@@ -1,7 +1,7 @@
 # ExtendedEggShell importing tools setup
 
 ## 1. Prerequisites
-Make sure you have Ruby and Perl installed, which should usually be the case on OS X.
+Make sure you have Ruby, Perl and Java installed.
 
 ## 2. Install ruby libraries (run these in terminal)
 ### 2.1 Install the cpanm utility
