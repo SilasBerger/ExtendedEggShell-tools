@@ -11,7 +11,7 @@ This document was last updated on February 19, 2017.
 The following resources are only needed to parse and analyze PDFs. If you already have an XML file containing a ScientificCommunity model exported from ExtendedEggShell and you only want to work with this, you don't need to complete these next steps. Note that the importing tools are currently only available for OS X.
 
 1. Download the contents of [this GitHub repository](https://github.com/SilasBerger/ExtendedEggShell-tools), put the "tools" folder next to the Moose image you want to use for ExtendedEggShell
-1. Follow the instructions in [INSTALL.md]() in downloaded repository, to install ParseCit
+1. Follow the instructions in [INSTALL.md](INSTALL.md) in downloaded repository, to install ParseCit
  
 ## Basic usage
 ### Modelling PDFs
