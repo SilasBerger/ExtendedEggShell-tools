@@ -1,10 +1,10 @@
 # How to install and use ExtendedEggShell
 
-This document was last updated on February 19, 2017.
+This document was last updated on February 20, 2017.
 
 ## Installation
 ### Download the core resources
-1. Download Moose 6.0 from the [Moose Technology download page](http://www.moosetechnology.org/#install)
+1. Download Moose 6.0 from the [Moose Technology download page](http://www.moosetechnology.org/#install). **Note: due to a bug, the path to your Moose image can not contain any whitespaces, in order for the PDF importing functions to work.**
 1. In Moose, add this repo in Monticello: http://smalltalkhub.com/mc/SilasBerger/ExtendedEggShell/main
 1. From this repo, load the latest version of ConfigurationOfExtendedEggShell
 1. To load all packages and dependencies of the current version, run the following command in a playground:
@@ -36,7 +36,7 @@ Note that this process will take a while, even for a rather small number of PDFs
 ### Exporting a ScientificCommunity model
 ```smalltalk
 exportPath := Path from: '/users/chandlerbing/mySCExport.xml'. "specify the export file path"
-ModelXMLExporter export: sc as: expPath. "export the ScientificCommunity stored in sc to the specified path"
+ModelXMLExporter export: sc as: exportPath. "export the ScientificCommunity stored in sc to the specified path"
 ```
 ### Loading a model from XML
 Note: currently, there is a bug in this feature. Users are advised to load models directly from a set of PDFs for now.
