@@ -7,7 +7,7 @@ This document was last updated on February 19, 2017.
 1. Download Moose 6.0 from the [Moose Technology download page](http://www.moosetechnology.org/#install)
 1. In Moose, add this repo in Monticello: http://smalltalkhub.com/mc/SilasBerger/ExtendedEggShell/main
 1. From this repo, load the latest version of ConfigurationOfExtendedEggShell
-1. To load all packages and dependencies of the current version, run the followung command in a playground:
+1. To load all packages and dependencies of the current version, run the following command in a playground:
 ```smalltalk
 (ConfigurationOfExtendedEggShell project version: '0.1') load
 ```
