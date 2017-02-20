@@ -5,7 +5,12 @@ This document was last updated on February 19, 2017.
 ## Installation
 ### Download the core resources
 1. Download Moose 6.0 from the [Moose Technology download page](http://www.moosetechnology.org/#install)
-1. In Moose, clone this repo: http://smalltalkhub.com/mc/SilasBerger/ExtendedEggShell/main
+1. In Moose, add this repo in Monticello: http://smalltalkhub.com/mc/SilasBerger/ExtendedEggShell/main
+1. From this repo, load the latest version of ConfigurationOfExtendedEggShell
+1. To load all packages and dependencies of the current version, run the followung command in a playground:
+```smalltalk
+(ConfigurationOfExtendedEggShell project version: '0.1') load
+```
 
 ### Download the optional resources
 The following resources are only needed to parse and analyze PDFs. If you already have an XML file containing a ScientificCommunity model exported from ExtendedEggShell and you only want to work with this, you don't need to complete these next steps. Note that the importing tools are currently only available for OS X.
