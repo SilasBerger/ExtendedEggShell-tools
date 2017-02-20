@@ -4,7 +4,7 @@ This document was last updated on February 20, 2017.
 
 ## Installation
 ### Download the core resources
-1. Download Moose 6.0 from the [Moose Technology download page](http://www.moosetechnology.org/#install). **Note: due to a bug, the path to your Moose image can not contain any whitespaces, in order for the PDF importing functions to work.**
+1. Download Moose 6.0 from the [Moose Technology download page](http://www.moosetechnology.org/#install). **Note: due to a bug, the path to your Moose image cannot contain any whitespaces, in order for the PDF importing functions to work.**
 1. In Moose, add this repo in Monticello: http://smalltalkhub.com/mc/SilasBerger/ExtendedEggShell/main
 1. From this repo, load the latest version of ConfigurationOfExtendedEggShell
 1. To load all packages and dependencies of the current version, run the following command in a playground:
