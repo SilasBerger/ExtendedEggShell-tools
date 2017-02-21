@@ -5,10 +5,13 @@ This document was last updated on February 20, 2017.
 ## Installation
 ### Download the core resources
 1. Download Moose 6.0 from the [Moose Technology download page](http://www.moosetechnology.org/#install). **Note: The path to your Moose image cannot contain any whitespaces, in order for the PDF importing functions to work.**
-1. In Moose, add this repo in Monticello: http://smalltalkhub.com/mc/SilasBerger/ExtendedEggShell/main
-1. From this repo, load the latest version of ConfigurationOfExtendedEggShell
-1. To load all packages and dependencies of the current version, run the following command in a playground:
+1. In Moose, execute the following code in a playground, in order to load the project:
 ```smalltalk
+Gofer new
+    package: 'ConfigurationOfExtendedEggShell';
+    url: 'http://smalltalkhub.com/mc/SilasBerger/ExtendedEggShell/main'
+    username: '' password: '';
+    update.
 (ConfigurationOfExtendedEggShell project version: '0.1') load
 ```
 
@@ -29,7 +32,7 @@ FileDownloader downloadExamplePDFs
 To import the PDFs, execute the following commands:</br>
 ```smalltalk
 loader := ModelLoader new.
-scientificCommunity := loader modelExamplePDFs.
+scientificCommunity := ModelLoader new modelExamplePDFs.
 ```
 Note that this process will take a while, even for a rather small number of PDFs. There's no progress update feedback so far, so just be patient.
 
