@@ -23,24 +23,32 @@ The following resources are only needed to parse and analyze PDFs. If you alread
  
 ## Basic usage
 ### Modelling PDFs
-Currently, the ModelLoader expects the PDFs to be located in the working directory of the Moose image, in a subfolder naed "examplePDFs". You can download a set of example PDFs directly into that folder by executing
+To download a set of example papers, execute the following line:
 
 ```smalltalk
 FileDownloader downloadExamplePDFs
 ```
 
-To import the PDFs, execute the following commands:</br>
+This will create a folder called "examplePDFs" in your working directory, which will contain the sample papers.
+
+To import the sample PDFs, execute the following commands:</br>
 ```smalltalk
-loader := ModelLoader new.
 scientificCommunity := ModelLoader new modelExamplePDFs.
 ```
 Note that this process will take a while, even for a rather small number of PDFs. There's no progress update feedback so far, so just be patient.
+
+If you want to use a custom set of PDFs, you can model them like this:
+```smalltalk
+folder := (Path from: '/users/chandlerbing/myPapers') asFileReference.
+scientificCommunity := ModelLoader new modelPDFs: folder.
+```
 
 ### Exporting a ScientificCommunity model
 ```smalltalk
 exportPath := Path from: '/users/chandlerbing/mySCExport.xml'. "specify the export file path"
 ModelXMLExporter export: sc as: exportPath. "export the ScientificCommunity stored in sc to the specified path"
 ```
+
 ### Loading a model from XML
 Note: currently, there is a bug in this feature. Users are advised to load models directly from a set of PDFs for now.
 
