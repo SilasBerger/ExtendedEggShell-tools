@@ -29,24 +29,22 @@ To download a set of example papers, execute the following line:
 FileDownloader downloadExamplePDFs
 ```
 
-This will create a folder called "examplePDFs" in your working directory, which will contain the sample papers.
-
-To import the sample PDFs, execute the following commands:</br>
+This will create a folder called "examplePDFs" in your working directory, which will contain the sample papers.To import the sample PDFs, execute the following commands:
 ```smalltalk
-scientificCommunity := ModelLoader new modelExamplePDFs.
+scientificCommunity := ModelLoader new modelExamplePDFs
 ```
 Note that this process will take a while, even for a rather small number of PDFs. There's no progress update feedback so far, so just be patient.
 
-If you want to use a custom set of PDFs, you can model them like this:
+If you want to use a custom set of PDFs, you can model them as follows:
 ```smalltalk
-folder := (Path from: '/users/chandlerbing/myPapers') asFileReference.
-scientificCommunity := ModelLoader new modelPDFs: folder.
+folder := (Path from: '/users/chandlerbing/myPapers') asFileReference. "specify the FileReference to the folder containing the PDFs"
+scientificCommunity := ModelLoader new modelPDFs: folder
 ```
 
 ### Exporting a ScientificCommunity model
 ```smalltalk
 exportPath := Path from: '/users/chandlerbing/mySCExport.xml'. "specify the export file path"
-ModelXMLExporter export: sc as: exportPath. "export the ScientificCommunity stored in sc to the specified path"
+ModelXMLExporter export: sc as: exportPath "export the ScientificCommunity stored in sc to the specified path"
 ```
 
 ### Loading a model from XML
@@ -55,12 +53,12 @@ Note: currently, there is a bug in this feature. Users are advised to load model
 ```smalltalk
 path := Path from: '/users/chandlerbing/mySCExport.xml'. "specify the path of your ScientificCommunity XML export file"
 file := FileSystem resolvePath: path. "load the file from the specified path".
-scientificCommunity := XMLModelLoader new loadFromXML: path. "load the model from the loaded file"
+scientificCommunity := XMLModelLoader new loadFromXML: path "load the model from the loaded file"
 ```
 
 ### Visualizing a ScientificCommunity model
 ```smalltalk
-graph := SCGraph new on: sc. "sc stores a ScientificCommunity"
+graph := SCGraph new on: sc "sc stores a ScientificCommunity"
 ```
 
 ### Run a search
@@ -72,8 +70,8 @@ se observe: SearchResultsInspector new. "add a new SearchResultsInspector as a s
 
 "create a search filed morph, which reports to the new SearchEngine object"
 search := SearchMorph new
-model: se;
-setIndexSelector: #searchForAuthor:.
+    model: se;
+    setIndexSelector: #searchForAuthor:.
 
 search openInWorld. "open the new search field in World"
 ```
