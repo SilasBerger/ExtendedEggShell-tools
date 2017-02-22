@@ -41,21 +41,6 @@ folder := (Path from: '/users/chandlerbing/myPapers') asFileReference. "specify 
 scientificCommunity := ModelLoader new modelPDFs: folder
 ```
 
-### Exporting a ScientificCommunity model
-```smalltalk
-exportPath := Path from: '/users/chandlerbing/mySCExport.xml'. "specify the export file path"
-ModelXMLExporter export: sc as: exportPath "export the ScientificCommunity stored in sc to the specified path"
-```
-
-### Loading a model from XML
-Note: currently, there is a bug in this feature. Users are advised to load models directly from a set of PDFs for now.
-
-```smalltalk
-path := Path from: '/users/chandlerbing/mySCExport.xml'. "specify the path of your ScientificCommunity XML export file"
-file := FileSystem resolvePath: path. "load the file from the specified path".
-scientificCommunity := XMLModelLoader new loadFromXML: path "load the model from the loaded file"
-```
-
 ### Visualizing a ScientificCommunity model
 ```smalltalk
 graph := SCGraph new on: sc "sc stores a ScientificCommunity"
