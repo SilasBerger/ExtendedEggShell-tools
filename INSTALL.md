@@ -3,7 +3,7 @@
 ## 1. Prerequisites
 Make sure you have Ruby, Perl and Java installed.
 
-## 2. Install ruby libraries (run these in terminal)
+## 2. Install Perl libraries (run these in terminal)
 ### 2.1 Install the cpanm utility
 $ cpan App::cpanminus
 
