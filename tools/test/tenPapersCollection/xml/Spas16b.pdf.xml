@@ -1,0 +1,1586 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.000007">
+<title confidence="0.835382">
+The Object Repository
+Pulling Objects out of the Ecosystem
+</title>
+<author confidence="0.977457">
+Boris SpasojevicÃÂ
+</author>
+<affiliation confidence="0.998186">
+University of Bern
+</affiliation>
+<email confidence="0.973322">
+spasojev@inf.unibe.ch
+</email>
+<author confidence="0.854466">
+Mohammad Ghafari
+</author>
+<affiliation confidence="0.964906">
+University of Bern
+</affiliation>
+<email confidence="0.60522">
+ghafari.unibe.ch
+</email>
+<author confidence="0.83485">
+Oscar Nierstrasz
+</author>
+<affiliation confidence="0.994412">
+University of Bern
+</affiliation>
+<email confidence="0.98657">
+oscar@inf.unibe.ch
+</email>
+<sectionHeader confidence="0.9882" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.994105333333333">
+In this paper we propose the idea of constructing an Object
+Repository Ã¢ÂÂ a repository of code snippets that, when exe-
+cuted, produce an instance of some class. Such a repository
+may be useful for several software engineering tasks like
+augmenting software documentation, testing object inspec-
+tors, improving program comprehension etc.
+We mine code snippets from existing software systems
+via brute force execution of code segments obtained through
+converting AST nodes of methods to source code. The gath-
+ered snippets are known to be executable, and this is a nov-
+elty which is not possible with existing approaches.
+We show that applying the proposed approach to 141
+open source Pharo projects results in an Object Repository
+that can instantiate almost 80% of the available classes in
+these projects.
+</bodyText>
+<sectionHeader confidence="0.922614" genericHeader="categories and subject descriptors">
+Categories and Subject Descriptors CR-number [subcat-
+egory]: third-level
+Keywords keyword1, keyword2
+1. Introduction
+</sectionHeader>
+<bodyText confidence="0.9996526">
+Every object-oriented language includes a mechanism for
+creating new objects, and developers leverage this mecha-
+nism to create complex objects needed in software systems.
+Most classes contain a default constructor, a way to create a
+default instance of that class, but some classes do not have
+a default representation, and are instantiated through more
+complex construction mechanisms such as parametrized
+constructors, factory methods, the builder design pattern and
+so on. Fully formed objects can also be created through any
+[Copyright notice will appear here once Ã¢ÂÂpreprintÃ¢ÂÂ option is removed.]
+valid object usage protocol, which may include an arbitrary
+number of interacting objects and method invocations.
+Finding a way to properly instantiate classes can be non-
+trivial, yet, code snippets that instantiate these classes exist
+throughout their client classes. Existing approaches for min-
+ing code snippets provide useful information about object
+creation and usage, but they lack the feature of being exe-
+cutable which is important to enable approaches that require
+objects on demand.
+We propose to mine available software projects for code
+snippets that instantiate classes, henceforth referred to sim-
+ply as snippets. We aim to create a repository of such snip-
+pets, which can be used to facilitate several software engi-
+neering tasks such as augmenting documentation, new test-
+ing approaches, support for program comprehension and
+others. We realize this approach by extracting all AST nodes
+from all methods of all available classes, converting them to
+their source code representation and attempting to execute
+them. If the execution is successful, i.e., produces an object,
+we save the snippet in a database and associate it to the type
+of the produced object.
+For our case study we chose Pharo, a Smalltalk inspired
+language. This choice was made because of the high reflec-
+tivity of Smalltalk [6], which enables us to move quickly
+with implementing such a system. We applied this approach
+to 141 open source Pharo projects and a selection of classes
+contained in the base Pharo image. We find that the result
+of this approach is that around 10% of AST nodes, when
+converted to source code and executed, produce objects for
+almost 80% of all the analysed classes. We check several
+aspects of the snippets to better understand their properties
+and also analyse the nodes that failed to produce objects, and
+discuss how to tackle the reasons for the failures.
+The paper is organised as follows: Section 2 discusses
+potential uses of the Object Repository, Section 3 describes
+the proposed approach to realize such a repository, Section 4
+presents the evaluation and discusses the results, Section 5
+review related work to this research. Section 6 explains our
+future plan, and Section 7 concludes the paper.
+To be submitted to IWST 2016 1 2016/6/28
+</bodyText>
+<sectionHeader confidence="0.988271" genericHeader="method">
+2. Motivation
+</sectionHeader>
+<bodyText confidence="0.9991408">
+This section presents some of potential use cases for the
+Object Repository. Though there are several software engi-
+neering tasks that can benefit from the availability of such a
+repository, our discussion advocates three of which that we
+found most applicable.
+</bodyText>
+<subsectionHeader confidence="0.947019">
+2.1 Software Documentation
+</subsectionHeader>
+<bodyText confidence="0.999375090909091">
+Documentation, when available and up to date, is still the
+most reliable and widely used resource for understanding
+software systems and APIs. Much work has been done
+around the idea of mining usage examples to enrich docu-
+mentation [2, 9, 23], however, none of the example snippets
+given are usable to directly create objects. Code snippets
+from the Object Repository could be used as a complemen-
+tary source for such examples, with the additional knowl-
+edge that the snippets are immediately executable. The main
+requirement for this use case is to have concise and repre-
+sentative snippets.
+Also, since the snippets in the Object Repository produce
+objects, one could introduce a concept of a Ã¢ÂÂplaygroundÃ¢ÂÂ
+within the documentation where a developer could experi-
+ment with a given live instance of the class whose documen-
+tation she is reading. Many similar Ã¢ÂÂplaygroundsÃ¢ÂÂ exist for
+languages such as Go1 and Haskell2, allowing developers to
+simply try out parts of the language.
+This requires at least one snippet associated with the
+documented class. Unlike the previous case, the quality of
+snippet is of no importance, as the user is only meant to
+interact with the object.
+</bodyText>
+<subsectionHeader confidence="0.997954">
+2.2 Software Testing
+</subsectionHeader>
+<bodyText confidence="0.95481495">
+Modern approaches to inspecting objects rely on object spe-
+cific representations [4]. This means that the author of a
+class, or anyone else through extensions, can specify a way
+that the object can represent itself. The object inspectors pro-
+vide the user all available ways to represent the object, and
+the user chooses one that suits the current context.
+According to our discussion with researchers in the field,
+testing new representations is laborious since they are usu-
+ally required to create the objects manually. Alternatively,
+the Object Repository could provide a set of objects gath-
+ered from the ecosystem that enables testing the new repre-
+sentation of such objects automatically.
+Testing software by generating random test inputs is a
+well researched field [3, 5, 17]. Integrating objects from the
+Object Repository with the random input generated by these
+approaches could help cover the corner cases that are hard
+to detect with raw random testing. Moreover, starting from
+actual instances from the Object Repository instead of, or in
+combination with, random ones could improve the results.
+For instance in case of genetic algorithms [15], this can
+</bodyText>
+<footnote confidence="0.983208">
+1 https://play.golang.org/
+2 https://tryhaskell.org/
+</footnote>
+<bodyText confidence="0.9943525">
+guide the genetic algorithm to an acceptable population of
+input data much faster while also avoids local maximums.
+Method arguments are usually checked for validity at the
+beginning of a method. In case the argument is not valid, the
+method should signal this fact to the caller in a standardized
+manner e.g., by throwing an exception, or returning an error
+value. In order to test this a developer would require multiple
+instances of the argument type both valid and invalid in the
+context of being input for that method. Assuming that argu-
+ments of the method are of a type that is present throughout
+the ecosystem, the Object Repository should contain code
+snippets needed to create such instances. This facilitates, to
+some extent, verifying automatically that the validation of
+the method arguments behaves as expected.
+To realize these use cases the Object Repository should
+contain as many snippets associated with a class as possible.
+The snippets should also produce representative and diverse
+objects.
+</bodyText>
+<subsectionHeader confidence="0.998796">
+2.3 Software evolution and maintenance
+</subsectionHeader>
+<bodyText confidence="0.999341060606061">
+While studying source code is the main way that developers
+interact with programs [10, 11] many program comprehen-
+sion tasks require runtime observation [12, 13]. Neverthe-
+less, running a system and placing it in a desired state can
+be challenging for several reasons like lack of input to the
+system, lack of knowledge about the system, long system
+running time before reaching a desired point.
+Having a way to create a live object of a required type
+could spawn a running system at any point in the source
+code by filling all the gaps in the execution context with
+blank objects of the adequate type. These objects should
+be presented in an object-inspector-like interface allowing
+the developer to set the values of these context objects and
+guide the execution of the program, as one would do in a
+debugging session. One example of one such usage could
+be in the domain of application security. Executing parts of
+source code in a sandbox created from objects taken from
+the Object Repository could ensure that the execution does
+not have any unexpected side effects.
+Objects taken from the Object Repository could be used
+to help disambiguate results of type inference engines for
+dynamically typed languages [19]. Many of these type infer-
+ence engines provide a list of potential candidate types for a
+variable. Thanks to the Object Repository, having instances
+of those types, and attempting to execute the code with each
+of those objects assigned to the variable in question could
+shed some light on the types which are more likely false pos-
+itives.
+The main requirement for these use cases is to have an
+Object Repository that contains snippets associated to as
+many classes as possible, extending the applicability of this
+use case to more project.
+To be submitted to IWST 2016 2 2016/6/28
+</bodyText>
+<figure confidence="0.942851947368421">
+0
+1
+82
+9
+3
+4
+5
+6
+MethodNode
+SeqenceNode
+ReturnNode
+VariableNode
+MessageNode
+BlockNode
+SeqenceNode
+AssignmentNode
+MessageNode
+7
+VariableNode
+</figure>
+<figureCaption confidence="0.998487">
+Figure 1. Abstract syntax tree of the method in Listing 1.
+</figureCaption>
+<sectionHeader confidence="0.920943" genericHeader="method">
+3. The Approach
+</sectionHeader>
+<bodyText confidence="0.997097928571428">
+We aim to mine code snippets from projects by transforming
+all available methods into their abstract syntax tree (AST)
+representation, transforming each AST node3 into its source
+code representation, attempting to execute it and observing
+the return value of the execution. We ignore this code snippet
+if the execution fails to compile, or to produce a return
+value. The ones that return an object are saved in the Object
+Repository and associated to the type of object produced by
+their execution.
+For example, Listing 1 shows a method from the Po-
+modoro project4. This method, checks if an instance vari-
+able progressBar is nil(line 2) and, if so, assigns it a new in-
+stance of ProgressBarMorph (line 3). Finally, it returns this
+instance variable (line 5).
+</bodyText>
+<figure confidence="0.9892366">
+1 PomodoroMorph&gt;&gt;progressBar
+2 progressBar ifNil: [
+3 progressBar := ProgressBarMorph new
+4 ].
+5 ÃÂ progressBar
+</figure>
+<figureCaption confidence="0.878257">
+Listing 1. Example method used to ilustrate the approach.
+</figureCaption>
+<bodyText confidence="0.9967145">
+We first parse this method and build the AST. Figure 1
+shows a graphical representation of this AST with all the
+</bodyText>
+<sectionHeader confidence="0.942682" genericHeader="method">
+3 Each AST node is technically an AST tree i.e., the subtree of the AST of
+</sectionHeader>
+<bodyText confidence="0.9705605">
+the method with the node in question at the root. We use the term Ã¢ÂÂAST
+nodeÃ¢ÂÂ in place of Ã¢ÂÂAST subtree with the node at the rootÃ¢ÂÂ for simplicity.
+</bodyText>
+<equation confidence="0.980837058823529">
+4 http://smalltalkhub.com/#!/~TorstenBergmann/Pomodoro
+C : Domain of classes (1)
+M : Domain of methods (2)
+defm : M Ã¢ÂÂ C (3)
+N : Domain of AST nodes (4)
+defn : N Ã¢ÂÂM (5)
+S : Domain of snippets (6)
+toCode : N Ã¢ÂÂ S (7)
+O : Domain of objects (8)
+O0 = O Ã¢ÂÂª Ã¢Â (9)
+instanceof : O Ã¢ÂÂ C (10)
+execute : S Ã¢ÂÂ O0 (11)
+Nexec = {n Ã¢ÂÂ N  |(execute Ã¢ÂÂ¦ toCode)(n) 6= Ã¢Â } (12)
+Sexec = {toCode(n),Ã¢ÂÂn Ã¢ÂÂ Nexec} (13)
+objectRepo(c Ã¢ÂÂ C) = {s Ã¢ÂÂ Sexec|
+(instanceof Ã¢ÂÂ¦ execute)(s) = c}
+(14)
+</equation>
+<figureCaption confidence="0.983710333333333">
+Figure 2. The core domains and functions of the formal
+model.
+nodes indexed and the type of the node shown next to it.
+</figureCaption>
+<bodyText confidence="0.999169375">
+We then transform each node into a source code snippet, and
+attempt to execute it.
+Table 1 summarizes the results. This table represents each
+AST node by index, the type of the node, the source code
+representation of the node, and finally the type of the value
+obtained by executing the snippet. We can see from this table
+that out of the 9 AST nodes only 2 are, when transformed
+into source code, executable and produce objects.
+</bodyText>
+<subsectionHeader confidence="0.934653">
+3.1 Formal Model
+</subsectionHeader>
+<bodyText confidence="0.998714764705882">
+To better explain the proposed approach, we introduce a
+small set-theoretical model. This subsection discusses do-
+mains and sets used in this model, the function that models
+the execution of the snippets, as well as the function used to
+retrieve snippets for a given class.
+As shown in Figure 2, C (Equation 1) is the domain of
+classes, M (Equation 2) is the domain of methods defined
+in the classes and N (Equation 4) is the domain of AST
+nodes defined in the methods. Each method is defined in one
+class (Equation 3), and each node is defined in one method
+(Equation 5).
+The conversion of the AST nodes into source code is
+defined as a function toCode (Equation 7). The codomain
+of this function is S, the domain of all code snippets. Since
+multiple AST nodes in N can have the same source code
+representation, toCode is a surjective function, and thus for
+To be submitted to IWST 2016 3 2016/6/28
+</bodyText>
+<listItem confidence="0.960625">
+# Node Type Corresponding Snippet Result Type
+1 SeqenceNode progressBar ifNil: [progressBar := ProgressBarMorph new]. ÃÂ progressBar -
+2 MessageNode progressBar ifNil: [ progressBar := ProgressBarMorph new ] -
+3 BlockNode [ progressBar := ProgressBarMorph new ] -
+4 SeqenceNode progressBar := ProgressBarMorph new -
+5 AssignmentNode progressBar := ProgressBarMorph new -
+6 MessageNode ProgressBarMorph new ProgressBarMorph
+7 VariableNode ProgressBarMorph ProgressBarMorph class
+8 ReturnNode ÃÂ progressBar -
+9 VariableNode progressBar -
+</listItem>
+<tableCaption confidence="0.976109">
+Table 1. The results of applying out proposed approach to the example method from Listing 1.
+</tableCaption>
+<bodyText confidence="0.986255">
+any N Ã¢ÂÂ² Ã¢ÂÂ N and the corresponding SÃ¢ÂÂ² it holds that |SÃ¢ÂÂ² |Ã¢ÂÂ¤
+|N Ã¢ÂÂ²|.
+The execution of source code from S is defined as a
+function called execute (Equation 11). Since not all snippets
+from S will, when executed, yield an object, the codomain
+of this function is the set O0 (Equation 9). This set is defined
+as the union of object domain (Equation 8) and an empty set,
+used to denote a failed snippet execution. Each object is an
+instance of a class (Equation 10).
+With all this in place, we define the set Nexec (Equa-
+tion 12) as the set of all AST nodes that, when converted to
+source code and executed, produce an instance of any class
+from C. We call members of this domain Ã¢ÂÂexecutable AST
+nodesÃ¢ÂÂ. Correspondingly, Sexec (Equation 13), defines the
+domain of all Ã¢ÂÂexecutableÃ¢ÂÂ code snippets.
+Lastly, the objectRepo function (Equation 14) returns, for
+a given class from C, a set of snippets from Sexec that, when
+executed, produce an instance of the given class.
+</bodyText>
+<subsectionHeader confidence="0.998724">
+3.2 Implementation
+</subsectionHeader>
+<bodyText confidence="0.999099">
+We implemented the approach in Pharo Smalltalk because
+of itÃ¢ÂÂs reflective nature which allows us to move fast with
+the implementation. Most of the needed implementation was
+readily available in Pharo i.e., parsing the source code to the
+AST, converting AST nodes to code snippets, etc. The main
+challenge was implementing the execute function
+First, we wrap a code snippet inside a closure. We then
+create a temporary method in a temporary class whose
+source code is solely the execution of the mentioned clo-
+sure. We then compile this method and, if the compilation is
+successful, we execute it wrapped in the Smalltalk equiva-
+lent of a try-catch block that catches all possible errors and
+exceptions.
+This setup is enough to catch errors caused by a snippet
+not being compilable (e.g., containing an undeclared vari-
+able) and the snippet failing to execute (e.g., throwing a di-
+vision by zero exception).
+During the execution of code snippets, we encountered
+some never terminating executions. Further investigation re-
+vealed that such issues arise due to concurrency. For exam-
+ple, the snippet might wait on a signal from a different thread
+to continue the execution. However, we only execute a sin-
+gle snippet at a time, which means there is no chance of re-
+ceiving such a signal. To restrain such executions, we limit
+the execution time for each snippet to 10 seconds. The time
+interval was chosen as an arbitrary cut of point with the rea-
+soning that the execution of any snippet should terminate in
+less than 10 seconds in order for the snippets to be usable in
+any way. Though, a vast majority of snippets terminate quite
+quickly, we chose a very long timeout to include as many
+snippets whose execution will eventually terminate.
+</bodyText>
+<sectionHeader confidence="0.979505" genericHeader="evaluation">
+4. Evaluation
+</sectionHeader>
+<bodyText confidence="0.978806571428571">
+To evaluate our approach we developed a research prototype,
+and ran it on all classes taken from 141 open source Pharo
+projects whose source code was accessible from the Pharo
+package management system and on a selection of classes
+from the base Pharo image. We do not include all the classes
+from the base image because a large part of the functionality
+of the Pharo language is implemented in Pharo itself. Exe-
+cuting code snippets from such classes caused many errors
+that could not be handled from within the language, but re-
+quired intervention at the Virtual Machine level. Examples
+are the contents of packages such of the Kernel, Compiler,
+Debugger, NativeBoost and others.
+This evaluation includes a set of classes we call C Ã¢ÂÂ² con-
+taining 13,909 classes. Correspondingly, the set of all meth-
+ods from C Ã¢ÂÂ² is noted as M Ã¢ÂÂ² and contains 256,362 methods.
+These methods are comprised of 1,525,914 AST nodes de-
+fined in a set called N Ã¢ÂÂ². The number of nodes that are ex-
+ecutable is only |N Ã¢ÂÂ²exec |= 154, 904 or 10.15% of all the
+nodes. Converting these nodes into code produces |SÃ¢ÂÂ²exec |=
+92, 460 unique snippets of code. Table 2 presents the cardi-
+nalities of these sets.
+In the rest of this section we define several sets, shown in
+Table 3, using which we discuss our findings from different
+perspectives.
+We define a set Cd as the domain of the objectRepo func-
+tion as shown in Figure 4, Equation 15. The cardinality of
+this set is 10,917 or 78.49% of all classes used in the evalu-
+To be submitted to IWST 2016 4 2016/6/28
+</bodyText>
+<table confidence="0.952678333333333">
+Set Cardinality
+C Ã¢ÂÂ² 13,909
+M Ã¢ÂÂ² 256,362
+N Ã¢ÂÂ² 1,525,914
+N Ã¢ÂÂ²exec 154,904 (10.15% of |N |)
+SÃ¢ÂÂ²exec 92,460
+</table>
+<tableCaption confidence="0.9131135">
+Table 2. The cardinalities of the core sets used in the evalu-
+ation.
+</tableCaption>
+<table confidence="0.999083333333333">
+Set Cardinality %|C Ã¢ÂÂ² |%|Cd |%|C1|
+Cd 10,917 78.49% - -
+C1 8,779 63.12% 80,42% -
+Cnew 2,384 17.14% 21.84% 27.16%
+Cl 6,091 43.79% 55.79% 69.38%
+Cg 2,442 17.56% 22.37% -
+</table>
+<tableCaption confidence="0.998416">
+Table 3. Cardinalities of the sets defined in Figure 4 and
+</tableCaption>
+<bodyText confidence="0.9588115">
+their relations.
+ation. Being able to instantiate almost 80% of all the classes
+seems to be a promising result considering the minimalistic
+approach of extracting snippets.
+</bodyText>
+<subsectionHeader confidence="0.994786">
+4.1 Snippet Distribution
+</subsectionHeader>
+<bodyText confidence="0.999265740740741">
+We call the set of all classes that can be instantiated through
+only one snippet C1 as shown in Figure 4, Equation 16. This
+set helps us to better understand the quality of the snippets,
+by showing that 8,779 classes, or 80,42% of all instantiable
+classes, have only one associated snippet.
+This, plus the fact that |SÃ¢ÂÂ²exec |= 92, 460 shows that the
+distribution of snippet counts is heavily skewed to a minority
+of classes i.e., about 20%. Further inspection of the snippets
+shows that the ten classes with the most snippets accumulate
+over 60% of all snippets. Table 4 presents some information
+about these classes.
+Most of the classes from Table 4, namely Array, Block-
+Closure, ByteString, ByteArray, Point and Association, have
+a very specific construction pattern. Some, like Array,
+ByteString, and ByteArray, have an idiomatic way of con-
+struction. For example, anything in source code between
+square brackets is considered a BlockClosure, anything be-
+tween single quotation marks is a ByteString. Other classes,
+like Point or Association, have a very distinctive construc-
+tor, e.g., two integers with the @ character between define a
+point with those integers as coordinates.
+With all of this in mind we conclude that the heavy
+skewing of snippets is not surprising, but it might have a very
+negative impact on the usability of an Object Repository
+built with this approach. Although the Object Repository can
+instantiate almost 80% of all available classes, over 80% of
+those classes can be instantiated in only one way, and only
+</bodyText>
+<figure confidence="0.953677965517242">
+80.42%
+Ã
+16.63%
+Ã
+2.49%
+Ã 0.39%
+Ã 0.07%
+Ã
+0.00%
+Ã
+10.00%
+Ã
+20.00%
+Ã
+30.00%
+Ã
+40.00%
+Ã
+50.00%
+Ã
+60.00%
+Ã
+70.00%
+Ã
+80.00%
+Ã
+90.00%
+Ã
+1
+</figure>
+<equation confidence="0.973880055555555">
+Ã [2-ÃÂ­Ã¢ÂÂ10)
+Ã [10-ÃÂ­Ã¢ÂÂ100)
+Ã [100-ÃÂ­Ã¢ÂÂ1000)
+Ã [1000-ÃÂ­Ã¢ÂÂ10000)
+Ã
+Pe
+rc
+en
+t
+Ã o
+f
+Ã C
+&amp;apos;
+Ã
+Numer
+Ã of
+Ã snippets
+Ã
+</equation>
+<figureCaption confidence="0.682586">
+Figure 3. Distribution of classes in Cd according to the
+number of snippets that can instantiate each class.
+</figureCaption>
+<table confidence="0.994481">
+c Ã¢ÂÂ C Ã¢ÂÂ² |objectRepo(c) |%|S|
+Array 16,907 18.29%
+ByteString 14,968 16.19%
+BlockClosure 8,826 9.55%
+ByteSymbol 4,199 4.54%
+ByteArray 3,807 4.12%
+Point 2,725 2.95%
+SmallInteger 2,502 2.71%
+Association 1,237 1.34%
+FixedDate 855 0.92%
+Measure 759 0.82%Ã¢ÂÂ
+56,785 61.42%
+</table>
+<tableCaption confidence="0.998443">
+Table 4. Ten classes with the most associated code snippets.
+</tableCaption>
+<bodyText confidence="0.996754">
+a handful of classes account for a majority of snippets. In
+Figure 3 we show a distribution of classes in Cd according
+to how many snippets can instantiate that class. We can see
+that just under 17% of classes can be instantiated by between
+two and ten snippets, while less than 3% with ten or more.
+</bodyText>
+<subsectionHeader confidence="0.994692">
+4.2 Trivial and Literal snippets
+</subsectionHeader>
+<bodyText confidence="0.999727545454545">
+To further focus on the quality of the snippets we define
+the Cnew set in Figure 4, Equation 17. This set includes all
+classes that have only one associated snippet, and that snip-
+pet is Ã¢ÂÂtrivialÃ¢ÂÂ i.e., the default way of creating instances in
+Pharo. This is achieved by matching snippets with a regular
+expression that checks if the snippet is of form Ã¢ÂÂClass newÃ¢ÂÂ.
+An example of such a snippet would be Ã¢ÂÂDictionary newÃ¢ÂÂ
+which trivially creates a Dictionary object.
+The cardinality of this set, as shown in Table 3, is 2,384 .
+This accounts for 27.16% of the classes with a single asso-
+To be submitted to IWST 2016 5 2016/6/28
+</bodyText>
+<equation confidence="0.9999181">
+Cd = {c Ã¢ÂÂ C Ã¢ÂÂ² |Ã¢ÂÂs Ã¢ÂÂ SÃ¢ÂÂ², objectRepo(s) = c} (15)
+C1 = {c Ã¢ÂÂ Cd ||objectRepo(c) |= 1} (16)
+Cnew = {c Ã¢ÂÂ C1 |Ã¢ÂÂs Ã¢ÂÂ objectRepo(c),
+regexMatch(s,Ã¢ÂÂÃÂ[a-zA-Z0-9 ]* new$Ã¢ÂÂ)}
+(17)
+Cl = {c Ã¢ÂÂ C1 |Ã¢ÂÂs Ã¢ÂÂ objectRepo(c),
+regexMatch(s,Ã¢ÂÂÃÂ[a-zA-Z0-9 ]*$Ã¢ÂÂ)}
+(18)
+Cg = Cd \ (Cnew Ã¢ÂÂª Cl) (19)
+Co = {c Ã¢ÂÂ C |Ã¢ÂÂn Ã¢ÂÂ N Ã¢ÂÂ²exec, (defm Ã¢ÂÂ¦ defn)(n) = c} (20)
+</equation>
+<figureCaption confidence="0.855412">
+Figure 4. Sets used during the evaluation of the Object
+Repository.
+</figureCaption>
+<bodyText confidence="0.991504368421053">
+ciated snippet, or 21.84% of all classes from |Cd|. Consid-
+ering that this is the default pattern of instantiating objects
+in Pharo, the percentage of classes instantiated only in this
+manner is not as high as might be expected.
+We move on to other poor quality snippets by defining
+the Cl set as shown in Figure 4, Equation 18. This set is a
+subset of C1, and contains all classes whose sole associated
+snippet is just one literal. This set is quite large as can be
+seen in Table 3. It has a cardinality of 6,091 or 55.79% of
+Cd. The size of this set is a result of SmalltalkÃ¢ÂÂs high reflec-
+tive nature. Namely, following the Ã¢ÂÂeverything is an objectÃ¢ÂÂ
+philosophy, each class in Smalltalk is essentially an instance
+of a corresponding metaclass, which in turn is an instance of
+the Metaclass class [8]. This leads to the phenomenon that
+executing a class name literal in Smalltalk will result in the
+object representing that class i.e., an instance of the corre-
+sponding metaclass. This phenomenon accounts for all but 8
+of the elements of Cl which are global variables which are
+mapped to concrete instances of regular (not meta) classes.
+</bodyText>
+<subsectionHeader confidence="0.999586">
+4.3 Promising Snippets
+</subsectionHeader>
+<bodyText confidence="0.967031833333333">
+An interesting set to focus on is the set of all classes that can
+be instantiated by the objectRepo function in a non-trivial
+and non-literal way. This is essentially the domain of the
+objectRepo function excluding the sets Cnew and Cl, and
+is defined as such in Figure 4, Equation 19. This set, named
+Cg , is actually containing the kind of data we wish to have
+to realize different use cases introduced in Section 2.
+As shown in Table 3 this set contains 2,442 elements, or
+17.56% of all classes included in the evaluation. This is not
+a large percentage of the classes analysed, but considering
+the minimalistic approach seems promising as the first step
+towards realizing the idea of building an Object Repository.
+The main question regarding the quality of these snippets
+is whether or not they produce fully initialized objects. This
+question is outside the scope of this paper and is very com-
+plex as there is no automated way of concluding when an
+object is fully initialized. Investigating this question would
+most likely require input from authors of classes, as they
+</bodyText>
+<table confidence="0.6473426">
+Minimum 1
+25% Quartile 16
+Median 28
+75% Quartile 51
+Maximum 1,279,918
+</table>
+<tableCaption confidence="0.713626">
+Table 5. Five number summary of snippet sizes.
+</tableCaption>
+<figure confidence="0.904882866666667">
+0
+Ã
+100
+Ã
+200
+Ã
+300
+Ã
+400
+Ã
+500
+Ã
+600
+Ã
+700
+Ã
+800
+Ã
+900
+Ã
+1000
+Ã
+Sn
+ip
+pe
+t
+Ã s
+iz
+e
+Ã
+</figure>
+<figureCaption confidence="0.866035">
+Figure 5. A sorted plot of sizes of snippet less then 1000
+characters long.
+</figureCaption>
+<bodyText confidence="0.960721">
+have the necessary domain and code expertise to determine
+when an object is fully initialized.
+</bodyText>
+<subsectionHeader confidence="0.997365">
+4.4 Snippet size
+</subsectionHeader>
+<bodyText confidence="0.9989847">
+The sizes of snippets in the Object Repository varies greatly.
+The smallest snippets are only one character long, an integer
+constant producing an instance of SmallInteger. The largest
+snippet is 1,279,918 characters long and is a declaration of
+a ByteArray object. Table 5 summarizes the distribution of
+snippet sizes. We can see by the first quartile (16), median
+(28) and third quartile (51) that the distribution of the snippet
+sizes is heavily centred around a much more reasonable size.
+Since the maximum is so far away from the third quartile,
+we assumed there are outliers that need to be excluded. But,
+our attempt to exclude outliers using one and a half times the
+interquartile range as the limit marked 10.44% of the data as
+outliers, and we thus include all the data points.
+Figure 5 demonstrates a sorted plot of all the sizes bellow
+1000, a total of 90,839 snippets or 97.2% of the data set.
+The remainder of the set was excluded from the plot because
+the drastic increase in values made the plot very difficult
+to understand. We can see from the plot that values are
+mostly under 100, after which a small number of values rises
+dramatically.
+</bodyText>
+<subsectionHeader confidence="0.996631">
+4.5 Origin of snippets
+</subsectionHeader>
+<bodyText confidence="0.988898421052631">
+To better understand our approach and the resulting snippets
+we look at where the snippets are coming from. Firstly, we
+wish to understand how many classes in the C Ã¢ÂÂ² set actually
+To be submitted to IWST 2016 6 2016/6/28
+contributed snippets to the Object Repository. We call these
+classes Ã¢ÂÂorigin classesÃ¢ÂÂ and they are members of the Co set
+defined in Figure 4, Equation 20. This set contains 9,138
+elements, or 65.70% of C Ã¢ÂÂ². Manual inspection of a sample of
+the classes not in this set reveals that they are mostly classes
+with none or very few declared methods. These are very
+often meta classes with no functionality outside the trivial
+instantiation of objects.
+We further investigate this set by identifying which
+classes in this set are meta classes or test classes. We find
+that meta classes account for 9.78% (894 elements) of Co
+that indicates meta classes are less likely to contain snippets,
+but should not be discarded from the analysis. Test classes
+account for 16.45% (1,503 elements) of Co. This initially
+seems to be not much better than the meta classes but con-
+sidering the much smaller number of test classes in C Ã¢ÂÂ² we
+can see that the contribution of test classes is much greater.
+Namely, there is a total of 1,797 test classes in C Ã¢ÂÂ², which
+means that over 80% of the available test classes contributed
+an executable node.
+We also find that only 112 classes (1.23% of Co) con-
+tributed a snippet that produces an instance of the same class
+(a snippet that originated in c Ã¢ÂÂ C Ã¢ÂÂ² and whose execution re-
+sults in an instance of c). This, coupled with the fact that the
+remaining 73.77% of Co are regular classes suggests that the
+clients of a class is the best place to look for snippets to in-
+stantiate that class.
+Finally, we aim to answer which types of AST nodes are
+common sources for snippets. Table 6 shows the percentage
+of occurrences of each type in N Ã¢ÂÂ²exec with simple, synthetic
+examples for easier understanding. As one might expect, the
+most common type of AST node is the LiteralValueNode,
+as it represents a value in the source code and is thus ex-
+ecutable by default. The second most common type is the
+MessageNode, which represents sending a message. This is
+also typical, since in Smalltalk everything happens by send-
+ing messages. Third on the list is VariableNode, which in our
+data denotes global variables i.e., meta classes. The remain-
+der of the list can be divided into two categories: wrappers
+and literals that we discuss in the following.
+The wrappers are SequenceNode, ReturnNode and Cas-
+cadeNode. The SequenceNode represents a sequence of
+nodes. For instance, the node indexed 4 in Figure 1 rep-
+resents a sequence of one node indexed 5 and thus yields
+the same snippet. The ReturnNode just adds the return char-
+acter in front of the node that it is wrapping. In Smalltalk,
+the last evaluated expression is returned by default and the
+return statement may not change the result of executing the
+snippet. For example, the snippets for LiteralValueNode and
+ReturnNode in Table 6 have the same execution result. A
+CascadeNode represents a series of message sends to one
+object. These types of nodes together account for 17.38% of
+executable nodes.
+</bodyText>
+<table confidence="0.999095583333333">
+Node Type % Example snippet
+LiteralValueNode 33.68% Ã¢ÂÂA StringÃ¢ÂÂ
+MessageNode 22.34% Dictionary new.
+VariableNode 17.50% Dictionary
+SequenceNode 9.45% -
+ReturnNode 7.59% ÃÂ Ã¢ÂÂA StringÃ¢ÂÂ
+BlockNode 6.20% [ 1 + 1 ]
+LiteralArrayNode 2.63% #(1 2 3)
+CascadeNode 0.34% XMLWriter new
+tag: Ã¢ÂÂoneÃ¢ÂÂ;
+tag: Ã¢ÂÂtwoÃ¢ÂÂ
+ArrayNode 0.27% {1 2 3}
+</table>
+<tableCaption confidence="0.998271">
+Table 6. The distribution of types of executable nodes with
+</tableCaption>
+<bodyText confidence="0.977408875">
+examples. The SequenceNode represents a sequence of other
+nodes so no example is given.
+The literals are BlockNode, LiteralArrayNode and Ar-
+rayNode. Closures are very commonly used in Smalltalk and
+even have their own AST node representation, the BlockN-
+ode. The other two types of nodes represent a compile time
+array (LiteralArrayNode) and a run time array (ArrayNode).
+These together account for 9.1% of N Ã¢ÂÂ²exec.
+</bodyText>
+<subsectionHeader confidence="0.974403">
+4.6 Failed executions
+</subsectionHeader>
+<bodyText confidence="0.992500846153846">
+Studying the reasons why about 90% of AST nodes failed
+to execute would be necessary towards improving the ap-
+proach. We primarily hypothesized that a node execution
+may fail for following reasons:
+Ã¢ÂÂ¢ Undefined variable in snippet
+Ã¢ÂÂ¢ Error or exception5
+Ã¢ÂÂ¢ Code snippet returns nil
+As one might suspect, the execution of the majority of
+nodes, i.e., over 82%, where prevented because the source
+code representation of the node failed to compile due to the
+snippet referring to an unidentified variable.
+The other two hypothesised faults are not as numerous.
+Errors and exceptions account for 1,880 AST nodes (0.12%
+of the total failing AST nodes), and returning nil accounts for
+17,425 AST nodes (1.14% of the total failing AST nodes).
+Surprisingly an additional 113,954 nodes (8.31% of the
+total failing ones) fall outside the hypothesised faults. Man-
+ual inspection of a sample of the available logs identifies that
+the main reason for failure was the snippets expecting inter-
+actions from the user e.g., opening a dialog for the user to
+choose a file. Such attempts were immediately shut down
+due to our code snippets being executed in a headless Pharo
+environment, meaning that no GUI elements are possible.
+5 This also includes the nodes terminated by our timeout mechanism de-
+scribed in Section 3.2
+To be submitted to IWST 2016 7 2016/6/28
+</bodyText>
+<subsectionHeader confidence="0.996127">
+4.7 Missing classes
+</subsectionHeader>
+<bodyText confidence="0.9997199375">
+To understand why certain classes have no snippets attached
+to them, we took a sample of 20 such classes and did a
+manual investigation.
+In our sample, 6 classes where test classes. It is not sur-
+prising that test classes are never explicitly instantiated, as
+they are only used by the unit testing framework. Out of all
+classes with no attached snippets in our data set, around 25%
+are test classes. Further, 4 classes of our sample where meta
+classes, and manual inspection shows that these classes, as
+well as their instances i.e., corresponding non-meta classes,
+are never used. Looking at all the classes without associated
+snippets, we find that around 21% are meta classes. The re-
+maining 10 elements of our sample are regular classes, and
+manual inspection finds that these classes are simply never
+instantiated. Some are never mentioned in the source code,
+and some have only class side methods invoked.
+</bodyText>
+<sectionHeader confidence="0.998717" genericHeader="related work">
+5. Related Work
+</sectionHeader>
+<bodyText confidence="0.9997865">
+Mining code snippets from existing repositories is not a
+novel idea and much work has already been done in the
+field. To the best of our knowledge, this is the first work
+focusing on mining executable snippets, with a special focus
+on gathering object creating snippets.
+A strong use case for mining snippets in the existing work
+is to obtain real world examples of API usage. This is typi-
+cally used to improve documentation or code search engines.
+Tools such as MAPO [23] focus on mining API methods
+that are frequently called together and their usages follow
+sequential rules. Other approaches such as those presented
+by Buse et al. [2] focus on a different kind of static analy-
+sis based on combination of path sensitive dataflow analysis,
+clustering, and pattern abstraction. A tool called PROSPEC-
+TOR [14] introduces the concept of jungloid source code in
+an attempt to simplify the mined snippets in order to enable
+synthesis and combining to form more complex code frag-
+ments. Other work, such as that of Ghafari et al. [7] focuses
+on mining examples from unit tests claiming that this is a
+good source of examples as they are concise, relevant and
+trustworthy.
+Multiple approaches have been proposed which mine rel-
+evant code examples and use them to improve code comple-
+tion tools. Holmes et al. propose Strathcona in an attempt to
+minimise the amount of effort for the developer to query for
+examples. Bruch et al. [1] explore three different strategies
+for using information gathered from existing code repos-
+itories. Their approach, given a set of methods that have
+been called on a variable and the enclosing method as con-
+text, recommend missing method calls for that variable. The
+PARSEWeb tool [21], rather than performing the analysis of
+open source systems itself, is build atop of code search en-
+gines in order to try to generalise their approach. Pavlinovic
+et al. [18] mines code snippets that occur more than a given
+threshold in a given code repository, and provides relevant
+snippets on demand and taking in to account the developers
+current context. Zhang et al. focus on automatically filling
+the parameter list of API calls automatically [22].
+</bodyText>
+<sectionHeader confidence="0.995648" genericHeader="discussions">
+6. Future Work
+</sectionHeader>
+<bodyText confidence="0.999627966666667">
+We identify several directions of potential future work. The
+main focus of the future work should be bringing the use
+cases described in Section 2 to fruition, and performing user
+studies to determine how beneficial the Object Repository
+would be to developers. This means both improving the
+approach for building up the object repository which is still
+in its primary steps, as well as implementing the necessary
+tools that would serve as the front end facing the developer.
+We believe the proposed approach can be improved via
+applying more solid static analysis techniques such as con-
+trol and data flow analysis, constant propagation, function
+inlining and etc. For instance, in Section 4.6 we identified
+that the main reason that executing AST nodes fails is that
+code snippets contain unidentified variables. In a statically
+typed language, this could, to a large extent, be addressed
+by bootstrapping the Object Repository i.e., using the Ob-
+ject Repository to instantiate all undefined variables at the
+beginning of the snippet, making all undefined variables not
+just defined, but instantiated. Lacking static type informa-
+tion would make this not so easily applicable, but still pos-
+sible through type inference [16, 19, 20], or brute force. The
+downside of this approach is that the instances created would
+be somewhat synthetic rather than directly pulled from the
+ecosystem.
+Finally, once we have an approach that is shown to be
+beneficial to developers, we would like to branch out to
+different programing languages and examine how different
+language features such as type systems, reflectivity or mode
+of execution (compiled vs interpreted) affect the benefits or
+usability of the Object Repository.
+</bodyText>
+<sectionHeader confidence="0.84347" genericHeader="acknowledgments">
+7. Conclusion
+</sectionHeader>
+<bodyText confidence="0.997615666666667">
+In this paper we propose the idea of building an Object
+Repository, a repository of code snippets that, when ex-
+ecuted, produce an instance of a class. We present mul-
+tiple software engineering tasks that could be improved
+by the Object Repository. We further present an initial at-
+tempt to realize the Object Repository for the Pharo lan-
+guage, through mining AST nodes and converting them to
+code snippets. We applied the approach to 141 open source
+projects , and discussed the results. Using this approach we
+could instantiate almost 80% of all classes that were in-
+cluded in the study, however, slightly less than 20% of in-
+stantiable classes have more than one associated snippets.
+Anyways, keeping the simplicity of our approach in mind,
+the obtained results still seem promising.
+We also take a look at the percent of AST nodes that
+actually produce a type, and discuss the main reasons why
+other nodes fail to do so. We find that the main reason
+To be submitted to IWST 2016 8 2016/6/28
+for this is unidentified variables, accounting for more than
+90% of nodes that failed to produce an instance. This is not
+unexpected, and can be addressed in several ways, including
+a bootstrapping of the Object Repository, i.e., using data
+from a previous run of the Object Repository to instantiate
+missing variables.
+</bodyText>
+<sectionHeader confidence="0.963309" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.985469436090226">
+[1] M. Bruch, M. Monperrus, and M. Mezini. Learning from
+examples to improve code completion systems. In Proceed-
+ings of the the 7th Joint Meeting of the European Software
+Engineering Conference and the ACM SIGSOFT Symposium
+on The Foundations of Software Engineering, ESEC/FSE Ã¢ÂÂ09,
+pages 213Ã¢ÂÂ222, New York, NY, USA, 2009. ACM. ISBN 978-
+1-60558-001-2. . URL http://doi.acm.org/10.1145/
+1595696.1595728.
+[2] R. P. L. Buse and W. Weimer. Synthesizing api usage ex-
+amples. In Proceedings of the 34th International Confer-
+ence on Software Engineering, ICSE Ã¢ÂÂ12, pages 782Ã¢ÂÂ792, Pis-
+cataway, NJ, USA, 2012. IEEE Press. ISBN 978-1-4673-
+1067-3. URL http://dl.acm.org/citation.cfm?id=
+2337223.2337316.
+[3] T. Y. Chen, F. C. Kuo, R. G. Merkel, and S. P. Ng. Mir-
+ror adaptive random testing. In Proceedings of the Third
+International Conference on Quality Software, QSIC Ã¢ÂÂ03,
+pages 4Ã¢ÂÂ, Washington, DC, USA, 2003. IEEE Computer So-
+ciety. ISBN 0-7695-2015-4. URL http://dl.acm.org/
+citation.cfm?id=950789.951282.
+[4] A. ChisÃÂ§, T. GÃÂ±ÃÂrba, O. Nierstrasz, and A. Syrel. GTInspector:
+A moldable domain-aware object inspector. In Proceedings of
+the Companion Publication of the 2015 ACM SIGPLAN Con-
+ference on Systems, Programming, and Applications: Soft-
+ware for Humanity, SPLASH Companion 2015, pages 15Ã¢ÂÂ
+16, New York, NY, USA, 2015. ACM. ISBN 978-1-4503-
+3722-9. . URL http://scg.unibe.ch/archive/papers/
+Chis15b-GTInspector.pdf.
+[5] J. W. Duran and S. Ntafos. A report on random testing. In
+Proceedings of the 5th International Conference on Software
+Engineering, ICSE Ã¢ÂÂ81, pages 179Ã¢ÂÂ183, Piscataway, NJ, USA,
+1981. IEEE Press. ISBN 0-89791-146-6. URL http://dl.
+acm.org/citation.cfm?id=800078.802530.
+[6] B. Foote and R. E. Johnson. Reflective facilities in Smalltalk-
+80. In Proceedings OOPSLA Ã¢ÂÂ89, ACM SIGPLAN Notices,
+volume 24, pages 327Ã¢ÂÂ336, Oct. 1989.
+[7] M. Ghafari, C. Ghezzi, A. Mocci, and G. Tamburrelli. Min-
+ing unit tests for code recommendation. In Proceedings of
+the 22Nd International Conference on Program Comprehen-
+sion, ICPC 2014, pages 142Ã¢ÂÂ145, New York, NY, USA, 2014.
+ACM. ISBN 978-1-4503-2879-1. . URL http://doi.acm.
+org/10.1145/2597008.2597789.
+[8] A. Goldberg and D. Robson. Smalltalk 80: the
+Language and its Implementation. Addison Wesley,
+Reading, Mass., May 1983. ISBN 0-201-13688-0.
+URL http://stephane.ducasse.free.fr/FreeBooks/
+BlueBook/Bluebook.pdf.
+[9] R. Holmes and G. C. Murphy. Using structural context to
+recommend source code examples. In Proceedings of the 27th
+International Conference on Software Engineering, ICSE Ã¢ÂÂ05,
+pages 117Ã¢ÂÂ125, New York, NY, USA, 2005. ACM. ISBN
+1-58113-963-2. . URL http://doi.acm.org/10.1145/
+1062455.1062491.
+[10] A. J. Ko, R. DeLine, and G. Venolia. Information needs in
+collocated software development teams. In Proceedings of
+the 29th international conference on Software Engineering,
+ICSE Ã¢ÂÂ07, pages 344Ã¢ÂÂ353, Washington, DC, USA, 2007. IEEE
+Computer Society. ISBN 0-7695-2828-7. .
+[11] J. Kubelka, A. Bergel, and R. Robbes. Asking and answering
+questions during a programming change task in the Pharo lan-
+guage. In Proceedings of the 5th Workshop on Evaluation and
+Usability of Programming Languages and Tools, PLATEAU
+Ã¢ÂÂ14, pages 1Ã¢ÂÂ11, New York, NY, USA, 2014. ACM. ISBN
+978-1-4503-2277-5. . URL http://doi.acm.org/10.
+1145/2688204.2688212.
+[12] T. D. LaToza and B. A. Myers. Developers ask reachabil-
+ity questions. In Proceedings of the 32Nd ACM/IEEE In-
+ternational Conference on Software Engineering - Volume 1,
+ICSE Ã¢ÂÂ10, pages 185Ã¢ÂÂ194, New York, NY, USA, 2010. ACM.
+ISBN 978-1-60558-719-6. . URL http://doi.acm.org/
+10.1145/1806799.1806829.
+[13] T. D. LaToza and B. A. Myers. Hard-to-answer questions
+about code. In Evaluation and Usability of Programming
+Languages and Tools, PLATEAU Ã¢ÂÂ10, pages 8:1Ã¢ÂÂ8:6, New
+York, NY, USA, 2010. ACM. ISBN 978-1-4503-0547-1. .
+URL http://doi.acm.org/10.1145/1937117.1937125.
+[14] D. Mandelin, L. Xu, R. BodÃÂ±ÃÂk, and D. Kimelman. Jungloid
+mining: Helping to navigate the API jungle. SIGPLAN Not.,
+40(6):48Ã¢ÂÂ61, June 2005. ISSN 0362-1340. . URL http:
+//doi.acm.org/10.1145/1064978.1065018.
+[15] C. C. Michael, G. McGraw, and M. A. Schatz. Generating
+software test data by evolution. IEEE Trans. Softw. Eng.,
+27(12):1085Ã¢ÂÂ1110, Dec. 2001. ISSN 0098-5589. . URL
+http://dx.doi.org/10.1109/32.988709.
+[16] R. Milner. A theory of type polymorphism in programming.
+Journal of Computer and System Sciences, 17:348Ã¢ÂÂ375, 1978.
+[17] C. Pacheco, S. K. Lahiri, M. D. Ernst, and T. Ball. Feedback-
+directed random test generation. In Proceedings of the 29th
+International Conference on Software Engineering, ICSE Ã¢ÂÂ07,
+pages 75Ã¢ÂÂ84, Washington, DC, USA, 2007. IEEE Computer
+Society. ISBN 0-7695-2828-7. . URL http://dx.doi.
+org/10.1109/ICSE.2007.37.
+[18] Z. PavlinovicÃÂ and D. BabicÃÂ. Interactive code snippet synthe-
+sis through repository mining. Technical Report UCB/EECS-
+2013-23, EECS Department, University of California, Berke-
+ley, mar 2013.
+[19] B. SpasojevicÃÂ, M. Lungu, and O. Nierstrasz. Mining the
+ecosystem to improve type inference for dynamically typed
+languages. In Proceedings of the 2014 ACM International
+Symposium on New Ideas, New Paradigms, and Reflections
+on Programming and Software, Onward! Ã¢ÂÂ14, pages 133Ã¢ÂÂ
+142, New York, NY, USA, 2014. ACM. ISBN 978-1-4503-
+3210-1. . URL http://scg.unibe.ch/archive/papers/
+Spas14c.pdf.
+To be submitted to IWST 2016 9 2016/6/28
+[20] B. SpasojevicÃÂ, M. Lungu, and O. Nierstrasz. A case study
+on type hints in method argument names in Pharo Smalltalk
+projects. In 2016 IEEE 23rd International Conference on
+Software Analysis, Evolution, and Reengineering (SANER),
+volume 1, pages 283Ã¢ÂÂ292, Mar. 2016. . URL http://scg.
+unibe.ch/archive/papers/Spas16a.pdf.
+[21] S. Thummalapenta and T. Xie. Parseweb: a programmer as-
+sistant for reusing open source code on the web. In Pro-
+ceedings of the twenty-second IEEE/ACM international con-
+ference on Automated software engineering, ASE Ã¢ÂÂ07, pages
+204Ã¢ÂÂ213, New York, NY, USA, 2007. ACM. ISBN 978-
+1-59593-882-4. . URL http://doi.acm.org/10.1145/
+1321631.1321663.
+[22] C. Zhang, J. Yang, Y. Zhang, J. Fan, X. Zhang, J. Zhao,
+and P. Ou. Automatic parameter recommendation for prac-
+tical api usage. In Proceedings of the 34th International
+Conference on Software Engineering, ICSE Ã¢ÂÂ12, pages 826Ã¢ÂÂ
+836, Piscataway, NJ, USA, 2012. IEEE Press. ISBN 978-1-
+4673-1067-3. URL http://dl.acm.org/citation.cfm?
+id=2337223.2337321.
+[23] H. Zhong, T. Xie, L. Zhang, J. Pei, and H. Mei. MAPO:
+Mining and recommending API usage patterns. In
+S. Drossopoulou, editor, ECOOP 2009 - Object-Oriented
+Programming, volume 5653 of Lecture Notes in Computer
+Science, pages 318Ã¢ÂÂ343. Springer Berlin Heidelberg, 2009.
+ISBN 978-3-642-03012-3. . URL http://dx.doi.org/10.
+1007/978-3-642-03013-0_15.
+To be submitted to IWST 2016 10 2016/6/28
+</reference>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.178205">
+<title confidence="0.996306">The Object Repository Pulling Objects out of the Ecosystem</title>
+<author confidence="0.999752">Boris SpasojevicÃÂ</author>
+<affiliation confidence="0.999961">University of Bern</affiliation>
+<email confidence="0.867003">spasojev@inf.unibe.ch</email>
+<author confidence="0.996633">Mohammad Ghafari</author>
+<affiliation confidence="0.999981">University of Bern</affiliation>
+<email confidence="0.892427">ghafari.unibe.ch</email>
+<author confidence="0.950523">Oscar Nierstrasz</author>
+<affiliation confidence="0.999895">University of Bern</affiliation>
+<email confidence="0.949143">oscar@inf.unibe.ch</email>
+<abstract confidence="0.974316888888889">In this paper we propose the idea of constructing an Object Repository Ã¢ÂÂ a repository of code snippets that, when executed, produce an instance of some class. Such a repository may be useful for several software engineering tasks like augmenting software documentation, testing object inspectors, improving program comprehension etc. We mine code snippets from existing software systems via brute force execution of code segments obtained through converting AST nodes of methods to source code. The gathered snippets are known to be executable, and this is a novelty which is not possible with existing approaches. We show that applying the proposed approach to 141 open source Pharo projects results in an Object Repository that can instantiate almost 80% of the available classes in these projects. Categories and Subject Descriptors CR-number [subcategory]: third-level</abstract>
+<intro confidence="0.303647">Keywords keyword1, keyword2</intro>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="false">
+<authors>
+<author>M Bruch</author>
+<author>M Monperrus</author>
+<author>M Mezini</author>
+</authors>
+<title>Learning from examples to improve code completion systems.</title>
+<date>2009</date>
+<journal>ACM. ISBN 978-1-60558-001-2. . URL</journal>
+<booktitle>In Proceedings of the the 7th Joint Meeting of the European Software Engineering Conference and the ACM SIGSOFT Symposium on The Foundations of Software Engineering, ESEC/FSE Ã¢09,</booktitle>
+<volume>10</volume>
+<pages>213--222</pages>
+<location>New York, NY, USA,</location>
+<contexts>
+<context position="33716" citStr="[1]" startWordPosition="5691" endWordPosition="5691">the concept of jungloid source code in an attempt to simplify the mined snippets in order to enable synthesis and combining to form more complex code fragments. Other work, such as that of Ghafari et al. [7] focuses on mining examples from unit tests claiming that this is a good source of examples as they are concise, relevant and trustworthy. Multiple approaches have been proposed which mine relevant code examples and use them to improve code completion tools. Holmes et al. propose Strathcona in an attempt to minimise the amount of effort for the developer to query for examples. Bruch et al. [1] explore three different strategies for using information gathered from existing code repositories. Their approach, given a set of methods that have been called on a variable and the enclosing method as context, recommend missing method calls for that variable. The PARSEWeb tool [21], rather than performing the analysis of open source systems itself, is build atop of code search engines in order to try to generalise their approach. Pavlinovic et al. [18] mines code snippets that occur more than a given threshold in a given code repository, and provides relevant snippets on demand and taking in</context>
+</contexts>
+<marker>[1]</marker>
+<rawString>M. Bruch, M. Monperrus, and M. Mezini. Learning from examples to improve code completion systems. In Proceedings of the the 7th Joint Meeting of the European Software Engineering Conference and the ACM SIGSOFT Symposium on The Foundations of Software Engineering, ESEC/FSE Ã¢ÂÂ09, pages 213Ã¢ÂÂ222, New York, NY, USA, 2009. ACM. ISBN 978-1-60558-001-2. . URL http://doi.acm.org/10.1145/ 1595696.1595728.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R P L Buse</author>
+<author>W Weimer</author>
+</authors>
+<title>Synthesizing api usage examples.</title>
+<date>2012</date>
+<booktitle>In Proceedings of the 34th International Conference on Software Engineering, ICSE Ã¢12,</booktitle>
+<tech>ISBN 978-1-4673-1067-3. URL http://dl.acm.org/citation.cfm?id=</tech>
+<pages>782--792</pages>
+<publisher>IEEE Press.</publisher>
+<location>Piscataway, NJ, USA,</location>
+<contexts>
+<context position="4558" citStr="[2, 9, 23]" startWordPosition="708" endWordPosition="710">n 7 concludes the paper. To be submitted to IWST 2016 1 2016/6/28 2. Motivation This section presents some of potential use cases for the Object Repository. Though there are several software engineering tasks that can benefit from the availability of such a repository, our discussion advocates three of which that we found most applicable. 2.1 Software Documentation Documentation, when available and up to date, is still the most reliable and widely used resource for understanding software systems and APIs. Much work has been done around the idea of mining usage examples to enrich documentation [2, 9, 23], however, none of the example snippets given are usable to directly create objects. Code snippets from the Object Repository could be used as a complementary source for such examples, with the additional knowledge that the snippets are immediately executable. The main requirement for this use case is to have concise and representative snippets. Also, since the snippets in the Object Repository produce objects, one could introduce a concept of a Ã¢playgroundÃ¢ within the documentation where a developer could experiment with a given live instance of the class whose documentation she is readin</context>
+<context position="32931" citStr="[2]" startWordPosition="5557" endWordPosition="5557">repositories is not a novel idea and much work has already been done in the field. To the best of our knowledge, this is the first work focusing on mining executable snippets, with a special focus on gathering object creating snippets. A strong use case for mining snippets in the existing work is to obtain real world examples of API usage. This is typically used to improve documentation or code search engines. Tools such as MAPO [23] focus on mining API methods that are frequently called together and their usages follow sequential rules. Other approaches such as those presented by Buse et al. [2] focus on a different kind of static analysis based on combination of path sensitive dataflow analysis, clustering, and pattern abstraction. A tool called PROSPECTOR [14] introduces the concept of jungloid source code in an attempt to simplify the mined snippets in order to enable synthesis and combining to form more complex code fragments. Other work, such as that of Ghafari et al. [7] focuses on mining examples from unit tests claiming that this is a good source of examples as they are concise, relevant and trustworthy. Multiple approaches have been proposed which mine relevant code examples</context>
+</contexts>
+<marker>[2]</marker>
+<rawString>R. P. L. Buse and W. Weimer. Synthesizing api usage examples. In Proceedings of the 34th International Conference on Software Engineering, ICSE Ã¢ÂÂ12, pages 782Ã¢ÂÂ792, Piscataway, NJ, USA, 2012. IEEE Press. ISBN 978-1-4673-1067-3. URL http://dl.acm.org/citation.cfm?id= 2337223.2337316.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>T Y Chen</author>
+<author>F C Kuo</author>
+<author>R G Merkel</author>
+<author>S P Ng</author>
+</authors>
+<title>Mirror adaptive random testing.</title>
+<date>2003</date>
+<journal>IEEE Computer Society. ISBN</journal>
+<booktitle>In Proceedings of the Third International Conference on Quality Software, QSIC Ã¢03,</booktitle>
+<pages>4</pages>
+<location>Washington, DC, USA,</location>
+<note>URL http://dl.acm.org/ citation.cfm?id=950789.951282.</note>
+<contexts>
+<context position="6295" citStr="[3, 5, 17]" startWordPosition="988" endWordPosition="990">ify a way that the object can represent itself. The object inspectors provide the user all available ways to represent the object, and the user chooses one that suits the current context. According to our discussion with researchers in the field, testing new representations is laborious since they are usually required to create the objects manually. Alternatively, the Object Repository could provide a set of objects gathered from the ecosystem that enables testing the new representation of such objects automatically. Testing software by generating random test inputs is a well researched field [3, 5, 17]. Integrating objects from the Object Repository with the random input generated by these approaches could help cover the corner cases that are hard to detect with raw random testing. Moreover, starting from actual instances from the Object Repository instead of, or in combination with, random ones could improve the results. For instance in case of genetic algorithms [15], this can 1 https://play.golang.org/ 2 https://tryhaskell.org/ guide the genetic algorithm to an acceptable population of input data much faster while also avoids local maximums. Method arguments are usually checked for valid</context>
+</contexts>
+<marker>[3]</marker>
+<rawString>T. Y. Chen, F. C. Kuo, R. G. Merkel, and S. P. Ng. Mirror adaptive random testing. In Proceedings of the Third International Conference on Quality Software, QSIC Ã¢ÂÂ03, pages 4Ã¢ÂÂ, Washington, DC, USA, 2003. IEEE Computer Society. ISBN 0-7695-2015-4. URL http://dl.acm.org/ citation.cfm?id=950789.951282.</rawString>
+</citation>
+<citation valid="false">
+<authors>
+<author>A ChisÃÂ§</author>
+<author>T GÃÂ±Ãrba</author>
+<author>O Nierstrasz</author>
+<author>A Syrel</author>
+</authors>
+<title>GTInspector: A moldable domain-aware object inspector.</title>
+<date>2015</date>
+<booktitle>In Proceedings of the Companion Publication of the 2015 ACM SIGPLAN Conference on Systems, Programming, and Applications: Software for Humanity, SPLASH Companion</booktitle>
+<pages>15--16</pages>
+<location>New York, NY, USA,</location>
+<contexts>
+<context position="5601" citStr="[4]" startWordPosition="877" endWordPosition="877">cept of a Ã¢playgroundÃ¢ within the documentation where a developer could experiment with a given live instance of the class whose documentation she is reading. Many similar Ã¢playgroundsÃ¢ exist for languages such as Go1 and Haskell2, allowing developers to simply try out parts of the language. This requires at least one snippet associated with the documented class. Unlike the previous case, the quality of snippet is of no importance, as the user is only meant to interact with the object. 2.2 Software Testing Modern approaches to inspecting objects rely on object specific representations [4]. This means that the author of a class, or anyone else through extensions, can specify a way that the object can represent itself. The object inspectors provide the user all available ways to represent the object, and the user chooses one that suits the current context. According to our discussion with researchers in the field, testing new representations is laborious since they are usually required to create the objects manually. Alternatively, the Object Repository could provide a set of objects gathered from the ecosystem that enables testing the new representation of such objects automati</context>
+</contexts>
+<marker>[4]</marker>
+<rawString>A. ChisÃÂ§, T. GÃÂ±ÃÂrba, O. Nierstrasz, and A. Syrel. GTInspector: A moldable domain-aware object inspector. In Proceedings of the Companion Publication of the 2015 ACM SIGPLAN Conference on Systems, Programming, and Applications: Software for Humanity, SPLASH Companion 2015, pages 15Ã¢ÂÂ 16, New York, NY, USA, 2015. ACM. ISBN 978-1-4503-3722-9. . URL http://scg.unibe.ch/archive/papers/ Chis15b-GTInspector.pdf.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J W Duran</author>
+<author>S Ntafos</author>
+</authors>
+<title>A report on random testing.</title>
+<date>1981</date>
+<booktitle>In Proceedings of the 5th International Conference on Software Engineering, ICSE Ã¢81,</booktitle>
+<pages>179--183</pages>
+<publisher>IEEE Press. ISBN</publisher>
+<location>Piscataway, NJ, USA,</location>
+<note>URL http://dl. acm.org/citation.cfm?id=800078.802530.</note>
+<contexts>
+<context position="6295" citStr="[3, 5, 17]" startWordPosition="988" endWordPosition="990">ify a way that the object can represent itself. The object inspectors provide the user all available ways to represent the object, and the user chooses one that suits the current context. According to our discussion with researchers in the field, testing new representations is laborious since they are usually required to create the objects manually. Alternatively, the Object Repository could provide a set of objects gathered from the ecosystem that enables testing the new representation of such objects automatically. Testing software by generating random test inputs is a well researched field [3, 5, 17]. Integrating objects from the Object Repository with the random input generated by these approaches could help cover the corner cases that are hard to detect with raw random testing. Moreover, starting from actual instances from the Object Repository instead of, or in combination with, random ones could improve the results. For instance in case of genetic algorithms [15], this can 1 https://play.golang.org/ 2 https://tryhaskell.org/ guide the genetic algorithm to an acceptable population of input data much faster while also avoids local maximums. Method arguments are usually checked for valid</context>
+</contexts>
+<marker>[5]</marker>
+<rawString>J. W. Duran and S. Ntafos. A report on random testing. In Proceedings of the 5th International Conference on Software Engineering, ICSE Ã¢ÂÂ81, pages 179Ã¢ÂÂ183, Piscataway, NJ, USA, 1981. IEEE Press. ISBN 0-89791-146-6. URL http://dl. acm.org/citation.cfm?id=800078.802530.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>B Foote</author>
+<author>R E Johnson</author>
+</authors>
+<title>Reflective facilities in Smalltalk80.</title>
+<date>1989</date>
+<journal>ACM SIGPLAN Notices,</journal>
+<booktitle>In Proceedings OOPSLA Ã¢89,</booktitle>
+<volume>24</volume>
+<pages>327--336</pages>
+<contexts>
+<context position="3064" citStr="[6]" startWordPosition="464" endWordPosition="464">te several software engineering tasks such as augmenting documentation, new testing approaches, support for program comprehension and others. We realize this approach by extracting all AST nodes from all methods of all available classes, converting them to their source code representation and attempting to execute them. If the execution is successful, i.e., produces an object, we save the snippet in a database and associate it to the type of the produced object. For our case study we chose Pharo, a Smalltalk inspired language. This choice was made because of the high reflectivity of Smalltalk [6], which enables us to move quickly with implementing such a system. We applied this approach to 141 open source Pharo projects and a selection of classes contained in the base Pharo image. We find that the result of this approach is that around 10% of AST nodes, when converted to source code and executed, produce objects for almost 80% of all the analysed classes. We check several aspects of the snippets to better understand their properties and also analyse the nodes that failed to produce objects, and discuss how to tackle the reasons for the failures. The paper is organised as follows: Sect</context>
+</contexts>
+<marker>[6]</marker>
+<rawString>B. Foote and R. E. Johnson. Reflective facilities in Smalltalk80. In Proceedings OOPSLA Ã¢ÂÂ89, ACM SIGPLAN Notices, volume 24, pages 327Ã¢ÂÂ336, Oct. 1989.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Ghafari</author>
+<author>C Ghezzi</author>
+<author>A Mocci</author>
+<author>G Tamburrelli</author>
+</authors>
+<title>Mining unit tests for code recommendation.</title>
+<date>2014</date>
+<booktitle>In Proceedings of the 22Nd International Conference on Program Comprehension, ICPC 2014,</booktitle>
+<pages>142--145</pages>
+<location>New York, NY, USA,</location>
+<contexts>
+<context position="33320" citStr="[7]" startWordPosition="5623" endWordPosition="5623"> or code search engines. Tools such as MAPO [23] focus on mining API methods that are frequently called together and their usages follow sequential rules. Other approaches such as those presented by Buse et al. [2] focus on a different kind of static analysis based on combination of path sensitive dataflow analysis, clustering, and pattern abstraction. A tool called PROSPECTOR [14] introduces the concept of jungloid source code in an attempt to simplify the mined snippets in order to enable synthesis and combining to form more complex code fragments. Other work, such as that of Ghafari et al. [7] focuses on mining examples from unit tests claiming that this is a good source of examples as they are concise, relevant and trustworthy. Multiple approaches have been proposed which mine relevant code examples and use them to improve code completion tools. Holmes et al. propose Strathcona in an attempt to minimise the amount of effort for the developer to query for examples. Bruch et al. [1] explore three different strategies for using information gathered from existing code repositories. Their approach, given a set of methods that have been called on a variable and the enclosing method as c</context>
+</contexts>
+<marker>[7]</marker>
+<rawString>M. Ghafari, C. Ghezzi, A. Mocci, and G. Tamburrelli. Mining unit tests for code recommendation. In Proceedings of the 22Nd International Conference on Program Comprehension, ICPC 2014, pages 142Ã¢ÂÂ145, New York, NY, USA, 2014. ACM. ISBN 978-1-4503-2879-1. . URL http://doi.acm. org/10.1145/2597008.2597789.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Goldberg</author>
+<author>D Robson</author>
+</authors>
+<title>Smalltalk 80: the Language and its Implementation.</title>
+<date>1983</date>
+<publisher>Addison Wesley,</publisher>
+<location>Reading, Mass.,</location>
+<note>ISBN 0-201-13688-0. URL http://stephane.ducasse.free.fr/FreeBooks/ BlueBook/Bluebook.pdf.</note>
+<contexts>
+<context position="22956" citStr="[8]" startWordPosition="3850" endWordPosition="3850">high as might be expected. We move on to other poor quality snippets by defining the Cl set as shown in Figure 4, Equation 18. This set is a subset of C1, and contains all classes whose sole associated snippet is just one literal. This set is quite large as can be seen in Table 3. It has a cardinality of 6,091 or 55.79% of Cd. The size of this set is a result of SmalltalkÃ¢s high reflective nature. Namely, following the Ã¢everything is an objectÃ¢ philosophy, each class in Smalltalk is essentially an instance of a corresponding metaclass, which in turn is an instance of the Metaclass class [8]. This leads to the phenomenon that executing a class name literal in Smalltalk will result in the object representing that class i.e., an instance of the corresponding metaclass. This phenomenon accounts for all but 8 of the elements of Cl which are global variables which are mapped to concrete instances of regular (not meta) classes. 4.3 Promising Snippets An interesting set to focus on is the set of all classes that can be instantiated by the objectRepo function in a non-trivial and non-literal way. This is essentially the domain of the objectRepo function excluding the sets Cnew and Cl, an</context>
+</contexts>
+<marker>[8]</marker>
+<rawString>A. Goldberg and D. Robson. Smalltalk 80: the Language and its Implementation. Addison Wesley, Reading, Mass., May 1983. ISBN 0-201-13688-0. URL http://stephane.ducasse.free.fr/FreeBooks/ BlueBook/Bluebook.pdf.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R Holmes</author>
+<author>G C Murphy</author>
+</authors>
+<title>Using structural context to recommend source code examples.</title>
+<date>2005</date>
+<journal>ACM. ISBN 1-58113-963-2. . URL</journal>
+<booktitle>In Proceedings of the 27th International Conference on Software Engineering, ICSE Ã¢05,</booktitle>
+<volume>10</volume>
+<pages>117--125</pages>
+<location>New York, NY, USA,</location>
+<contexts>
+<context position="4558" citStr="[2, 9, 23]" startWordPosition="708" endWordPosition="710">n 7 concludes the paper. To be submitted to IWST 2016 1 2016/6/28 2. Motivation This section presents some of potential use cases for the Object Repository. Though there are several software engineering tasks that can benefit from the availability of such a repository, our discussion advocates three of which that we found most applicable. 2.1 Software Documentation Documentation, when available and up to date, is still the most reliable and widely used resource for understanding software systems and APIs. Much work has been done around the idea of mining usage examples to enrich documentation [2, 9, 23], however, none of the example snippets given are usable to directly create objects. Code snippets from the Object Repository could be used as a complementary source for such examples, with the additional knowledge that the snippets are immediately executable. The main requirement for this use case is to have concise and representative snippets. Also, since the snippets in the Object Repository produce objects, one could introduce a concept of a Ã¢playgroundÃ¢ within the documentation where a developer could experiment with a given live instance of the class whose documentation she is readin</context>
+</contexts>
+<marker>[9]</marker>
+<rawString>R. Holmes and G. C. Murphy. Using structural context to recommend source code examples. In Proceedings of the 27th International Conference on Software Engineering, ICSE Ã¢ÂÂ05, pages 117Ã¢ÂÂ125, New York, NY, USA, 2005. ACM. ISBN 1-58113-963-2. . URL http://doi.acm.org/10.1145/ 1062455.1062491.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A J Ko</author>
+<author>R DeLine</author>
+<author>G Venolia</author>
+</authors>
+<title>Information needs in collocated software development teams.</title>
+<date>2007</date>
+<journal>IEEE Computer Society. ISBN</journal>
+<booktitle>In Proceedings of the 29th international conference on Software Engineering, ICSE Ã¢07,</booktitle>
+<pages>344--353</pages>
+<location>Washington, DC, USA,</location>
+<contexts>
+<context position="7874" citStr="[10, 11]" startWordPosition="1236" endWordPosition="1237">that arguments of the method are of a type that is present throughout the ecosystem, the Object Repository should contain code snippets needed to create such instances. This facilitates, to some extent, verifying automatically that the validation of the method arguments behaves as expected. To realize these use cases the Object Repository should contain as many snippets associated with a class as possible. The snippets should also produce representative and diverse objects. 2.3 Software evolution and maintenance While studying source code is the main way that developers interact with programs [10, 11] many program comprehension tasks require runtime observation [12, 13]. Nevertheless, running a system and placing it in a desired state can be challenging for several reasons like lack of input to the system, lack of knowledge about the system, long system running time before reaching a desired point. Having a way to create a live object of a required type could spawn a running system at any point in the source code by filling all the gaps in the execution context with blank objects of the adequate type. These objects should be presented in an object-inspector-like interface allowing the deve</context>
+</contexts>
+<marker>[10]</marker>
+<rawString>A. J. Ko, R. DeLine, and G. Venolia. Information needs in collocated software development teams. In Proceedings of the 29th international conference on Software Engineering, ICSE Ã¢ÂÂ07, pages 344Ã¢ÂÂ353, Washington, DC, USA, 2007. IEEE Computer Society. ISBN 0-7695-2828-7. .</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Kubelka</author>
+<author>A Bergel</author>
+<author>R Robbes</author>
+</authors>
+<title>Asking and answering questions during a programming change task in the Pharo language.</title>
+<date>2014</date>
+<journal>ACM. ISBN 978-1-4503-2277-5. . URL</journal>
+<booktitle>In Proceedings of the 5th Workshop on Evaluation and Usability of Programming Languages and Tools, PLATEAU Ã¢14,</booktitle>
+<volume>10</volume>
+<pages>1--11</pages>
+<location>New York, NY, USA,</location>
+<contexts>
+<context position="7874" citStr="[10, 11]" startWordPosition="1236" endWordPosition="1237">that arguments of the method are of a type that is present throughout the ecosystem, the Object Repository should contain code snippets needed to create such instances. This facilitates, to some extent, verifying automatically that the validation of the method arguments behaves as expected. To realize these use cases the Object Repository should contain as many snippets associated with a class as possible. The snippets should also produce representative and diverse objects. 2.3 Software evolution and maintenance While studying source code is the main way that developers interact with programs [10, 11] many program comprehension tasks require runtime observation [12, 13]. Nevertheless, running a system and placing it in a desired state can be challenging for several reasons like lack of input to the system, lack of knowledge about the system, long system running time before reaching a desired point. Having a way to create a live object of a required type could spawn a running system at any point in the source code by filling all the gaps in the execution context with blank objects of the adequate type. These objects should be presented in an object-inspector-like interface allowing the deve</context>
+</contexts>
+<marker>[11]</marker>
+<rawString>J. Kubelka, A. Bergel, and R. Robbes. Asking and answering questions during a programming change task in the Pharo language. In Proceedings of the 5th Workshop on Evaluation and Usability of Programming Languages and Tools, PLATEAU Ã¢ÂÂ14, pages 1Ã¢ÂÂ11, New York, NY, USA, 2014. ACM. ISBN 978-1-4503-2277-5. . URL http://doi.acm.org/10. 1145/2688204.2688212.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>T D LaToza</author>
+<author>B A Myers</author>
+</authors>
+<title>Developers ask reachability questions.</title>
+<date>2010</date>
+<journal>ACM. ISBN 978-1-60558-719-6. . URL</journal>
+<booktitle>In Proceedings of the 32Nd ACM/IEEE International Conference on Software Engineering - Volume 1, ICSE Ã¢10,</booktitle>
+<volume>http://doi.acm.org/</volume>
+<pages>185--194</pages>
+<location>New York, NY, USA,</location>
+<contexts>
+<context position="7944" citStr="[12, 13]" startWordPosition="1246" endWordPosition="1247">the ecosystem, the Object Repository should contain code snippets needed to create such instances. This facilitates, to some extent, verifying automatically that the validation of the method arguments behaves as expected. To realize these use cases the Object Repository should contain as many snippets associated with a class as possible. The snippets should also produce representative and diverse objects. 2.3 Software evolution and maintenance While studying source code is the main way that developers interact with programs [10, 11] many program comprehension tasks require runtime observation [12, 13]. Nevertheless, running a system and placing it in a desired state can be challenging for several reasons like lack of input to the system, lack of knowledge about the system, long system running time before reaching a desired point. Having a way to create a live object of a required type could spawn a running system at any point in the source code by filling all the gaps in the execution context with blank objects of the adequate type. These objects should be presented in an object-inspector-like interface allowing the developer to set the values of these context objects and guide the executi</context>
+</contexts>
+<marker>[12]</marker>
+<rawString>T. D. LaToza and B. A. Myers. Developers ask reachability questions. In Proceedings of the 32Nd ACM/IEEE International Conference on Software Engineering - Volume 1, ICSE Ã¢ÂÂ10, pages 185Ã¢ÂÂ194, New York, NY, USA, 2010. ACM. ISBN 978-1-60558-719-6. . URL http://doi.acm.org/ 10.1145/1806799.1806829.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>T D LaToza</author>
+<author>B A Myers</author>
+</authors>
+<title>Hard-to-answer questions about code.</title>
+<date>2010</date>
+<journal>ACM. ISBN</journal>
+<booktitle>In Evaluation and Usability of Programming Languages and Tools, PLATEAU Ã¢10,</booktitle>
+<pages>8--1</pages>
+<location>New York, NY, USA,</location>
+<note>URL http://doi.acm.org/10.1145/1937117.1937125.</note>
+<contexts>
+<context position="7944" citStr="[12, 13]" startWordPosition="1246" endWordPosition="1247">the ecosystem, the Object Repository should contain code snippets needed to create such instances. This facilitates, to some extent, verifying automatically that the validation of the method arguments behaves as expected. To realize these use cases the Object Repository should contain as many snippets associated with a class as possible. The snippets should also produce representative and diverse objects. 2.3 Software evolution and maintenance While studying source code is the main way that developers interact with programs [10, 11] many program comprehension tasks require runtime observation [12, 13]. Nevertheless, running a system and placing it in a desired state can be challenging for several reasons like lack of input to the system, lack of knowledge about the system, long system running time before reaching a desired point. Having a way to create a live object of a required type could spawn a running system at any point in the source code by filling all the gaps in the execution context with blank objects of the adequate type. These objects should be presented in an object-inspector-like interface allowing the developer to set the values of these context objects and guide the executi</context>
+</contexts>
+<marker>[13]</marker>
+<rawString>T. D. LaToza and B. A. Myers. Hard-to-answer questions about code. In Evaluation and Usability of Programming Languages and Tools, PLATEAU Ã¢ÂÂ10, pages 8:1Ã¢ÂÂ8:6, New York, NY, USA, 2010. ACM. ISBN 978-1-4503-0547-1. . URL http://doi.acm.org/10.1145/1937117.1937125.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Mandelin</author>
+<author>L Xu</author>
+<author>R BodÃÂ±Ãk</author>
+<author>D Kimelman</author>
+</authors>
+<title>Jungloid mining: Helping to navigate the API jungle.</title>
+<date>2005</date>
+<journal>SIGPLAN Not.,</journal>
+<volume>40</volume>
+<issue>6</issue>
+<note>ISSN 0362-1340. . URL http: //doi.acm.org/10.1145/1064978.1065018.</note>
+<contexts>
+<context position="33101" citStr="[14]" startWordPosition="5584" endWordPosition="5584">ppets, with a special focus on gathering object creating snippets. A strong use case for mining snippets in the existing work is to obtain real world examples of API usage. This is typically used to improve documentation or code search engines. Tools such as MAPO [23] focus on mining API methods that are frequently called together and their usages follow sequential rules. Other approaches such as those presented by Buse et al. [2] focus on a different kind of static analysis based on combination of path sensitive dataflow analysis, clustering, and pattern abstraction. A tool called PROSPECTOR [14] introduces the concept of jungloid source code in an attempt to simplify the mined snippets in order to enable synthesis and combining to form more complex code fragments. Other work, such as that of Ghafari et al. [7] focuses on mining examples from unit tests claiming that this is a good source of examples as they are concise, relevant and trustworthy. Multiple approaches have been proposed which mine relevant code examples and use them to improve code completion tools. Holmes et al. propose Strathcona in an attempt to minimise the amount of effort for the developer to query for examples. B</context>
+</contexts>
+<marker>[14]</marker>
+<rawString>D. Mandelin, L. Xu, R. BodÃÂ±ÃÂk, and D. Kimelman. Jungloid mining: Helping to navigate the API jungle. SIGPLAN Not., 40(6):48Ã¢ÂÂ61, June 2005. ISSN 0362-1340. . URL http: //doi.acm.org/10.1145/1064978.1065018.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>C C Michael</author>
+<author>G McGraw</author>
+<author>M A Schatz</author>
+</authors>
+<title>Generating software test data by evolution.</title>
+<date>2001</date>
+<journal>IEEE Trans. Softw. Eng.,</journal>
+<volume>27</volume>
+<issue>12</issue>
+<note>ISSN 0098-5589. . URL http://dx.doi.org/10.1109/32.988709.</note>
+<contexts>
+<context position="6669" citStr="[15]" startWordPosition="1048" endWordPosition="1048">pository could provide a set of objects gathered from the ecosystem that enables testing the new representation of such objects automatically. Testing software by generating random test inputs is a well researched field [3, 5, 17]. Integrating objects from the Object Repository with the random input generated by these approaches could help cover the corner cases that are hard to detect with raw random testing. Moreover, starting from actual instances from the Object Repository instead of, or in combination with, random ones could improve the results. For instance in case of genetic algorithms [15], this can 1 https://play.golang.org/ 2 https://tryhaskell.org/ guide the genetic algorithm to an acceptable population of input data much faster while also avoids local maximums. Method arguments are usually checked for validity at the beginning of a method. In case the argument is not valid, the method should signal this fact to the caller in a standardized manner e.g., by throwing an exception, or returning an error value. In order to test this a developer would require multiple instances of the argument type both valid and invalid in the context of being input for that method. Assuming tha</context>
+</contexts>
+<marker>[15]</marker>
+<rawString>C. C. Michael, G. McGraw, and M. A. Schatz. Generating software test data by evolution. IEEE Trans. Softw. Eng., 27(12):1085Ã¢ÂÂ1110, Dec. 2001. ISSN 0098-5589. . URL http://dx.doi.org/10.1109/32.988709.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R Milner</author>
+</authors>
+<title>A theory of type polymorphism in programming.</title>
+<date>1978</date>
+<journal>Journal of Computer and System Sciences,</journal>
+<volume>17</volume>
+<contexts>
+<context position="35701" citStr="[16, 19, 20]" startWordPosition="6008" endWordPosition="6010">nstant propagation, function inlining and etc. For instance, in Section 4.6 we identified that the main reason that executing AST nodes fails is that code snippets contain unidentified variables. In a statically typed language, this could, to a large extent, be addressed by bootstrapping the Object Repository i.e., using the Object Repository to instantiate all undefined variables at the beginning of the snippet, making all undefined variables not just defined, but instantiated. Lacking static type information would make this not so easily applicable, but still possible through type inference [16, 19, 20], or brute force. The downside of this approach is that the instances created would be somewhat synthetic rather than directly pulled from the ecosystem. Finally, once we have an approach that is shown to be beneficial to developers, we would like to branch out to different programing languages and examine how different language features such as type systems, reflectivity or mode of execution (compiled vs interpreted) affect the benefits or usability of the Object Repository. 7. Conclusion In this paper we propose the idea of building an Object Repository, a repository of code snippets that, w</context>
+</contexts>
+<marker>[16]</marker>
+<rawString>R. Milner. A theory of type polymorphism in programming. Journal of Computer and System Sciences, 17:348Ã¢ÂÂ375, 1978.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>C Pacheco</author>
+<author>S K Lahiri</author>
+<author>M D Ernst</author>
+<author>T Ball</author>
+</authors>
+<title>Feedbackdirected random test generation.</title>
+<date>2007</date>
+<journal>IEEE Computer Society. ISBN</journal>
+<booktitle>In Proceedings of the 29th International Conference on Software Engineering, ICSE Ã¢07,</booktitle>
+<pages>75--84</pages>
+<location>Washington, DC, USA,</location>
+<note>URL http://dx.doi. org/10.1109/ICSE.2007.37.</note>
+<contexts>
+<context position="6295" citStr="[3, 5, 17]" startWordPosition="988" endWordPosition="990">ify a way that the object can represent itself. The object inspectors provide the user all available ways to represent the object, and the user chooses one that suits the current context. According to our discussion with researchers in the field, testing new representations is laborious since they are usually required to create the objects manually. Alternatively, the Object Repository could provide a set of objects gathered from the ecosystem that enables testing the new representation of such objects automatically. Testing software by generating random test inputs is a well researched field [3, 5, 17]. Integrating objects from the Object Repository with the random input generated by these approaches could help cover the corner cases that are hard to detect with raw random testing. Moreover, starting from actual instances from the Object Repository instead of, or in combination with, random ones could improve the results. For instance in case of genetic algorithms [15], this can 1 https://play.golang.org/ 2 https://tryhaskell.org/ guide the genetic algorithm to an acceptable population of input data much faster while also avoids local maximums. Method arguments are usually checked for valid</context>
+</contexts>
+<marker>[17]</marker>
+<rawString>C. Pacheco, S. K. Lahiri, M. D. Ernst, and T. Ball. Feedbackdirected random test generation. In Proceedings of the 29th International Conference on Software Engineering, ICSE Ã¢ÂÂ07, pages 75Ã¢ÂÂ84, Washington, DC, USA, 2007. IEEE Computer Society. ISBN 0-7695-2828-7. . URL http://dx.doi. org/10.1109/ICSE.2007.37.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Z PavlinovicÃ</author>
+<author>D BabicÃ</author>
+</authors>
+<title>Interactive code snippet synthesis through repository mining.</title>
+<date>2013</date>
+<tech>Technical Report UCB/EECS2013-23,</tech>
+<institution>EECS Department, University of California, Berkeley,</institution>
+<contexts>
+<context position="34174" citStr="[18]" startWordPosition="5766" endWordPosition="5766">n tools. Holmes et al. propose Strathcona in an attempt to minimise the amount of effort for the developer to query for examples. Bruch et al. [1] explore three different strategies for using information gathered from existing code repositories. Their approach, given a set of methods that have been called on a variable and the enclosing method as context, recommend missing method calls for that variable. The PARSEWeb tool [21], rather than performing the analysis of open source systems itself, is build atop of code search engines in order to try to generalise their approach. Pavlinovic et al. [18] mines code snippets that occur more than a given threshold in a given code repository, and provides relevant snippets on demand and taking in to account the developers current context. Zhang et al. focus on automatically filling the parameter list of API calls automatically [22]. 6. Future Work We identify several directions of potential future work. The main focus of the future work should be bringing the use cases described in Section 2 to fruition, and performing user studies to determine how beneficial the Object Repository would be to developers. This means both improving the approach fo</context>
+</contexts>
+<marker>[18]</marker>
+<rawString>Z. PavlinovicÃÂ and D. BabicÃÂ. Interactive code snippet synthesis through repository mining. Technical Report UCB/EECS2013-23, EECS Department, University of California, Berkeley, mar 2013.</rawString>
+</citation>
+<citation valid="false">
+<authors>
+<author>B SpasojevicÃ</author>
+<author>M Lungu</author>
+<author>O Nierstrasz</author>
+</authors>
+<title>Mining the ecosystem to improve type inference for dynamically typed languages.</title>
+<date>2014</date>
+<booktitle>In Proceedings of the 2014 ACM International Symposium on New Ideas, New Paradigms, and Reflections on Programming and Software, Onward! Ã¢14,</booktitle>
+<volume>9</volume>
+<pages>133--142</pages>
+<location>New York, NY, USA,</location>
+<note>To be submitted to IWST</note>
+<contexts>
+<context position="9000" citStr="[19]" startWordPosition="1426" endWordPosition="1426">ts should be presented in an object-inspector-like interface allowing the developer to set the values of these context objects and guide the execution of the program, as one would do in a debugging session. One example of one such usage could be in the domain of application security. Executing parts of source code in a sandbox created from objects taken from the Object Repository could ensure that the execution does not have any unexpected side effects. Objects taken from the Object Repository could be used to help disambiguate results of type inference engines for dynamically typed languages [19]. Many of these type inference engines provide a list of potential candidate types for a variable. Thanks to the Object Repository, having instances of those types, and attempting to execute the code with each of those objects assigned to the variable in question could shed some light on the types which are more likely false positives. The main requirement for these use cases is to have an Object Repository that contains snippets associated to as many classes as possible, extending the applicability of this use case to more project. To be submitted to IWST 2016 2 2016/6/28 0 1 82 9 3 4 5 6 Met</context>
+<context position="35701" citStr="[16, 19, 20]" startWordPosition="6008" endWordPosition="6010">nstant propagation, function inlining and etc. For instance, in Section 4.6 we identified that the main reason that executing AST nodes fails is that code snippets contain unidentified variables. In a statically typed language, this could, to a large extent, be addressed by bootstrapping the Object Repository i.e., using the Object Repository to instantiate all undefined variables at the beginning of the snippet, making all undefined variables not just defined, but instantiated. Lacking static type information would make this not so easily applicable, but still possible through type inference [16, 19, 20], or brute force. The downside of this approach is that the instances created would be somewhat synthetic rather than directly pulled from the ecosystem. Finally, once we have an approach that is shown to be beneficial to developers, we would like to branch out to different programing languages and examine how different language features such as type systems, reflectivity or mode of execution (compiled vs interpreted) affect the benefits or usability of the Object Repository. 7. Conclusion In this paper we propose the idea of building an Object Repository, a repository of code snippets that, w</context>
+</contexts>
+<marker>[19]</marker>
+<rawString>B. SpasojevicÃÂ, M. Lungu, and O. Nierstrasz. Mining the ecosystem to improve type inference for dynamically typed languages. In Proceedings of the 2014 ACM International Symposium on New Ideas, New Paradigms, and Reflections on Programming and Software, Onward! Ã¢ÂÂ14, pages 133Ã¢ÂÂ 142, New York, NY, USA, 2014. ACM. ISBN 978-1-4503-3210-1. . URL http://scg.unibe.ch/archive/papers/ Spas14c.pdf. To be submitted to IWST 2016 9 2016/6/28</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>B SpasojevicÃ</author>
+<author>M Lungu</author>
+<author>O Nierstrasz</author>
+</authors>
+<title>A case study on type hints in method argument names in Pharo Smalltalk projects.</title>
+<date>2016</date>
+<booktitle>In 2016 IEEE 23rd International Conference on Software Analysis, Evolution, and Reengineering (SANER),</booktitle>
+<volume>1</volume>
+<pages>283--292</pages>
+<note>URL http://scg. unibe.ch/archive/papers/Spas16a.pdf.</note>
+<contexts>
+<context position="35701" citStr="[16, 19, 20]" startWordPosition="6008" endWordPosition="6010">nstant propagation, function inlining and etc. For instance, in Section 4.6 we identified that the main reason that executing AST nodes fails is that code snippets contain unidentified variables. In a statically typed language, this could, to a large extent, be addressed by bootstrapping the Object Repository i.e., using the Object Repository to instantiate all undefined variables at the beginning of the snippet, making all undefined variables not just defined, but instantiated. Lacking static type information would make this not so easily applicable, but still possible through type inference [16, 19, 20], or brute force. The downside of this approach is that the instances created would be somewhat synthetic rather than directly pulled from the ecosystem. Finally, once we have an approach that is shown to be beneficial to developers, we would like to branch out to different programing languages and examine how different language features such as type systems, reflectivity or mode of execution (compiled vs interpreted) affect the benefits or usability of the Object Repository. 7. Conclusion In this paper we propose the idea of building an Object Repository, a repository of code snippets that, w</context>
+</contexts>
+<marker>[20]</marker>
+<rawString>B. SpasojevicÃÂ, M. Lungu, and O. Nierstrasz. A case study on type hints in method argument names in Pharo Smalltalk projects. In 2016 IEEE 23rd International Conference on Software Analysis, Evolution, and Reengineering (SANER), volume 1, pages 283Ã¢ÂÂ292, Mar. 2016. . URL http://scg. unibe.ch/archive/papers/Spas16a.pdf.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Thummalapenta</author>
+<author>T Xie</author>
+</authors>
+<title>Parseweb: a programmer assistant for reusing open source code on the web.</title>
+<date>2007</date>
+<journal>ACM. ISBN 978-1-59593-882-4. . URL</journal>
+<booktitle>In Proceedings of the twenty-second IEEE/ACM international conference on Automated software engineering, ASE Ã¢07,</booktitle>
+<volume>10</volume>
+<pages>204--213</pages>
+<location>New York, NY, USA,</location>
+<contexts>
+<context position="34000" citStr="[21]" startWordPosition="5736" endWordPosition="5736">rce of examples as they are concise, relevant and trustworthy. Multiple approaches have been proposed which mine relevant code examples and use them to improve code completion tools. Holmes et al. propose Strathcona in an attempt to minimise the amount of effort for the developer to query for examples. Bruch et al. [1] explore three different strategies for using information gathered from existing code repositories. Their approach, given a set of methods that have been called on a variable and the enclosing method as context, recommend missing method calls for that variable. The PARSEWeb tool [21], rather than performing the analysis of open source systems itself, is build atop of code search engines in order to try to generalise their approach. Pavlinovic et al. [18] mines code snippets that occur more than a given threshold in a given code repository, and provides relevant snippets on demand and taking in to account the developers current context. Zhang et al. focus on automatically filling the parameter list of API calls automatically [22]. 6. Future Work We identify several directions of potential future work. The main focus of the future work should be bringing the use cases descr</context>
+</contexts>
+<marker>[21]</marker>
+<rawString>S. Thummalapenta and T. Xie. Parseweb: a programmer assistant for reusing open source code on the web. In Proceedings of the twenty-second IEEE/ACM international conference on Automated software engineering, ASE Ã¢ÂÂ07, pages 204Ã¢ÂÂ213, New York, NY, USA, 2007. ACM. ISBN 978-1-59593-882-4. . URL http://doi.acm.org/10.1145/ 1321631.1321663.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>C Zhang</author>
+<author>J Yang</author>
+<author>Y Zhang</author>
+<author>J Fan</author>
+<author>X Zhang</author>
+<author>J Zhao</author>
+<author>P Ou</author>
+</authors>
+<title>Automatic parameter recommendation for practical api usage.</title>
+<date>2012</date>
+<booktitle>In Proceedings of the 34th International Conference on Software Engineering, ICSE Ã¢12,</booktitle>
+<pages>826--836</pages>
+<publisher>IEEE Press. ISBN</publisher>
+<location>Piscataway, NJ, USA,</location>
+<note>URL http://dl.acm.org/citation.cfm? id=2337223.2337321.</note>
+<contexts>
+<context position="34454" citStr="[22]" startWordPosition="5811" endWordPosition="5811">hods that have been called on a variable and the enclosing method as context, recommend missing method calls for that variable. The PARSEWeb tool [21], rather than performing the analysis of open source systems itself, is build atop of code search engines in order to try to generalise their approach. Pavlinovic et al. [18] mines code snippets that occur more than a given threshold in a given code repository, and provides relevant snippets on demand and taking in to account the developers current context. Zhang et al. focus on automatically filling the parameter list of API calls automatically [22]. 6. Future Work We identify several directions of potential future work. The main focus of the future work should be bringing the use cases described in Section 2 to fruition, and performing user studies to determine how beneficial the Object Repository would be to developers. This means both improving the approach for building up the object repository which is still in its primary steps, as well as implementing the necessary tools that would serve as the front end facing the developer. We believe the proposed approach can be improved via applying more solid static analysis techniques such as</context>
+</contexts>
+<marker>[22]</marker>
+<rawString>C. Zhang, J. Yang, Y. Zhang, J. Fan, X. Zhang, J. Zhao, and P. Ou. Automatic parameter recommendation for practical api usage. In Proceedings of the 34th International Conference on Software Engineering, ICSE Ã¢ÂÂ12, pages 826Ã¢ÂÂ 836, Piscataway, NJ, USA, 2012. IEEE Press. ISBN 978-1-4673-1067-3. URL http://dl.acm.org/citation.cfm? id=2337223.2337321.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>H Zhong</author>
+<author>T Xie</author>
+<author>L Zhang</author>
+<author>J Pei</author>
+<author>H Mei</author>
+</authors>
+<title>MAPO: Mining and recommending API usage patterns.</title>
+<date>2009</date>
+<booktitle>ECOOP 2009 - Object-Oriented Programming,</booktitle>
+<volume>5653</volume>
+<pages>318--343</pages>
+<editor>In S. Drossopoulou, editor,</editor>
+<publisher>Springer</publisher>
+<location>Berlin Heidelberg,</location>
+<note>To be submitted to IWST</note>
+<contexts>
+<context position="4558" citStr="[2, 9, 23]" startWordPosition="708" endWordPosition="710">n 7 concludes the paper. To be submitted to IWST 2016 1 2016/6/28 2. Motivation This section presents some of potential use cases for the Object Repository. Though there are several software engineering tasks that can benefit from the availability of such a repository, our discussion advocates three of which that we found most applicable. 2.1 Software Documentation Documentation, when available and up to date, is still the most reliable and widely used resource for understanding software systems and APIs. Much work has been done around the idea of mining usage examples to enrich documentation [2, 9, 23], however, none of the example snippets given are usable to directly create objects. Code snippets from the Object Repository could be used as a complementary source for such examples, with the additional knowledge that the snippets are immediately executable. The main requirement for this use case is to have concise and representative snippets. Also, since the snippets in the Object Repository produce objects, one could introduce a concept of a Ã¢playgroundÃ¢ within the documentation where a developer could experiment with a given live instance of the class whose documentation she is readin</context>
+<context position="32765" citStr="[23]" startWordPosition="5530" endWordPosition="5530">ply never instantiated. Some are never mentioned in the source code, and some have only class side methods invoked. 5. Related Work Mining code snippets from existing repositories is not a novel idea and much work has already been done in the field. To the best of our knowledge, this is the first work focusing on mining executable snippets, with a special focus on gathering object creating snippets. A strong use case for mining snippets in the existing work is to obtain real world examples of API usage. This is typically used to improve documentation or code search engines. Tools such as MAPO [23] focus on mining API methods that are frequently called together and their usages follow sequential rules. Other approaches such as those presented by Buse et al. [2] focus on a different kind of static analysis based on combination of path sensitive dataflow analysis, clustering, and pattern abstraction. A tool called PROSPECTOR [14] introduces the concept of jungloid source code in an attempt to simplify the mined snippets in order to enable synthesis and combining to form more complex code fragments. Other work, such as that of Ghafari et al. [7] focuses on mining examples from unit tests c</context>
+</contexts>
+<marker>[23]</marker>
+<rawString>H. Zhong, T. Xie, L. Zhang, J. Pei, and H. Mei. MAPO: Mining and recommending API usage patterns. In S. Drossopoulou, editor, ECOOP 2009 - Object-Oriented Programming, volume 5653 of Lecture Notes in Computer Science, pages 318Ã¢ÂÂ343. Springer Berlin Heidelberg, 2009. ISBN 978-3-642-03012-3. . URL http://dx.doi.org/10. 1007/978-3-642-03013-0_15. To be submitted to IWST 2016 10 2016/6/28</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

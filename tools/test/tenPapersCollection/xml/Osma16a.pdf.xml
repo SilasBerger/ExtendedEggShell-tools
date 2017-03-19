@@ -1,0 +1,1859 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.000000">
+<title confidence="0.914913">
+Tracking Null Checks in Open-Source Java Systems
+</title>
+<author confidence="0.983706">
+Haidar Osman
+</author>
+<affiliation confidence="0.708815">
+SCG, University of Bern
+Switzerland
+</affiliation>
+<email confidence="0.956326">
+osman@inf.unibe.ch
+</email>
+<author confidence="0.975665">
+Manuel Leuenberger
+</author>
+<affiliation confidence="0.6972925">
+University of Bern
+Switzerland
+</affiliation>
+<email confidence="0.917555">
+manuel.leu@students.unibe.ch
+</email>
+<author confidence="0.80216">
+Mircea Lungu
+</author>
+<affiliation confidence="0.7824355">
+University of Groningen
+The Netherlands
+</affiliation>
+<email confidence="0.945974">
+m.f.lungu@rug.nl
+</email>
+<author confidence="0.910049">
+Oscar Nierstrasz
+</author>
+<affiliation confidence="0.684644">
+SCG, University of Bern
+Switzerland
+</affiliation>
+<email confidence="0.869543">
+oscar@inf.unibe.ch
+</email>
+<bodyText confidence="0.9839592">
+AbstractÃ¢ÂÂ It is widely acknowledged that null values should
+be avoided if possible or carefully used when necessary in
+Java code. The careless use of null has negative effects on
+maintainability, code readability, and software performance.
+However, a study on understanding null usage is still missing.
+In this paper we analyze null checks in 810 open-source
+Java systems and manually inspect 100 code samples to
+understand when and why developers use null. We find that
+35% of all conditional statements contain null checks. A deeper
+investigation reveals many questionable practices with respect
+to using null. Uninitialized member variables, returning null
+in methods, and passing null as a method parameter are
+among the most recurrent reasons for introducing null checks.
+Developers often return null in methods to signal errors instead
+of throwing a proper exception. As a result, 71% of the values
+checked for null are returned from method calls.
+Our study provides a novel evidence of an overuse of null
+checks and of the null value itself in Java, and at the same
+time, reveals actionable recommendations to reduce this null
+usage.
+</bodyText>
+<sectionHeader confidence="0.5794825" genericHeader="method">
+Keywords-Null Checks; Null Usage; Static Analysis
+I. INTRODUCTION
+</sectionHeader>
+<bodyText confidence="0.993818178571429">
+Tony Hoare1 considers null as his Ã¢ÂÂbillion-dollar mistakeÃ¢ÂÂ
+[1]. Besides the bugs it introduces in running systems, null
+usage hinders performance [2], increases maintenance costs
+[3], and decreases code readability.
+Recent studies show that a considerable number of bug
+fixes are recurrent [4][5][6][7]. Interestingly, the if -related
+bug category is dominant [4], and more particularly, missing
+null check is the most frequent pattern of bugs in Java
+systems [7]. These results suggest that null dereferencing is
+a major source of bugs in Java programs, forcing developers
+to add guards (null checks) on objects before using them.
+Many tools and techniques have been introduced to solve
+the null dereferencing problem. However, a study is still
+missing on how null is used, why null checks are introduced,
+and where the checked-for-null objects come from in the
+source code.
+In this paper, we aim at understanding when, why, and
+how often developers introduce null checks. More con-
+cretely, we pose the following three research questions:
+IEEE 23rd International Conference on Software Analysis, Evolution,
+and Reengineering (SANER) 2016, Osaka, Japan.
+1A computing pioneer credited with introducing the concept of a null
+pointer in Algol W. https://en.wikipedia.org/wiki/Tony Hoare
+RQ1: How common are null checks?
+We answer this question by measuring the ratio be-
+tween the overall number of conditional statements
+and those containing null checks.
+RQ2: What kind of objects are checked against null?
+We consider whether the checked object is a param-
+eter, a member variable, or a local variable.
+RQ3: How are the checked-for-null objects initialized?
+We analyze the kind of expression that was assigned
+to the checked-for-null object.
+RQ4: How is null used in Java programs?
+We manually investigate 100 samples from our corpus
+to understand what null represents in Java programs
+(e.g., errors, default values, or other special values).
+To answer the posed research questions, we developed a
+tool, NullTracker, that statically analyzes Java source code
+files and approximates the statistics about null check usage.
+Applying our analysis to a large Java software corpus, we
+find that 35% of the conditional statements in our corpus
+are null checks.
+We also find that 24% of the checked objects are member
+variables, 23% are parameters, and 50% are local variables.
+Unsurprisingly, 71% of the checked objects come from
+method calls. In other words, developers insert null checks
+mainly when they use methods that may return null. Passing
+null values to methods and uninitialized member variables
+are recurrent reasons for introducing null checks.
+We manually review 100 code samples from our corpus to
+understand the contexts and discover patterns of null check
+usage. In 76 samples null is used to represent errors, in 15
+samples it is a representation of absence of a value, and
+in 9 samples null represents a meaningful value. Most of
+these instances of null usage can (or should) be replaced
+by proper exceptions or special case objects such as a Null
+Object [8][9].
+The rest of the paper is organized as follows: in Section II,
+we explain why using null leads to problems. We explain
+the procedure we followed to extract the null checks and the
+devised heuristics to analyze the checked-for-null objects
+in Section III. Then, we explain the experimental setup,
+the terminology, and the procedure we followed to analyze
+null checks and null usage in Section III. In Section IV,
+we demonstrate the results and answer the posed research
+questions. In Section V, we discuss the research questions
+and the implications of the results. We then explain in
+Section VI the possible threats to validity in our study and
+how we tried to mitigate them. In Section VII, we discuss
+the related work and how the null-related problems are
+approached. Finally, we conclude this paper in Section VIII.
+II. MOTIVATION
+Pominville et al. achieved 2% to 10% performance gain
+in Java bytecode when they annotated Java class files with
+assumptions about the Ã¢ÂÂnullnessÃ¢ÂÂ and array bounds [2].
+With respect to null, their framework, SOOT [10], performs
+intra-procedural null analysis to make assumptions about
+variables being null or not to be able to remove unnecessary
+null checks in the bytecode level. This means that null
+checks impose a non-negligible performance overhead on
+Java programs.
+In a managed language like Java, null is an unusable value.
+Its interpretation depends on the context and when it causes a
+problem, its value yields Ã¢ÂÂno useful debugging informationÃ¢ÂÂ
+[11]. For instance, the listFiles() method in the File
+class returns an array of the files, File[], in the specified
+directory. However, if the directory does not exist, it returns
+null. This returned null value might mean that the File
+object does not exist, that it is not a directory, or that an I/O
+error has occurred. This inherent ambiguity of null leads to
+increased difficulties in code comprehension.
+Missing null checks are the most recurrent bug pattern
+in Java systems [7]. This bug manifests itself as the Java
+NullPointerException. Debugging this kind of exception is
+particularly hard because the stack traces do not provide
+enough information about the source of the null. Acknowl-
+edging this problem, Bond et al. introduced Origin Tracking
+[11], which records code locations where unused values
+(such as null) are assigned. Origin Tracking gathers the
+necessary information dynamically at run time so they can
+be reported at failure time to aid the debugging activities.
+This indirectly means that the overuse of null in program
+increases maintenance efforts.
+To this end, we establish that the use of null in Java
+code often leads to performance degradation, code that
+is harder to read, more defective software, and increased
+project maintenance efforts. In the following sections we
+explore how often null is used in Java code and in what
+contexts. This knowledge can help software engineers to
+build better static code checkers and develop better practices
+for writing and reviewing Java code.
+</bodyText>
+<equation confidence="0.847382">
+public class CoDriver {
+Ã¢ÂÂ¦
+public void join(Driver driver) {
+Ã¢ÂÂ¦
+Car car;
+Ã¢ÂÂ¦
+car = driver.getCar();
+Ã¢ÂÂ¦
+Ã¢ÂÂ¦
+if (car != null) {
+Ã¢ÂÂ¦
+}
+Ã¢ÂÂ¦
+}
+Ã¢ÂÂ¦
+</equation>
+<figure confidence="0.9038978">
+}
+Null Check
+N-Comparand
+NC-Def-expression
+NC-Def-valueNC-Declaration
+</figure>
+<figureCaption confidence="0.98117">
+Figure 1. A code example showing the definitions of the terms used in
+the paper.
+</figureCaption>
+<sectionHeader confidence="0.5863055" genericHeader="method">
+III. NULL CHECK ANALYSIS
+A. Experimental Corpus
+</sectionHeader>
+<bodyText confidence="0.975132769230769">
+For our experiment, we used the same software corpus
+from a previous study [7]. This corpus was built using a
+crawler that queries Github2 for Java projects that have more
+than 5 stars (popular) and are more than 100KB in size
+(relatively large). This corpus contains 810 Java projects,
+371,745 Java source files, and 34,894,844 lines of code. We
+are making the corpus available for download through the
+Pangea infrastructure3 [12].
+B. Terminology
+Before we explain the analysis, we define the terms used
+in this paper as follows (depicted in Figure 1):
+Ã¢ÂÂ¢ A Conditional: is a binary comparison expression that
+evaluates to a boolean value, such as:
+</bodyText>
+<equation confidence="0.933177333333333">
+Ã¢ÂÂ y &gt; 0
+Ã¢ÂÂ x != null
+Ã¢ÂÂ¢ A Conditional Statement: is a Java statement that con-
+</equation>
+<bodyText confidence="0.634558">
+tains a conditional, such as:
+</bodyText>
+<equation confidence="0.800358">
+Ã¢ÂÂ if(y &gt; 0) ...
+Ã¢ÂÂ isNull = (x != null);
+Ã¢ÂÂ¢ A Null Check: is a conditional that contains the null
+</equation>
+<bodyText confidence="0.899196">
+literal as a left hand side or a right hand side operand.
+In other words, It is a comparison to null. For instance:
+</bodyText>
+<equation confidence="0.7625425">
+Ã¢ÂÂ Person != null
+Ã¢ÂÂ iterator.next() != null
+</equation>
+<bodyText confidence="0.8869265">
+Ã¢ÂÂ¢ An N-Comparand: is the expression that is compared to
+null in the null check (Usually an assignable l-value.)
+</bodyText>
+<footnote confidence="0.994496">
+2http://www.github.com/
+3http://scg.unibe.ch/research/pangea
+</footnote>
+<bodyText confidence="0.967165538461539">
+Ã¢ÂÂ¢ An NC-Declaration: is the declaration expression of the
+N-Comparand.
+Ã¢ÂÂ¢ An NC-Def-expression: is the assignment expression
+involving the N-Comparand as the assignable l-value.
+Ã¢ÂÂ¢ An NC-Def-value: is the value assigned to the com-
+parand in an NC-Def-expression (i.e., the right-hand
+side operand of the NC-Def-expression).
+C. Analysis
+We implemented a tool, NullTracker4, to extract null
+checks and analyze the kinds and definitions of the N-
+Comparands. NullTracker is designed as a pipeline, fol-
+lowing a pipes and filters architecture. NullTracker analyzes
+each Java source file as follows:
+</bodyText>
+<listItem confidence="0.954813666666667">
+1) Parse the Java source file and extract the null checks.
+2) For each null check, extract the N-Comparand.
+3) Parse the N-Comparand and determine its kind (e.g.,
+</listItem>
+<bodyText confidence="0.961440529411765">
+name, method call, field access, etc.).
+4) When the N-Comparand is a name expression, de-
+termine its kind (member variable, local variable, or
+parameter) by looking for its NC-Declaration within
+the current method for local variables and parameters,
+and within the current type declaration for member
+variables.
+5) When the N-Comparand is assignable (name, array
+access, field access), extract all the NC-Def-expressions
+that appear lexically (textually) before the null check
+and within the same method as the null check itself.
+Then, parse them and extract the kind of the NC-Def-
+values (method call, null literal, object creation, or any
+expression that can evaluate to a reference value).
+6) Finally, the resulting data, which conforms to the model
+illustrated in Figure 2, is saved in the database for
+further analysis.
+</bodyText>
+<figure confidence="0.964374090909091">
+Null Check N-Comparand
+NC-Def-
+expressionNC-Def-value
+Java Source File
+1 0 .. * 1 1
+1
+0 .. *
+11
+NC-Declaration
+1
+0 .. *
+</figure>
+<figureCaption confidence="0.7679895">
+Figure 2. The data model of NullTracker analysis.
+D. Manual Inspection
+</figureCaption>
+<bodyText confidence="0.94473375">
+After the analysis phase, we manually inspect multiple
+instances of the null checks belonging to different categories
+and types. More concretely, we inspect 10 random samples
+of each of the following categories to gain more insight:
+</bodyText>
+<listItem confidence="0.915608666666667">
+1) Method call N-Comparands.
+2) Field access N-Comparands.
+4https://github.com/haidaros/NullTracker
+3) local variable name N-Comparands.
+4) Parameter name N-Comparands.
+5) Member variable name N-Comparands.
+6) Method invocation NC-Def-value.
+7) Null literal NC-Def-value.
+8) Cast NC-Def-value.
+9) Object creation NC-Def-value.
+10) Name NC-Def-value.
+In this phase we aim at understanding how and why devel-
+opers use null values and null checks. We look specifically
+at the following:
+1) The intended semantics of the null value.
+2) Potentially missing null checks (e.g., a member variable
+that is sometimes checked against null and sometimes
+not before dereferencing it).
+3) The type of the checked-for-null object (String, List,
+Tree, Number, etc.).
+4) The source of the null value. (e.g., uninitialized local
+</listItem>
+<bodyText confidence="0.984631941176471">
+variables, a return null statement in a method body, etc.)
+We do not derive any statistics from this phase, as we only
+want to gain deeper insights into how null and null checks
+are used in the code and for what reasons.
+IV. RESULTS
+We applied our analysis to the 810 Java projects in our
+dataset and we manually reviewed 100 code samples. In
+the following subsections which are organized around the
+research questions, we explain the results.
+A. How Common Are Null Checks?
+To our knowledge, only Kimura et al. have measured the
+density of null checks in source code [3]. They measured the
+ratio between the number of null checks and the number of
+lines of code. They found this ratio to be from one to four
+per 100 lines of code, depending on the project.
+We, on the other hand, go one step further and measure
+the ratio of the conditional statements containing null checks
+with respect to all conditional statements. This will enable
+us in answering the first research question: RQ1: How
+Common are Null Checks?
+We call the ratio between the null checks and the overall
+number of conditional statements the null check ratio. Ana-
+lyzing our dataset, we found 2,329,808 conditionals, 818,335
+of which contain null checks. This means that a staggering
+35% of the conditional statements contain null checks.
+As detailed in Table I and Figure 3, the null check ratio
+exhibits a bell-shaped distribution around the value of 32%.
+In other words, more than half of the projects have a null
+check ratio of more than 32%. Our results show evidence
+of an existing overuse (or abuse) of null checks by Java
+programmers, which indicates the over-use of the Ã¢ÂÂnullÃ¢ÂÂ
+value itself. As discussed in Section II, this practice affects
+the readability of code, the maintainability of the project,
+and the performance of the running system.
+</bodyText>
+<figure confidence="0.994538695652174">
+0.
+0
+0.
+2
+0.
+4
+0.
+6
+0.
+8
+1.
+0
+N
+ul
+l C
+he
+ck
+R
+at
+io
+(a)
+Null Check Ratio
+N
+um
+be
+r
+of
+O
+cc
+ur
+re
+nc
+es
+(
+P
+ro
+je
+ct
+s)
+0.0 0.2 0.4 0.6 0.8 1.0
+0
+20
+40
+60
+80
+(b)
+</figure>
+<figureCaption confidence="0.8867335">
+Figure 3. The distribution of the per-project null check ratio. The boxplot in (a) shows that more than half the projects have null check ratios of more
+than 32%. The histogram in (b) shows that the null check ratio distribution demonstrates a bell-shaped curve around the value of 32%.
+</figureCaption>
+<figure confidence="0.778685">
+Table I
+A SUMMARY OF THE PER-PROJECT NULL CHECK RATIO.
+Number of Number of Null Check
+</figure>
+<table confidence="0.90598275">
+Conditionals Null Checks Ratio
+Min 1.0 0.0 0%
+1st quartile 117.5 33.0 23%
+Median 531.5 138.5 32%
+Mean 2,876.3 1,010.3 32%
+3rd quartile 2,171.8 671.5 40%
+Max 196,812.0 76,609.0 100%
+B. What Entities Do Developers Check For Null?
+</table>
+<bodyText confidence="0.99840208">
+To answer the second research question (RQ2: What
+kind of objects are checked against null?), first, we
+analyze the kind of the N-Comparand itself. Second, we
+look for the NC-Declaration of the N-Comparand when it
+is an l-value (i.e., name expression, array, or field access
+expression).
+We find that N-Comparands are mainly name expressions
+(78%) and method call expressions (15%), as Figure 4
+shows. Figure 5 shows that 50% of the name N-Comparands
+are local variables, 24% are member variables, and 23% are
+parameters.
+Inspecting 10 code samples where the null check is
+against a method call, the method calls are all for get-
+ter methods either from the same class or from another
+class. This puts field access N-Comparands, method call N-
+Comparands, and member variable name N-Comparands in
+the same category, which is member variable null check.
+Member variables are checked against null because they
+might not be initialized. This happens in the manually
+inspected code when one or more of the following is true:
+Ã¢ÂÂ¢ There exists a constructor that does not initialize it.
+Ã¢ÂÂ¢ There exists a constructor or a setter method that can
+accepts null as a parameter and sets it to null.
+Ã¢ÂÂ¢ There exists a method that explicitly sets to null.
+Ã¢ÂÂ¢ The member variable is public or is returned by address
+in the getter method.
+The code in all inspected 10 samples where the N-
+Comparand is a member variable can be improved to avoid
+having to check for null every time the member variable
+needs to be used. In our samples, there is no obvious
+reason why member variables are not explicitly initialized
+in every constructor. In fact in 5 of the inspected samples,
+the member variable should even be final. This suggests
+a failure in applying well-established object-oriented design
+principles, in particular that of establishing class invariants
+[13].
+As we see in Figure 5, a considerable percentage of null
+checks are guards on method parameters. In the inspected
+code samples, we observe that developers check parameters
+against null mainly to validate them. However, we differ-
+entiate between two recurring patterns of null checks on
+parameters. In the first pattern, a method throws an exception
+if a certain parameter is null. Listing 1 shows a real example
+of this pattern. The second, and more questionable, pattern
+is shown in Listing 2. The method skeletons in Listing 2
+are the most recurrent usage scenarios of a parameter null
+check. In these scenarios, the method does not accept null
+as a parameter. However, instead of throwing a proper
+exception, the method does nothing and returns silently
+without informing the caller of any problem.
+</bodyText>
+<table confidence="0.6665648">
+public File writeToFile(final HttpEntity entity
+) throws ClientProtocolException,
+IOException {
+if (entity == null) {
+throw new LibRuntimeException(
+</table>
+<equation confidence="0.521297458333333">
+LibResultCode.E_PARAM_ERROR);
+}
+.
+.
+.
+}
+Listing 1. Throwing a proper exception when the parameter is null.
+SOME_TYPE method1(Param p){
+if(p==null){
+return null;
+}
+METHOD_BODY
+}
+void method2(Param p){
+if(p==null){
+return;
+}
+METHOD_BODY
+}
+void method3(Param p){
+if(p!=null){
+METHOD_BODY
+}
+}
+</equation>
+<bodyText confidence="0.9369360625">
+Listing 2. The most recurrent usage scenarios of a parameter null check.
+More often than not, this indicates a poor API design. One
+can use, for instance, the specification pattern [14][15] to
+extract the validation code, which throws a proper exception,
+in a dedicated method or class. In any case, it is widely
+acknowledged that passing null as an argument to methods
+is a bad practice and Ã¢ÂÂthe rational approach is to forbid
+passing null by defaultÃ¢ÂÂ [16]. Nevertheless, developers often
+add null checks on parameters because they expect null to be
+passed as a parameter. Our results show a clear gap between
+what is considered a good practice and how software is
+implemented in reality.
+C. Where Does The Null Come From?
+When the N-Comparand is a name expression, we an-
+alyze the NC-Def-values assigned to it in all the NC-
+Def-expressions preceding the null check within the same
+</bodyText>
+<figure confidence="0.997451603773585">
+78.46%
+Ã
+14.68%
+Ã
+5.42%
+Ã
+0.79%
+Ã 0.62%
+Ã 0.01%
+Ã
+0%
+Ã
+10%
+Ã
+20%
+Ã
+30%
+Ã
+40%
+Ã
+50%
+Ã
+60%
+Ã
+70%
+Ã
+80%
+Ã
+90%
+Ã
+100%
+Ã
+Name
+Ã MethodCall
+Ã FieldAccess
+Ã Enclosed
+Ã ArrayAccess
+Ã Other
+Ã
+%
+Ã o
+f
+Ã O
+cc
+ur
+re
+nc
+es
+Ã
+Type
+Ã of
+Ã Comparand
+Ã
+</figure>
+<figureCaption confidence="0.9114215">
+Figure 4. The immediate kind of the N-Comparands as a parsing
+expression.
+</figureCaption>
+<bodyText confidence="0.998944724137931">
+method. Figure 6 shows the kinds of the assigned NC-Def-
+values. As an answer to the third research question (RQ3:
+How are the checked-for-null objects initialized?) we
+find that 71% of the time the NC-Def-value is a method
+call expression, which means that null checks are mostly
+applied to values returned from method invocations. In
+other words, when methods possibly return null, they tend
+to cause NullPointerExceptions in the invoking methods
+forcing developers to add null checks.
+There is a long debate about whether methods should
+return null or not. In a previous study [7], we found that
+missing null checks represent the most frequent bug in
+Java programs. In this study, we show that null checks are
+applied to the results of method invocations. Both studies
+combined provide evidence that returning null in methods
+is a major cause of bugs. Hence, we side with the opinion
+that developers should avoid returning null in their method
+implementations and either throw an exception or return a
+special case object [16] such as a Null Object [8][9].
+Surprisingly, some Java standard libraries exhibit this
+questionable design [16]. In our manually inspected code
+samples, we find 5 null checks because of methods from
+the Java standard API e.g., Map.get(...), List.get(...), Itera-
+tor.next().
+Another less frequent reason for checking a local variable
+for null is when it is initialized within a method call or a
+constructor that might throw an exception before completing.
+We observe this pattern in our manually-inspected code
+samples, as the code skeleton shows in Listing 3. The
+</bodyText>
+<equation confidence="0.854498">
+70.93%
+Ã
+10.09%
+Ã
+6.93%
+Ã
+4.15%
+Ã 3.15%
+Ã 1.53%
+Ã 1.34%
+Ã 0.86%
+Ã 0.50%
+Ã 0.53%
+Ã
+</equation>
+<figure confidence="0.985411452830188">
+0%
+Ã
+10%
+Ã
+20%
+Ã
+30%
+Ã
+40%
+Ã
+50%
+Ã
+60%
+Ã
+70%
+Ã
+80%
+Ã
+90%
+Ã
+100%
+Ã
+MethodCall
+Ã NullLiteral
+Ã Cast
+Ã ObjectCreaAon
+Ã Name
+Ã CondiAonal
+Ã FieldAccess
+Ã ArrayAccess
+Ã StringLiteral
+Ã Other
+Ã
+%
+Ã o
+f
+Ã O
+cc
+ur
+re
+nc
+es
+Ã
+Type
+Ã of
+Ã the
+Ã Def-ÃÂ­Ã¢ÂÂValue
+Ã Assigned
+Ã to
+Ã the
+Ã Comparand
+Ã
+Ã
+</figure>
+<figureCaption confidence="0.990643">
+Figure 6. This diagram shows that the checked-for-null objects are mainly set or initialized using method invocations.
+</figureCaption>
+<figure confidence="0.996079549019608">
+49.79%
+Ã
+24.02%
+Ã 22.84%
+Ã
+3.36%
+Ã
+0%
+Ã
+10%
+Ã
+20%
+Ã
+30%
+Ã
+40%
+Ã
+50%
+Ã
+60%
+Ã
+70%
+Ã
+80%
+Ã
+90%
+Ã
+100%
+Ã
+LocalVariable
+Ã MemberVariable
+Ã Parameter
+Ã Undefined
+Ã
+%
+Ã o
+f
+Ã O
+cc
+ur
+re
+nc
+es
+Ã
+Type
+Ã of
+Ã Name
+Ã Comparand
+Ã (Checked
+Ã Variables)
+Ã
+</figure>
+<figureCaption confidence="0.999874">
+Figure 5. The type of name expression comparands. Undefined indicates
+</figureCaption>
+<bodyText confidence="0.8749495">
+that 3.36% cannot be determined, as explained in Section VI
+variable is set to null first, initialized in a try-catch
+block, then checked for null to make sure that initialization
+completed and no exception was thrown.
+</bodyText>
+<figure confidence="0.990503090909091">
+...
+Object obj = null;
+try{
+obj = METHOD_INVOCATION or CONSTRUCTOR_CALL
+}catch(...){
+....
+}
+if(obj != null){
+...
+}
+...
+</figure>
+<figureCaption confidence="0.583461">
+Listing 3. When the initialization is in a try-catch block, a null check
+</figureCaption>
+<bodyText confidence="0.994735493150685">
+usually follows to make sure no exception is thrown.
+D. What Does Null Mean?
+In the manual inspection phase we find that developers
+use null values for three different reasons.
+As an answer to the fourth research question (RQ4: How
+is null used in Java programs?), the most recurrent usage
+of null is to encode or represent an error. 76 of 100 inspected
+samples fall into this category. For instance, if a method does
+not accept null as a parameter, it returns null or just returns
+when it encounters a null parameter. Another example is
+when a method returns null in a catch block.
+The second usage of null is to represent the absence of
+a value (or the nothingness). 15 out of the 100 inspected
+samples fall into this category. For example, left and right
+branches in a leaf node are null in a binary tree. Another
+example is a find(...) method that returns null in case
+it cannot find the item.
+The third usage of null is when it is a proxy for a
+meaningful value. For instance, in many code samples, we
+find non-boolean variables used as ones (null means false
+and instantiated means true).
+We argue that the first and third usage of null are bad
+practices as there are other language constructs to represent
+the corresponding semantics. For errors and failures, one
+should use well-defined exceptions as they are easier to read
+and act upon. For the third usage, one can have a dedicated
+enum, class, or other data type to represent the semantics
+in a more readable and maintainable form. In fact, 19 out of
+the 100 inspected classes contain potential bugs in the form
+of potentially missing null checks. All of these 19 potential
+bugs exist when null represents an error or a meaningful
+value.
+We also argue that second usage scenario where null
+means the absence of a value is only tolerable and not
+ideal, as one should use special case object [16] like the
+Null Object [8][9] when applicable. Actually, even when
+the representation of absence of value is available for free
+(such as an empty string for a String variable), developers
+tend to not use it. Eight out of the inspected N-Comparands
+are of type String and seven are of type List. Carefully
+reading the code, we find out that uninitialized strings and
+lists are equivalent to empty strings and lists correspondingly
+in these samples.
+V. DISCUSSION
+Null usage often leads to various maintenance problems.
+Missing null check bugs, useless NullPointerException stack
+traces, and vague null semantics are often the consequences
+of the careless use of null value. A disciplined usage of null
+is highly recommended [17], and alternatives, like the Null
+Object Pattern [8][9], should be considered. However, the
+results of this study suggest that null is often misused and
+overused in Java code.
+To demonstrate how null is often misused, we put the
+observations from this study and from our previous study on
+bug-fix patterns [7] into a hypothetical story that represents
+the most recurrent pattern of wrong null usage.
+A developer, A, adds a return null statement in
+the method body of m(...) to indicate that a problem
+has occurred and the method m(...) cannot continue its
+normal execution. Another developer, B, uses the method
+m(...) and assigns its result to a local variable obj.
+When developer B runs his code, a NullPointerException
+is thrown. Developer B looks at the stack traces struggling
+to understand the problem and finally identifies the place of
+the null dereferencing. It is the local variable obj and the
+null comes from the method invocation of m(...). Unable
+to understand the meaning of null in this situation, developer
+B adds a null check before using the local variable obj.
+When such scenarios accumulate in a codebase, the code
+starts to get harder to maintain and reason about, leading to
+the problems discussed in Section II.
+However, our study also reveals some actionable recom-
+mendations to reduce null checks and null usage:
+</bodyText>
+<listItem confidence="0.6042230625">
+1) A method should not return null in case of errors. A
+method should always throw a proper exception that
+explains the exact reason and even possible solutions
+in case of errors.
+2) Null should not be passed to public methods and public
+methods should not accept null as a parameter. In other
+words, public method arguments should be non-null by
+default.
+3) Member variables should be initialized either in all con-
+structors or through the use of the Builder pattern. The
+point here is that objects should be fully constructed
+before being created and class invariants should be
+explicitly established.
+4) String instances should be initialized to empty strings
+&quot;&quot;.
+5) List instances should be initialized to empty lists.
+</listItem>
+<bodyText confidence="0.983309125">
+Following the aforementioned practices can prevent or
+at least mitigate the problems coming from null usage (as
+discussed in Section II). These practices can be ensured man-
+ually during code review or automatically using static code
+analyzers and annotations. An even more radical approach
+is to forbid the usage of null altogether in the language and
+observe the effects on the code quality, but this is a topic
+for further study.
+VI. THREATS TO VALIDITY
+The internal threats to validity come from the known
+limitations of static analysis itself on one hand, and the
+limitations of our heuristics on the other hand.
+Ã¢ÂÂ¢ As can be seen in Figure 5, NullTracker cannot trace
+3.36% of the variables back to their declarations, as
+can be seen in Figure 5, because we parse and analyze
+one Java source file at a time. For instance, inherited
+member variables cannot be discovered.
+Ã¢ÂÂ¢ NullTracker extracts all the NC-Def-expressions that
+appear lexically before the null check regardless of
+the actual data flow taking all the possible NC-Def-
+expressions into account.
+Ã¢ÂÂ¢ NullTracker cannot detect whether an N-Comparand is
+changed by passing it as a parameter to other methods.
+Only NC-Def-expressions are considered.
+Ã¢ÂÂ¢ When an N-Comparand appears within the same
+method in multiple null checks, every time it is con-
+sidered a different N-Comparand leading to possible
+duplicates in the analysis of the N-Comparand kinds.
+The external threats to validity come from the fact that we
+only analyzed 810 Java open-source projects. The results
+might not generalize to all open source projects or to
+industrial closed-source projects
+</bodyText>
+<sectionHeader confidence="0.640256" genericHeader="method">
+VII. RELATED WORK
+</sectionHeader>
+<bodyText confidence="0.99953876">
+A closely related work is a study on the maintainability
+burden imposed by the Ã¢ÂÂreturn nullÃ¢ÂÂ statement [3]. Kimura
+et al. found that return null statements are modified more
+frequently than other return statements but null conditionals
+are not. This indicates that the presence of return null is
+costly to maintain. They also found that the density of null
+checks are from one to four per 100 lines of code [3]. Our
+definition of null check ratio expresses null check usage
+better than null checks per LOC because it quantifies the
+added complexity null checks have on the code.
+Null-related bugs attract the attention of many researchers
+and practitioners who propose various approaches to detect
+them as early as possible.
+The first family of solutions incorporates data flow
+analysis techniques to detect possible null values.
+Some techniques are simple, fast, and intra-procedural
+[18][19][20][21][22] and some are more complex,
+thorough, and inter-procedural [23][24][25][26]. For
+instance, Hovemeyer and Pugh [22] perform intra-
+procedural forward data flow analysis to approximate the
+static single assignment for the values of variables. Then
+they analyze the dereferences as a backward data flow
+over the SSA approximation. This algorithm replaces the
+previous basic forward data flow analysis approach [27]
+and is now part of FindBugs [28], a static analysis tool for
+finding bugs in Java.
+An interesting study by Ayewah and Pugh [29] compares
+several null dereference analysis tools and observes that,
+besides the reported false positives, many of the reported
+null dereferences (true positives) do not manifest themselves
+as bugs at run time. The authors claim that when the
+null dereference passes the initial software testing, it rarely
+causes bugs and Ã¢ÂÂreviewing all potential null dereferences is
+often not as important as many other undone software quality
+tasksÃ¢ÂÂ[29]. We argue that Ayewah and Pugh underestimate
+the frequency of the bugs caused by dereferencing null as
+we show in our previous study [7].
+The second family of solutions proposes to annotate the
+Ã¢ÂÂnullnessÃ¢ÂÂ in code. FaÃÂhndrich and Leino propose to distin-
+guish the non-null references from the possibly-null ones at
+the type level (using annotations) to detect null-related bugs
+[30]. Papi and Ernst introduced the @NonNull annotation on
+types [31]. Loginov et al. [23], beside their inter-procedural
+null dereference analysis, propose null-related annotations
+to ensure the soundness and safety of the analysis. The idea
+of annotations made it to widely-used Java libraries like
+Checker Framework5 and Guava6. Also some programming
+languages introduce the idea of reference declarations that
+are not null. For instance the Spec# programming system
+extends the C# programming language with the support of
+</bodyText>
+<footnote confidence="0.998624">
+5http://types.cs.washington.edu/checker-framework/
+6https://github.com/google/guava
+</footnote>
+<bodyText confidence="0.998508227272727">
+contracts (like non-null types), allowing the Spec# compiler
+to statically enforce these contracts [32].
+The third family of solutions tries to solve the problem
+by introducing language constructs. Haskell [33] and Scala
+[34] have the Ã¢ÂÂMaybeÃ¢ÂÂ and the Ã¢ÂÂOptionÃ¢ÂÂ types, which are
+object containers. In a similar fashion, Oracle introduced
+the Ã¢ÂÂOptionalÃ¢ÂÂ type in Java 8 recently [35]. Groovy and C#
+have the safe navigation Ã¢ÂÂ?.Ã¢ÂÂ to safely invoke a method on
+a possibly-null object.
+None of the above solutions deals with null usage problem
+thoroughly. The first family of solutions does not reduce null
+usage but points out potential null dereferencing locations
+in the code, encouraging developers to add even more null
+checks. The second family of solutions can mainly ensure
+that method parameters are not null, but cannot, for instance,
+prevent methods from returning null. The third family of
+solutions just encapsulates the problem with syntactic sugar
+rather than solving it. We argue that more research is needed
+to solve the problems associated with null usage by dealing
+with the cause of the problems instead of dealing with the
+symptoms. A good solution should foster good programming
+practices and a disciplined usage of null.
+</bodyText>
+<sectionHeader confidence="0.956385" genericHeader="method">
+VIII. CONCLUSIONS
+</sectionHeader>
+<bodyText confidence="0.999823266666667">
+Null-related problems are very common in Java. The
+overuse of the null value may introduce more bugs, hinder
+performance, and lead to maintenance difficulties.
+In this paper, we study null checks as a proxy to under-
+stand null usage. We conduct a census of the null checks in
+Java systems showing that 35% of the conditionals are null
+checks. Our analysis reveals many bad practices in terms
+of null usage. Returning null in methods, passing null as
+arguments, and uninitialized member variables are the most
+frequent, and questionable, null usage patterns causing the
+high null check density. Finding out the root causes behind
+improper null usage, we provide actionable recommenda-
+tions to avoid null-related problems. These recommendations
+can be checked using static code analyzers to ensure a
+disciplined use of null and increase the quality of the code.
+</bodyText>
+<sectionHeader confidence="0.990132" genericHeader="acknowledgments">
+ACKNOWLEDGEMENTS
+</sectionHeader>
+<bodyText confidence="0.8096845">
+The authors gratefully acknowledge the funding of the
+Swiss National Science Foundations for the project Agile
+Software Assessment (SNSF project No. 200020-144126/1,
+Jan 1, 2013 - Dec. 30, 2015)7.
+The authors also acknowledge the financial support
+of the Swiss Object-Oriented Systems and Environments
+</bodyText>
+<footnote confidence="0.889944">
+(CHOOSE)8 for the presentation of this research.
+7http://p3.snf.ch/Project-144126
+8http://www.choose.s-i.ch
+</footnote>
+<sectionHeader confidence="0.975851" genericHeader="references">
+REFERENCES
+</sectionHeader>
+<reference confidence="0.998677818181818">
+[1] T. Hoare, Ã¢ÂÂNull references: The billion dollar mistake,Ã¢ÂÂ Pre-
+sentation at QCon London, 2009.
+[2] P. Pominville, F. Qian, R. ValleÃÂe-Rai, L. Hendren, and C. Ver-
+brugge, Ã¢ÂÂA framework for optimizing Java using attributes,Ã¢ÂÂ
+in Proceedings of the 2000 conference of the Centre for
+Advanced Studies on Collaborative research. IBM Press,
+2000, p. 8.
+[3] S. Kimura, K. Hotta, Y. Higo, H. Igaki, and S. Kusumoto,
+Ã¢ÂÂDoes return null matter?Ã¢ÂÂ in Software Maintenance, Reengi-
+neering and Reverse Engineering (CSMR-WCRE), 2014 Soft-
+ware Evolution Week - IEEE Conference on, Feb. 2014, pp.
+244Ã¢ÂÂ253.
+[4] K. Pan, S. Kim, and E. J. Whitehead, Jr., Ã¢ÂÂToward an
+understanding of bug fix patterns,Ã¢ÂÂ Empirical Softw. Engg.,
+vol. 14, no. 3, pp. 286Ã¢ÂÂ315, Jun. 2009. [Online]. Available:
+http://dx.doi.org/10.1007/s10664-008-9077-5
+[5] T. T. Nguyen, H. A. Nguyen, N. H. Pham, J. Al-Kofahi,
+and T. N. Nguyen, Ã¢ÂÂRecurring bug fixes in object-
+oriented programs,Ã¢ÂÂ in Proceedings of the 32Nd ACM/IEEE
+International Conference on Software Engineering - Volume
+1, ser. ICSE Ã¢ÂÂ10. New York, NY, USA: ACM, 2010,
+pp. 315Ã¢ÂÂ324. [Online]. Available: http://doi.acm.org/10.1145/
+</reference>
+<page confidence="0.509334">
+1806799.1806847
+</page>
+<reference confidence="0.996788945054945">
+[6] M. Martinez, L. Duchien, and M. Monperrus, Ã¢ÂÂAutomati-
+cally extracting instances of code change patterns with AST
+analysis,Ã¢ÂÂ in Proceedings of the 29th IEEE International
+Conference on Software Maintenance, 2013, eRA Track.
+[7] H. Osman, M. Lungu, and O. Nierstrasz, Ã¢ÂÂMining
+frequent bug-fix code changes,Ã¢ÂÂ in Software Maintenance,
+Reengineering and Reverse Engineering (CSMR-WCRE),
+2014 Software Evolution Week - IEEE Conference on, Feb.
+2014, pp. 343Ã¢ÂÂ347. [Online]. Available: http://scg.unibe.ch/
+archive/papers/Osma14aMiningBugFixChanges.pdf
+[8] B. Woolf, Ã¢ÂÂThe null object pattern,Ã¢ÂÂ in Design Patterns, PLoP
+1996. Robert Allerton Park and Conference Center, Uni-
+versity of Illinois at Urbana-Champaign, Monticello, Illinois,
+1996.
+[9] Ã¢ÂÂÃ¢ÂÂ, Ã¢ÂÂNull object,Ã¢ÂÂ in Pattern Languages of Program Design
+3, R. Martin, D. Riehle, and F. Buschmann, Eds. Addison
+Wesley, 1998, pp. 5Ã¢ÂÂ18.
+[10] R. ValleÃÂe-Rai, P. Co, E. Gagnon, L. Hendren, P. Lam, and
+V. Sundaresan, Ã¢ÂÂSoot Ã¢ÂÂ a Java bytecode optimization frame-
+work,Ã¢ÂÂ in Proceedings of the 1999 conference of the Centre
+for Advanced Studies on Collaborative research. IBM Press,
+1999, p. 13.
+[11] M. D. Bond, N. Nethercote, S. W. Kent, S. Z. Guyer, and
+K. S. McKinley, Ã¢ÂÂTracking bad apples: reporting the origin
+of null and undefined value errors,Ã¢ÂÂ in Proceedings of the
+22nd annual ACM SIGPLAN conference on Object oriented
+programming systems and applications (OOPSLAÃ¢ÂÂ07). New
+York, NY, USA: ACM, 2007, pp. 405Ã¢ÂÂ422.
+[12] A. Caracciolo, A. ChisÃÂ§, B. SpasojevicÃÂ, and M. Lungu,
+Ã¢ÂÂPangea: A workbench for statically analyzing multi-language
+software corpora,Ã¢ÂÂ in Source Code Analysis and Manipulation
+(SCAM), 2014 IEEE 14th International Working Conference
+on. IEEE, Sep. 2014, pp. 71Ã¢ÂÂ76. [Online]. Available:
+http://scg.unibe.ch/archive/papers/Cara14c.pdf
+[13] B. Meyer, Ã¢ÂÂApplying design by contract,Ã¢ÂÂ IEEE Computer
+(Special Issue on Inheritance &amp; Classification), vol. 25,
+no. 10, pp. 40Ã¢ÂÂ52, Oct. 1992. [Online]. Available: http:
+//se.ethz.ch/Ã¢ÂÂ¼meyer/publications/computer/contract.pdf
+[14] E. Evans and M. Fowler, Ã¢ÂÂSpecifications,Ã¢ÂÂ in Proceedings of
+the 1997 Conference on Pattern Languages of Programming,
+1997, pp. 97Ã¢ÂÂ34.
+[15] E. Evans, Domain-Driven Design: Tacking Complexity In the
+Heart of Software. Boston, MA, USA: Addison-Wesley
+Longman Publishing Co., Inc., 2003.
+[16] R. C. Martin, Clean Code: A Handbook of Agile Software
+Craftsmanship, 1st ed. Upper Saddle River, NJ, USA:
+Prentice Hall PTR, 2008.
+[17] M. Fowler, K. Beck, J. Brant, W. Opdyke, and D. Roberts,
+Refactoring: Improving the Design of Existing Code. Addi-
+son Wesley, 1999.
+[18] W. R. Bush, J. D. Pincus, and D. J. Sielaff, Ã¢ÂÂA
+static analyzer for finding dynamic programming errors,Ã¢ÂÂ
+Softw. Pract. Exper., vol. 30, no. 7, pp. 775Ã¢ÂÂ802, Jun.
+2000. [Online]. Available: http://dx.doi.org/10.1002/(SICI)
+1097-024X(200006)30:7Ã£ÂÂ775::AID-SPE309Ã£ÂÂ3.0.CO;2-H
+[19] I. Dillig, T. Dillig, and A. Aiken, Ã¢ÂÂStatic error detection using
+semantic inconsistency inference,Ã¢ÂÂ in Proceedings of the
+2007 ACM SIGPLAN Conference on Programming Language
+Design and Implementation, ser. PLDI Ã¢ÂÂ07. New York,
+NY, USA: ACM, 2007, pp. 435Ã¢ÂÂ445. [Online]. Available:
+http://doi.acm.org/10.1145/1250734.1250784
+[20] D. Engler, D. Y. Chen, S. Hallem, A. Chou, and B. Chelf,
+Ã¢ÂÂBugs as deviant behavior: A general approach to inferring
+errors in systems code,Ã¢ÂÂ in Proceedings of the Eighteenth
+ACM Symposium on Operating Systems Principles, ser. SOSP
+Ã¢ÂÂ01. New York, NY, USA: ACM, 2001, pp. 57Ã¢ÂÂ72. [Online].
+Available: http://doi.acm.org/10.1145/502034.502041
+[21] C. Flanagan, K. R. M. Leino, M. Lillibridge, G. Nelson,
+J. B. Saxe, and R. Stata, Ã¢ÂÂExtended static checking for Java,Ã¢ÂÂ
+in Proceedings of the ACM SIGPLAN 2002 Conference on
+Programming Language Design and Implementation, ser.
+PLDI Ã¢ÂÂ02. New York, NY, USA: ACM, 2002, pp. 234Ã¢ÂÂ
+245. [Online]. Available: http://doi.acm.org/10.1145/512529.
+512558
+[22] D. Hovemeyer and W. Pugh, Ã¢ÂÂFinding more null pointer
+bugs, but not too many,Ã¢ÂÂ in Proceedings of the 7th ACM
+SIGPLAN-SIGSOFT Workshop on Program Analysis for
+Software Tools and Engineering, ser. PASTE Ã¢ÂÂ07. New
+York, NY, USA: ACM, 2007, pp. 9Ã¢ÂÂ14. [Online]. Available:
+http://doi.acm.org/10.1145/1251535.1251537
+[23] A. Loginov, E. Yahav, S. Chandra, S. Fink, N. Rinetzky,
+and M. Nanda, Ã¢ÂÂVerifying dereference safety via expanding-
+scope analysis,Ã¢ÂÂ in Proceedings of the 2008 International
+Symposium on Software Testing and Analysis, ser. ISSTA Ã¢ÂÂ08.
+New York, NY, USA: ACM, 2008, pp. 213Ã¢ÂÂ224. [Online].
+Available: http://doi.acm.org/10.1145/1390630.1390657
+[24] A. Tomb, G. Brat, and W. Visser, Ã¢ÂÂVariably interprocedural
+program analysis for runtime error detection,Ã¢ÂÂ in Proceedings
+of the 2007 International Symposium on Software Testing
+and Analysis, ser. ISSTA Ã¢ÂÂ07. New York, NY, USA: ACM,
+2007, pp. 97Ã¢ÂÂ107. [Online]. Available: http://doi.acm.org/10.
+</reference>
+<page confidence="0.543264">
+1145/1273463.1273478
+</page>
+<reference confidence="0.9983414">
+[25] M. G. Nanda and S. Sinha, Ã¢ÂÂAccurate interprocedural
+null-dereference analysis for Java,Ã¢ÂÂ in Proceedings of the
+31st International Conference on Software Engineering,
+ser. ICSE Ã¢ÂÂ09. Washington, DC, USA: IEEE Computer
+Society, 2009, pp. 133Ã¢ÂÂ143. [Online]. Available: http:
+//dx.doi.org/10.1109/ICSE.2009.5070515
+[26] T. Ekman and G. Hedin, Ã¢ÂÂPluggable checking and inferencing
+of non-null types for Java,Ã¢ÂÂ Journal of Object Technology,
+vol. 6, no. 9, pp. 455Ã¢ÂÂ475, 2007.
+[27] D. Hovemeyer, J. Spacco, and W. Pugh, Ã¢ÂÂEvaluating and
+tuning a static analysis to find null pointer bugs,Ã¢ÂÂ in
+Proceedings of the 6th ACM SIGPLAN-SIGSOFT Workshop
+on Program Analysis for Software Tools and Engineering,
+ser. PASTE Ã¢ÂÂ05. New York, NY, USA: ACM, 2005,
+pp. 13Ã¢ÂÂ19. [Online]. Available: http://doi.acm.org/10.1145/
+</reference>
+<page confidence="0.657131">
+1108792.1108798
+</page>
+<reference confidence="0.997802290322581">
+[28] D. Hovemeyer and W. Pugh, Ã¢ÂÂFinding bugs is easy,Ã¢ÂÂ ACM
+SIGPLAN Notices, vol. 39, no. 12, pp. 92Ã¢ÂÂ106, 2004.
+[29] N. Ayewah and W. Pugh, Ã¢ÂÂNull dereference analysis in
+practice,Ã¢ÂÂ in Proceedings of the 9th ACM SIGPLAN-
+SIGSOFT Workshop on Program Analysis for Software
+Tools and Engineering, ser. PASTE Ã¢ÂÂ10. New York,
+NY, USA: ACM, 2010, pp. 65Ã¢ÂÂ72. [Online]. Available:
+http://doi.acm.org/10.1145/1806672.1806686
+[30] M. FaÃÂhndrich and R. Leino, Ã¢ÂÂDeclaring and checking non-
+null types in an object-oriented language,Ã¢ÂÂ in Proceedings of
+OOPSLA Ã¢ÂÂ03, ACM SIGPLAN Notices, 2003. [Online]. Avail-
+able: http://research.microsoft.com/Ã¢ÂÂ¼maf/Papers/non-null.pdf
+[31] M. M. Papi and M. D. Ernst, Ã¢ÂÂCompile-time type-checking
+for custom type qualifiers in Java,Ã¢ÂÂ in Companion to the 22Nd
+ACM SIGPLAN Conference on Object-oriented Programming
+Systems and Applications Companion, ser. OOPSLA Ã¢ÂÂ07.
+New York, NY, USA: ACM, 2007, pp. 809Ã¢ÂÂ810. [Online].
+Available: http://doi.acm.org/10.1145/1297846.1297911
+[32] M. Barnett, K. R. M. Leino, and W. Schulte, Ã¢ÂÂThe Spec#
+programming system: An overview,Ã¢ÂÂ in Construction and
+analysis of safe, secure, and interoperable smart devices.
+Springer, 2005, pp. 49Ã¢ÂÂ69.
+[33] Ã¢ÂÂHaskel 98 Report.Ã¢ÂÂ [Online]. Available: https://www.haskell.
+org/onlinereport/index98.html
+[34] M. Odersky, Ã¢ÂÂScala language specification v. 2.4,Ã¢ÂÂ EÃÂcole Poly-
+technique FeÃÂdeÃÂrale de Lausanne, 1015 Lausanne, Switzerland,
+Tech. Rep., Mar. 2007.
+[35] R.-G. Urma, Ã¢ÂÂTired of null pointer exceptions? Consider
+using Java SE 8Ã¢ÂÂs optional!Ã¢ÂÂ Oracle, Tech. Rep.,
+Mar. 2014. [Online]. Available: http://www.oracle.com/
+technetwork/articles/java/java8-optional-2175753.html
+</reference>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.187731">
+<title confidence="0.99986">Tracking Null Checks in Open-Source Java Systems</title>
+<author confidence="0.99738">Haidar Osman</author>
+<affiliation confidence="0.999883">SCG, University of Bern</affiliation>
+<address confidence="0.727178">Switzerland</address>
+<email confidence="0.945389">osman@inf.unibe.ch</email>
+<author confidence="0.999956">Manuel Leuenberger</author>
+<affiliation confidence="0.7862055">University of Bern Switzerland</affiliation>
+<email confidence="0.941687">manuel.leu@students.unibe.ch</email>
+<author confidence="0.960064">Mircea Lungu</author>
+<affiliation confidence="0.999913">University of Groningen</affiliation>
+<address confidence="0.943029">The Netherlands</address>
+<email confidence="0.991493">m.f.lungu@rug.nl</email>
+<author confidence="0.946954">Oscar Nierstrasz</author>
+<affiliation confidence="0.999292">SCG, University of Bern</affiliation>
+<address confidence="0.720404">Switzerland</address>
+<email confidence="0.909468">oscar@inf.unibe.ch</email>
+<abstract confidence="0.9997745">AbstractÃ¢ÂÂ It is widely acknowledged that null values should be avoided if possible or carefully used when necessary in Java code. The careless use of null has negative effects on maintainability, code readability, and software performance. However, a study on understanding null usage is still missing. In this paper we analyze null checks in 810 open-source Java systems and manually inspect 100 code samples to understand when and why developers use null. We find that 35% of all conditional statements contain null checks. A deeper investigation reveals many questionable practices with respect to using null. Uninitialized member variables, returning null in methods, and passing null as a method parameter are among the most recurrent reasons for introducing null checks. Developers often return null in methods to signal errors instead of throwing a proper exception. As a result, 71% of the values checked for null are returned from method calls. Our study provides a novel evidence of an overuse of null checks and of the null value itself in Java, and at the same time, reveals actionable recommendations to reduce this null usage.</abstract>
+<intro confidence="0.883087">Keywords-Null Checks; Null Usage; Static Analysis</intro>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>T Hoare</author>
+</authors>
+<title>Ã¢Null references: The billion dollar mistake,Ã¢ Presentation at QCon London,</title>
+<date>2009</date>
+<contexts>
+<context position="1613" citStr="[1]" startWordPosition="236" endWordPosition="236">, and passing null as a method parameter are among the most recurrent reasons for introducing null checks. Developers often return null in methods to signal errors instead of throwing a proper exception. As a result, 71% of the values checked for null are returned from method calls. Our study provides a novel evidence of an overuse of null checks and of the null value itself in Java, and at the same time, reveals actionable recommendations to reduce this null usage. Keywords-Null Checks; Null Usage; Static Analysis I. INTRODUCTION Tony Hoare1 considers null as his Ã¢billion-dollar mistakeÃ¢ [1]. Besides the bugs it introduces in running systems, null usage hinders performance [2], increases maintenance costs [3], and decreases code readability. Recent studies show that a considerable number of bug fixes are recurrent [4][5][6][7]. Interestingly, the if -related bug category is dominant [4], and more particularly, missing null check is the most frequent pattern of bugs in Java systems [7]. These results suggest that null dereferencing is a major source of bugs in Java programs, forcing developers to add guards (null checks) on objects before using them. Many tools and techniques have</context>
+</contexts>
+<marker>[1]</marker>
+<rawString>T. Hoare, Ã¢ÂÂNull references: The billion dollar mistake,Ã¢ÂÂ Presentation at QCon London, 2009.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>P Pominville</author>
+<author>F Qian</author>
+<author>R ValleÃe-Rai</author>
+<author>L Hendren</author>
+<author>C Verbrugge</author>
+</authors>
+<title>Ã¢A framework for optimizing Java using attributes,Ã¢</title>
+<date>2000</date>
+<booktitle>in Proceedings of the 2000 conference of the Centre for Advanced Studies on Collaborative research.</booktitle>
+<pages>8</pages>
+<publisher>IBM Press,</publisher>
+<contexts>
+<context position="1700" citStr="[2]" startWordPosition="249" endWordPosition="249">ducing null checks. Developers often return null in methods to signal errors instead of throwing a proper exception. As a result, 71% of the values checked for null are returned from method calls. Our study provides a novel evidence of an overuse of null checks and of the null value itself in Java, and at the same time, reveals actionable recommendations to reduce this null usage. Keywords-Null Checks; Null Usage; Static Analysis I. INTRODUCTION Tony Hoare1 considers null as his Ã¢billion-dollar mistakeÃ¢ [1]. Besides the bugs it introduces in running systems, null usage hinders performance [2], increases maintenance costs [3], and decreases code readability. Recent studies show that a considerable number of bug fixes are recurrent [4][5][6][7]. Interestingly, the if -related bug category is dominant [4], and more particularly, missing null check is the most frequent pattern of bugs in Java systems [7]. These results suggest that null dereferencing is a major source of bugs in Java programs, forcing developers to add guards (null checks) on objects before using them. Many tools and techniques have been introduced to solve the null dereferencing problem. However, a study is still mis</context>
+<context position="5623" citStr="[2]" startWordPosition="877" endWordPosition="877">ection IV, we demonstrate the results and answer the posed research questions. In Section V, we discuss the research questions and the implications of the results. We then explain in Section VI the possible threats to validity in our study and how we tried to mitigate them. In Section VII, we discuss the related work and how the null-related problems are approached. Finally, we conclude this paper in Section VIII. II. MOTIVATION Pominville et al. achieved 2% to 10% performance gain in Java bytecode when they annotated Java class files with assumptions about the Ã¢nullnessÃ¢ and array bounds [2]. With respect to null, their framework, SOOT [10], performs intra-procedural null analysis to make assumptions about variables being null or not to be able to remove unnecessary null checks in the bytecode level. This means that null checks impose a non-negligible performance overhead on Java programs. In a managed language like Java, null is an unusable value. Its interpretation depends on the context and when it causes a problem, its value yields Ã¢no useful debugging informationÃ¢ [11]. For instance, the listFiles() method in the File class returns an array of the files, File[], in the s</context>
+</contexts>
+<marker>[2]</marker>
+<rawString>P. Pominville, F. Qian, R. ValleÃÂe-Rai, L. Hendren, and C. Verbrugge, Ã¢ÂÂA framework for optimizing Java using attributes,Ã¢ÂÂ in Proceedings of the 2000 conference of the Centre for Advanced Studies on Collaborative research. IBM Press, 2000, p. 8.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Kimura</author>
+<author>K Hotta</author>
+<author>Y Higo</author>
+<author>H Igaki</author>
+<author>S Kusumoto</author>
+</authors>
+<title>Ã¢Does return null matter?Ã¢</title>
+<date>2014</date>
+<booktitle>in Software Maintenance, Reengineering and Reverse Engineering (CSMR-WCRE), 2014 Software Evolution Week - IEEE Conference on,</booktitle>
+<pages>244--253</pages>
+<contexts>
+<context position="1733" citStr="[3]" startWordPosition="253" endWordPosition="253">ten return null in methods to signal errors instead of throwing a proper exception. As a result, 71% of the values checked for null are returned from method calls. Our study provides a novel evidence of an overuse of null checks and of the null value itself in Java, and at the same time, reveals actionable recommendations to reduce this null usage. Keywords-Null Checks; Null Usage; Static Analysis I. INTRODUCTION Tony Hoare1 considers null as his Ã¢billion-dollar mistakeÃ¢ [1]. Besides the bugs it introduces in running systems, null usage hinders performance [2], increases maintenance costs [3], and decreases code readability. Recent studies show that a considerable number of bug fixes are recurrent [4][5][6][7]. Interestingly, the if -related bug category is dominant [4], and more particularly, missing null check is the most frequent pattern of bugs in Java systems [7]. These results suggest that null dereferencing is a major source of bugs in Java programs, forcing developers to add guards (null checks) on objects before using them. Many tools and techniques have been introduced to solve the null dereferencing problem. However, a study is still missing on how null is used, why nul</context>
+<context position="12559" citStr="[3]" startWordPosition="1993" endWordPosition="1993">lue. (e.g., uninitialized local variables, a return null statement in a method body, etc.) We do not derive any statistics from this phase, as we only want to gain deeper insights into how null and null checks are used in the code and for what reasons. IV. RESULTS We applied our analysis to the 810 Java projects in our dataset and we manually reviewed 100 code samples. In the following subsections which are organized around the research questions, we explain the results. A. How Common Are Null Checks? To our knowledge, only Kimura et al. have measured the density of null checks in source code [3]. They measured the ratio between the number of null checks and the number of lines of code. They found this ratio to be from one to four per 100 lines of code, depending on the project. We, on the other hand, go one step further and measure the ratio of the conditional statements containing null checks with respect to all conditional statements. This will enable us in answering the first research question: RQ1: How Common are Null Checks? We call the ratio between the null checks and the overall number of conditional statements the null check ratio. Analyzing our dataset, we found 2,329,808 c</context>
+<context position="28052" citStr="[3]" startWordPosition="4665" endWordPosition="4665">meter to other methods. Only NC-Def-expressions are considered. Ã¢Â¢ When an N-Comparand appears within the same method in multiple null checks, every time it is considered a different N-Comparand leading to possible duplicates in the analysis of the N-Comparand kinds. The external threats to validity come from the fact that we only analyzed 810 Java open-source projects. The results might not generalize to all open source projects or to industrial closed-source projects VII. RELATED WORK A closely related work is a study on the maintainability burden imposed by the Ã¢return nullÃ¢ statement [3]. Kimura et al. found that return null statements are modified more frequently than other return statements but null conditionals are not. This indicates that the presence of return null is costly to maintain. They also found that the density of null checks are from one to four per 100 lines of code [3]. Our definition of null check ratio expresses null check usage better than null checks per LOC because it quantifies the added complexity null checks have on the code. Null-related bugs attract the attention of many researchers and practitioners who propose various approaches to detect them as </context>
+</contexts>
+<marker>[3]</marker>
+<rawString>S. Kimura, K. Hotta, Y. Higo, H. Igaki, and S. Kusumoto, Ã¢ÂÂDoes return null matter?Ã¢ÂÂ in Software Maintenance, Reengineering and Reverse Engineering (CSMR-WCRE), 2014 Software Evolution Week - IEEE Conference on, Feb. 2014, pp. 244Ã¢ÂÂ253.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>K Pan</author>
+<author>S Kim</author>
+<author>E J Whitehead</author>
+</authors>
+<title>Ã¢Toward an understanding of bug fix patterns,Ã¢</title>
+<date>2009</date>
+<journal>Empirical Softw. Engg.,</journal>
+<volume>14</volume>
+<pages>286--315</pages>
+<contexts>
+<context position="1844" citStr="[4]" startWordPosition="270" endWordPosition="270">ues checked for null are returned from method calls. Our study provides a novel evidence of an overuse of null checks and of the null value itself in Java, and at the same time, reveals actionable recommendations to reduce this null usage. Keywords-Null Checks; Null Usage; Static Analysis I. INTRODUCTION Tony Hoare1 considers null as his Ã¢billion-dollar mistakeÃ¢ [1]. Besides the bugs it introduces in running systems, null usage hinders performance [2], increases maintenance costs [3], and decreases code readability. Recent studies show that a considerable number of bug fixes are recurrent [4][5][6][7]. Interestingly, the if -related bug category is dominant [4], and more particularly, missing null check is the most frequent pattern of bugs in Java systems [7]. These results suggest that null dereferencing is a major source of bugs in Java programs, forcing developers to add guards (null checks) on objects before using them. Many tools and techniques have been introduced to solve the null dereferencing problem. However, a study is still missing on how null is used, why null checks are introduced, and where the checked-for-null objects come from in the source code. In this paper, we</context>
+</contexts>
+<marker>[4]</marker>
+<rawString>K. Pan, S. Kim, and E. J. Whitehead, Jr., Ã¢ÂÂToward an understanding of bug fix patterns,Ã¢ÂÂ Empirical Softw. Engg., vol. 14, no. 3, pp. 286Ã¢ÂÂ315, Jun. 2009. [Online]. Available: http://dx.doi.org/10.1007/s10664-008-9077-5</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>T T Nguyen</author>
+<author>H A Nguyen</author>
+<author>N H Pham</author>
+<author>J Al-Kofahi</author>
+<author>T N Nguyen</author>
+</authors>
+<title>Ã¢Recurring bug fixes in objectoriented programs,Ã¢</title>
+<date>2010</date>
+<booktitle>in Proceedings of the 32Nd ACM/IEEE International Conference on Software Engineering - Volume 1, ser. ICSE Ã¢10.</booktitle>
+<pages>315--324</pages>
+<publisher>ACM,</publisher>
+<location>New York, NY, USA:</location>
+<note>[Online]. Available: http://doi.acm.org/10.1145/</note>
+<contexts>
+<context position="1847" citStr="[5]" startWordPosition="270" endWordPosition="270"> checked for null are returned from method calls. Our study provides a novel evidence of an overuse of null checks and of the null value itself in Java, and at the same time, reveals actionable recommendations to reduce this null usage. Keywords-Null Checks; Null Usage; Static Analysis I. INTRODUCTION Tony Hoare1 considers null as his Ã¢billion-dollar mistakeÃ¢ [1]. Besides the bugs it introduces in running systems, null usage hinders performance [2], increases maintenance costs [3], and decreases code readability. Recent studies show that a considerable number of bug fixes are recurrent [4][5][6][7]. Interestingly, the if -related bug category is dominant [4], and more particularly, missing null check is the most frequent pattern of bugs in Java systems [7]. These results suggest that null dereferencing is a major source of bugs in Java programs, forcing developers to add guards (null checks) on objects before using them. Many tools and techniques have been introduced to solve the null dereferencing problem. However, a study is still missing on how null is used, why null checks are introduced, and where the checked-for-null objects come from in the source code. In this paper, we ai</context>
+</contexts>
+<marker>[5]</marker>
+<rawString>T. T. Nguyen, H. A. Nguyen, N. H. Pham, J. Al-Kofahi, and T. N. Nguyen, Ã¢ÂÂRecurring bug fixes in objectoriented programs,Ã¢ÂÂ in Proceedings of the 32Nd ACM/IEEE International Conference on Software Engineering - Volume 1, ser. ICSE Ã¢ÂÂ10. New York, NY, USA: ACM, 2010, pp. 315Ã¢ÂÂ324. [Online]. Available: http://doi.acm.org/10.1145/</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Martinez</author>
+<author>L Duchien</author>
+<author>M Monperrus</author>
+</authors>
+<title>Ã¢Automatically extracting instances of code change patterns with AST analysis,Ã¢</title>
+<date>2013</date>
+<booktitle>in Proceedings of the 29th IEEE International Conference on Software Maintenance,</booktitle>
+<note>eRA Track.</note>
+<contexts>
+<context position="1850" citStr="[6]" startWordPosition="270" endWordPosition="270">ecked for null are returned from method calls. Our study provides a novel evidence of an overuse of null checks and of the null value itself in Java, and at the same time, reveals actionable recommendations to reduce this null usage. Keywords-Null Checks; Null Usage; Static Analysis I. INTRODUCTION Tony Hoare1 considers null as his Ã¢billion-dollar mistakeÃ¢ [1]. Besides the bugs it introduces in running systems, null usage hinders performance [2], increases maintenance costs [3], and decreases code readability. Recent studies show that a considerable number of bug fixes are recurrent [4][5][6][7]. Interestingly, the if -related bug category is dominant [4], and more particularly, missing null check is the most frequent pattern of bugs in Java systems [7]. These results suggest that null dereferencing is a major source of bugs in Java programs, forcing developers to add guards (null checks) on objects before using them. Many tools and techniques have been introduced to solve the null dereferencing problem. However, a study is still missing on how null is used, why null checks are introduced, and where the checked-for-null objects come from in the source code. In this paper, we aim a</context>
+</contexts>
+<marker>[6]</marker>
+<rawString>M. Martinez, L. Duchien, and M. Monperrus, Ã¢ÂÂAutomatically extracting instances of code change patterns with AST analysis,Ã¢ÂÂ in Proceedings of the 29th IEEE International Conference on Software Maintenance, 2013, eRA Track.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>H Osman</author>
+<author>M Lungu</author>
+<author>O Nierstrasz</author>
+</authors>
+<title>Ã¢Mining frequent bug-fix code changes,Ã¢</title>
+<date>2014</date>
+<booktitle>in Software Maintenance, Reengineering and Reverse Engineering (CSMR-WCRE), 2014 Software Evolution Week - IEEE Conference on,</booktitle>
+<pages>343--347</pages>
+<note>[Online]. Available: http://scg.unibe.ch/ archive/papers/Osma14aMiningBugFixChanges.pdf</note>
+<contexts>
+<context position="1853" citStr="[7]" startWordPosition="270" endWordPosition="270">ed for null are returned from method calls. Our study provides a novel evidence of an overuse of null checks and of the null value itself in Java, and at the same time, reveals actionable recommendations to reduce this null usage. Keywords-Null Checks; Null Usage; Static Analysis I. INTRODUCTION Tony Hoare1 considers null as his Ã¢billion-dollar mistakeÃ¢ [1]. Besides the bugs it introduces in running systems, null usage hinders performance [2], increases maintenance costs [3], and decreases code readability. Recent studies show that a considerable number of bug fixes are recurrent [4][5][6][7]. Interestingly, the if -related bug category is dominant [4], and more particularly, missing null check is the most frequent pattern of bugs in Java systems [7]. These results suggest that null dereferencing is a major source of bugs in Java programs, forcing developers to add guards (null checks) on objects before using them. Many tools and techniques have been introduced to solve the null dereferencing problem. However, a study is still missing on how null is used, why null checks are introduced, and where the checked-for-null objects come from in the source code. In this paper, we aim at u</context>
+<context position="6599" citStr="[7]" startWordPosition="1035" endWordPosition="1035">rpretation depends on the context and when it causes a problem, its value yields Ã¢no useful debugging informationÃ¢ [11]. For instance, the listFiles() method in the File class returns an array of the files, File[], in the specified directory. However, if the directory does not exist, it returns null. This returned null value might mean that the File object does not exist, that it is not a directory, or that an I/O error has occurred. This inherent ambiguity of null leads to increased difficulties in code comprehension. Missing null checks are the most recurrent bug pattern in Java systems [7]. This bug manifests itself as the Java NullPointerException. Debugging this kind of exception is particularly hard because the stack traces do not provide enough information about the source of the null. Acknowledging this problem, Bond et al. introduced Origin Tracking [11], which records code locations where unused values (such as null) are assigned. Origin Tracking gathers the necessary information dynamically at run time so they can be reported at failure time to aid the debugging activities. This indirectly means that the overuse of null in program increases maintenance efforts. To this </context>
+<context position="8051" citStr="[7]" startWordPosition="1268" endWordPosition="1268">in Java code and in what contexts. This knowledge can help software engineers to build better static code checkers and develop better practices for writing and reviewing Java code. public class CoDriver { Ã¢Â¦ public void join(Driver driver) { Ã¢Â¦ Car car; Ã¢Â¦ car = driver.getCar(); Ã¢Â¦ Ã¢Â¦ if (car != null) { Ã¢Â¦ } Ã¢Â¦ } Ã¢Â¦ } Null Check N-Comparand NC-Def-expression NC-Def-valueNC-Declaration Figure 1. A code example showing the definitions of the terms used in the paper. III. NULL CHECK ANALYSIS A. Experimental Corpus For our experiment, we used the same software corpus from a previous study [7]. This corpus was built using a crawler that queries Github2 for Java projects that have more than 5 stars (popular) and are more than 100KB in size (relatively large). This corpus contains 810 Java projects, 371,745 Java source files, and 34,894,844 lines of code. We are making the corpus available for download through the Pangea infrastructure3 [12]. B. Terminology Before we explain the analysis, we define the terms used in this paper as follows (depicted in Figure 1): Ã¢Â¢ A Conditional: is a binary comparison expression that evaluates to a boolean value, such as: Ã¢ y &gt; 0 Ã¢ x != null Ã¢Â¢</context>
+<context position="19436" citStr="[7]" startWordPosition="3182" endWordPosition="3182">a parsing expression. method. Figure 6 shows the kinds of the assigned NC-Defvalues. As an answer to the third research question (RQ3: How are the checked-for-null objects initialized?) we find that 71% of the time the NC-Def-value is a method call expression, which means that null checks are mostly applied to values returned from method invocations. In other words, when methods possibly return null, they tend to cause NullPointerExceptions in the invoking methods forcing developers to add null checks. There is a long debate about whether methods should return null or not. In a previous study [7], we found that missing null checks represent the most frequent bug in Java programs. In this study, we show that null checks are applied to the results of method invocations. Both studies combined provide evidence that returning null in methods is a major cause of bugs. Hence, we side with the opinion that developers should avoid returning null in their method implementations and either throw an exception or return a special case object [16] such as a Null Object [8][9]. Surprisingly, some Java standard libraries exhibit this questionable design [16]. In our manually inspected code samples, w</context>
+<context position="24548" citStr="[7]" startWordPosition="4091" endWordPosition="4091">these samples. V. DISCUSSION Null usage often leads to various maintenance problems. Missing null check bugs, useless NullPointerException stack traces, and vague null semantics are often the consequences of the careless use of null value. A disciplined usage of null is highly recommended [17], and alternatives, like the Null Object Pattern [8][9], should be considered. However, the results of this study suggest that null is often misused and overused in Java code. To demonstrate how null is often misused, we put the observations from this study and from our previous study on bug-fix patterns [7] into a hypothetical story that represents the most recurrent pattern of wrong null usage. A developer, A, adds a return null statement in the method body of m(...) to indicate that a problem has occurred and the method m(...) cannot continue its normal execution. Another developer, B, uses the method m(...) and assigns its result to a local variable obj. When developer B runs his code, a NullPointerException is thrown. Developer B looks at the stack traces struggling to understand the problem and finally identifies the place of the null dereferencing. It is the local variable obj and the null</context>
+<context position="29969" citStr="[7]" startWordPosition="4963" endWordPosition="4963">y Ayewah and Pugh [29] compares several null dereference analysis tools and observes that, besides the reported false positives, many of the reported null dereferences (true positives) do not manifest themselves as bugs at run time. The authors claim that when the null dereference passes the initial software testing, it rarely causes bugs and Ã¢reviewing all potential null dereferences is often not as important as many other undone software quality tasksÃ¢[29]. We argue that Ayewah and Pugh underestimate the frequency of the bugs caused by dereferencing null as we show in our previous study [7]. The second family of solutions proposes to annotate the Ã¢nullnessÃ¢ in code. FaÃhndrich and Leino propose to distinguish the non-null references from the possibly-null ones at the type level (using annotations) to detect null-related bugs [30]. Papi and Ernst introduced the @NonNull annotation on types [31]. Loginov et al. [23], beside their inter-procedural null dereference analysis, propose null-related annotations to ensure the soundness and safety of the analysis. The idea of annotations made it to widely-used Java libraries like Checker Framework5 and Guava6. Also some programming l</context>
+</contexts>
+<marker>[7]</marker>
+<rawString>H. Osman, M. Lungu, and O. Nierstrasz, Ã¢ÂÂMining frequent bug-fix code changes,Ã¢ÂÂ in Software Maintenance, Reengineering and Reverse Engineering (CSMR-WCRE), 2014 Software Evolution Week - IEEE Conference on, Feb. 2014, pp. 343Ã¢ÂÂ347. [Online]. Available: http://scg.unibe.ch/ archive/papers/Osma14aMiningBugFixChanges.pdf</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>B Woolf</author>
+</authors>
+<title>Ã¢The null object pattern,Ã¢ in Design Patterns,</title>
+<date>1996</date>
+<institution>Robert Allerton Park and Conference Center, University of Illinois at Urbana-Champaign,</institution>
+<location>Monticello, Illinois,</location>
+<contexts>
+<context position="4615" citStr="[8]" startWordPosition="711" endWordPosition="711">ert null checks mainly when they use methods that may return null. Passing null values to methods and uninitialized member variables are recurrent reasons for introducing null checks. We manually review 100 code samples from our corpus to understand the contexts and discover patterns of null check usage. In 76 samples null is used to represent errors, in 15 samples it is a representation of absence of a value, and in 9 samples null represents a meaningful value. Most of these instances of null usage can (or should) be replaced by proper exceptions or special case objects such as a Null Object [8][9]. The rest of the paper is organized as follows: in Section II, we explain why using null leads to problems. We explain the procedure we followed to extract the null checks and the devised heuristics to analyze the checked-for-null objects in Section III. Then, we explain the experimental setup, the terminology, and the procedure we followed to analyze null checks and null usage in Section III. In Section IV, we demonstrate the results and answer the posed research questions. In Section V, we discuss the research questions and the implications of the results. We then explain in Section VI t</context>
+<context position="19908" citStr="[8]" startWordPosition="3262" endWordPosition="3262">cing developers to add null checks. There is a long debate about whether methods should return null or not. In a previous study [7], we found that missing null checks represent the most frequent bug in Java programs. In this study, we show that null checks are applied to the results of method invocations. Both studies combined provide evidence that returning null in methods is a major cause of bugs. Hence, we side with the opinion that developers should avoid returning null in their method implementations and either throw an exception or return a special case object [16] such as a Null Object [8][9]. Surprisingly, some Java standard libraries exhibit this questionable design [16]. In our manually inspected code samples, we find 5 null checks because of methods from the Java standard API e.g., Map.get(...), List.get(...), Iterator.next(). Another less frequent reason for checking a local variable for null is when it is initialized within a method call or a constructor that might throw an exception before completing. We observe this pattern in our manually-inspected code samples, as the code skeleton shows in Listing 3. The 70.93% Ã 10.09% Ã 6.93% Ã 4.15% Ã 3.15% Ã 1.53% Ã 1.34% Ã 0.86%</context>
+<context position="23538" citStr="[8]" startWordPosition="3929" endWordPosition="3929">use well-defined exceptions as they are easier to read and act upon. For the third usage, one can have a dedicated enum, class, or other data type to represent the semantics in a more readable and maintainable form. In fact, 19 out of the 100 inspected classes contain potential bugs in the form of potentially missing null checks. All of these 19 potential bugs exist when null represents an error or a meaningful value. We also argue that second usage scenario where null means the absence of a value is only tolerable and not ideal, as one should use special case object [16] like the Null Object [8][9] when applicable. Actually, even when the representation of absence of value is available for free (such as an empty string for a String variable), developers tend to not use it. Eight out of the inspected N-Comparands are of type String and seven are of type List. Carefully reading the code, we find out that uninitialized strings and lists are equivalent to empty strings and lists correspondingly in these samples. V. DISCUSSION Null usage often leads to various maintenance problems. Missing null check bugs, useless NullPointerException stack traces, and vague null semantics are often the c</context>
+</contexts>
+<marker>[8]</marker>
+<rawString>B. Woolf, Ã¢ÂÂThe null object pattern,Ã¢ÂÂ in Design Patterns, PLoP 1996. Robert Allerton Park and Conference Center, University of Illinois at Urbana-Champaign, Monticello, Illinois, 1996.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Ã¢Ã¢</author>
+</authors>
+<title>Ã¢Null object,Ã¢</title>
+<date>1998</date>
+<booktitle>in Pattern Languages of Program Design 3,</booktitle>
+<pages>5--18</pages>
+<publisher>Addison Wesley,</publisher>
+<contexts>
+<context position="4618" citStr="[9]" startWordPosition="711" endWordPosition="711"> null checks mainly when they use methods that may return null. Passing null values to methods and uninitialized member variables are recurrent reasons for introducing null checks. We manually review 100 code samples from our corpus to understand the contexts and discover patterns of null check usage. In 76 samples null is used to represent errors, in 15 samples it is a representation of absence of a value, and in 9 samples null represents a meaningful value. Most of these instances of null usage can (or should) be replaced by proper exceptions or special case objects such as a Null Object [8][9]. The rest of the paper is organized as follows: in Section II, we explain why using null leads to problems. We explain the procedure we followed to extract the null checks and the devised heuristics to analyze the checked-for-null objects in Section III. Then, we explain the experimental setup, the terminology, and the procedure we followed to analyze null checks and null usage in Section III. In Section IV, we demonstrate the results and answer the posed research questions. In Section V, we discuss the research questions and the implications of the results. We then explain in Section VI the </context>
+<context position="19911" citStr="[9]" startWordPosition="3262" endWordPosition="3262">g developers to add null checks. There is a long debate about whether methods should return null or not. In a previous study [7], we found that missing null checks represent the most frequent bug in Java programs. In this study, we show that null checks are applied to the results of method invocations. Both studies combined provide evidence that returning null in methods is a major cause of bugs. Hence, we side with the opinion that developers should avoid returning null in their method implementations and either throw an exception or return a special case object [16] such as a Null Object [8][9]. Surprisingly, some Java standard libraries exhibit this questionable design [16]. In our manually inspected code samples, we find 5 null checks because of methods from the Java standard API e.g., Map.get(...), List.get(...), Iterator.next(). Another less frequent reason for checking a local variable for null is when it is initialized within a method call or a constructor that might throw an exception before completing. We observe this pattern in our manually-inspected code samples, as the code skeleton shows in Listing 3. The 70.93% Ã 10.09% Ã 6.93% Ã 4.15% Ã 3.15% Ã 1.53% Ã 1.34% Ã 0.86% Ã </context>
+<context position="23541" citStr="[9]" startWordPosition="3929" endWordPosition="3929"> well-defined exceptions as they are easier to read and act upon. For the third usage, one can have a dedicated enum, class, or other data type to represent the semantics in a more readable and maintainable form. In fact, 19 out of the 100 inspected classes contain potential bugs in the form of potentially missing null checks. All of these 19 potential bugs exist when null represents an error or a meaningful value. We also argue that second usage scenario where null means the absence of a value is only tolerable and not ideal, as one should use special case object [16] like the Null Object [8][9] when applicable. Actually, even when the representation of absence of value is available for free (such as an empty string for a String variable), developers tend to not use it. Eight out of the inspected N-Comparands are of type String and seven are of type List. Carefully reading the code, we find out that uninitialized strings and lists are equivalent to empty strings and lists correspondingly in these samples. V. DISCUSSION Null usage often leads to various maintenance problems. Missing null check bugs, useless NullPointerException stack traces, and vague null semantics are often the cons</context>
+</contexts>
+<marker>[9]</marker>
+<rawString>Ã¢ÂÂÃ¢ÂÂ, Ã¢ÂÂNull object,Ã¢ÂÂ in Pattern Languages of Program Design 3, R. Martin, D. Riehle, and F. Buschmann, Eds. Addison Wesley, 1998, pp. 5Ã¢ÂÂ18.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R ValleÃe-Rai</author>
+<author>P Co</author>
+<author>E Gagnon</author>
+<author>L Hendren</author>
+<author>P Lam</author>
+<author>V Sundaresan</author>
+</authors>
+<title>Ã¢Soot Ã¢ a Java bytecode optimization framework,Ã¢</title>
+<date>1999</date>
+<booktitle>in Proceedings of the 1999 conference of the Centre for Advanced Studies on Collaborative research.</booktitle>
+<pages>13</pages>
+<publisher>IBM Press,</publisher>
+<contexts>
+<context position="5673" citStr="[10]" startWordPosition="885" endWordPosition="885">the posed research questions. In Section V, we discuss the research questions and the implications of the results. We then explain in Section VI the possible threats to validity in our study and how we tried to mitigate them. In Section VII, we discuss the related work and how the null-related problems are approached. Finally, we conclude this paper in Section VIII. II. MOTIVATION Pominville et al. achieved 2% to 10% performance gain in Java bytecode when they annotated Java class files with assumptions about the Ã¢nullnessÃ¢ and array bounds [2]. With respect to null, their framework, SOOT [10], performs intra-procedural null analysis to make assumptions about variables being null or not to be able to remove unnecessary null checks in the bytecode level. This means that null checks impose a non-negligible performance overhead on Java programs. In a managed language like Java, null is an unusable value. Its interpretation depends on the context and when it causes a problem, its value yields Ã¢no useful debugging informationÃ¢ [11]. For instance, the listFiles() method in the File class returns an array of the files, File[], in the specified directory. However, if the directory does</context>
+</contexts>
+<marker>[10]</marker>
+<rawString>R. ValleÃÂe-Rai, P. Co, E. Gagnon, L. Hendren, P. Lam, and V. Sundaresan, Ã¢ÂÂSoot Ã¢ÂÂ a Java bytecode optimization framework,Ã¢ÂÂ in Proceedings of the 1999 conference of the Centre for Advanced Studies on Collaborative research. IBM Press, 1999, p. 13.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M D Bond</author>
+<author>N Nethercote</author>
+<author>S W Kent</author>
+<author>S Z Guyer</author>
+<author>K S McKinley</author>
+</authors>
+<title>Ã¢Tracking bad apples: reporting the origin of null and undefined value errors,Ã¢</title>
+<date>2007</date>
+<booktitle>in Proceedings of the 22nd annual ACM SIGPLAN conference on Object oriented programming systems and applications (OOPSLAÃ¢07).</booktitle>
+<pages>405--422</pages>
+<publisher>ACM,</publisher>
+<location>New York, NY, USA:</location>
+<contexts>
+<context position="6119" citStr="[11]" startWordPosition="954" endWordPosition="954">bytecode when they annotated Java class files with assumptions about the Ã¢nullnessÃ¢ and array bounds [2]. With respect to null, their framework, SOOT [10], performs intra-procedural null analysis to make assumptions about variables being null or not to be able to remove unnecessary null checks in the bytecode level. This means that null checks impose a non-negligible performance overhead on Java programs. In a managed language like Java, null is an unusable value. Its interpretation depends on the context and when it causes a problem, its value yields Ã¢no useful debugging informationÃ¢ [11]. For instance, the listFiles() method in the File class returns an array of the files, File[], in the specified directory. However, if the directory does not exist, it returns null. This returned null value might mean that the File object does not exist, that it is not a directory, or that an I/O error has occurred. This inherent ambiguity of null leads to increased difficulties in code comprehension. Missing null checks are the most recurrent bug pattern in Java systems [7]. This bug manifests itself as the Java NullPointerException. Debugging this kind of exception is particularly hard beca</context>
+</contexts>
+<marker>[11]</marker>
+<rawString>M. D. Bond, N. Nethercote, S. W. Kent, S. Z. Guyer, and K. S. McKinley, Ã¢ÂÂTracking bad apples: reporting the origin of null and undefined value errors,Ã¢ÂÂ in Proceedings of the 22nd annual ACM SIGPLAN conference on Object oriented programming systems and applications (OOPSLAÃ¢ÂÂ07). New York, NY, USA: ACM, 2007, pp. 405Ã¢ÂÂ422.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Caracciolo</author>
+<author>A ChisÃÂ§</author>
+<author>B SpasojevicÃ</author>
+<author>M Lungu</author>
+</authors>
+<title>Ã¢Pangea: A workbench for statically analyzing multi-language software corpora,Ã¢ in Source Code Analysis and Manipulation (SCAM),</title>
+<date>2014</date>
+<booktitle>IEEE 14th International Working Conference on. IEEE,</booktitle>
+<pages>71--76</pages>
+<note>[Online]. Available: http://scg.unibe.ch/archive/papers/Cara14c.pdf</note>
+<contexts>
+<context position="8404" citStr="[12]" startWordPosition="1325" endWordPosition="1325">C-Def-expression NC-Def-valueNC-Declaration Figure 1. A code example showing the definitions of the terms used in the paper. III. NULL CHECK ANALYSIS A. Experimental Corpus For our experiment, we used the same software corpus from a previous study [7]. This corpus was built using a crawler that queries Github2 for Java projects that have more than 5 stars (popular) and are more than 100KB in size (relatively large). This corpus contains 810 Java projects, 371,745 Java source files, and 34,894,844 lines of code. We are making the corpus available for download through the Pangea infrastructure3 [12]. B. Terminology Before we explain the analysis, we define the terms used in this paper as follows (depicted in Figure 1): Ã¢Â¢ A Conditional: is a binary comparison expression that evaluates to a boolean value, such as: Ã¢ y &gt; 0 Ã¢ x != null Ã¢Â¢ A Conditional Statement: is a Java statement that contains a conditional, such as: Ã¢ if(y &gt; 0) ... Ã¢ isNull = (x != null); Ã¢Â¢ A Null Check: is a conditional that contains the null literal as a left hand side or a right hand side operand. In other words, It is a comparison to null. For instance: Ã¢ Person != null Ã¢ iterator.next() != null Ã¢Â¢ </context>
+</contexts>
+<marker>[12]</marker>
+<rawString>A. Caracciolo, A. ChisÃÂ§, B. SpasojevicÃÂ, and M. Lungu, Ã¢ÂÂPangea: A workbench for statically analyzing multi-language software corpora,Ã¢ÂÂ in Source Code Analysis and Manipulation (SCAM), 2014 IEEE 14th International Working Conference on. IEEE, Sep. 2014, pp. 71Ã¢ÂÂ76. [Online]. Available: http://scg.unibe.ch/archive/papers/Cara14c.pdf</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>B Meyer</author>
+</authors>
+<title>Ã¢Applying design by contract,Ã¢</title>
+<date>1992</date>
+<journal>IEEE Computer (Special Issue on Inheritance &amp; Classification),</journal>
+<volume>25</volume>
+<pages>40--52</pages>
+<note>[Online]. Available: http: //se.ethz.ch/Ã¢meyer/publications/computer/contract.pdf</note>
+<contexts>
+<context position="16419" citStr="[13]" startWordPosition="2670" endWordPosition="2670">. Ã¢Â¢ The member variable is public or is returned by address in the getter method. The code in all inspected 10 samples where the NComparand is a member variable can be improved to avoid having to check for null every time the member variable needs to be used. In our samples, there is no obvious reason why member variables are not explicitly initialized in every constructor. In fact in 5 of the inspected samples, the member variable should even be final. This suggests a failure in applying well-established object-oriented design principles, in particular that of establishing class invariants [13]. As we see in Figure 5, a considerable percentage of null checks are guards on method parameters. In the inspected code samples, we observe that developers check parameters against null mainly to validate them. However, we differentiate between two recurring patterns of null checks on parameters. In the first pattern, a method throws an exception if a certain parameter is null. Listing 1 shows a real example of this pattern. The second, and more questionable, pattern is shown in Listing 2. The method skeletons in Listing 2 are the most recurrent usage scenarios of a parameter null check. In t</context>
+</contexts>
+<marker>[13]</marker>
+<rawString>B. Meyer, Ã¢ÂÂApplying design by contract,Ã¢ÂÂ IEEE Computer (Special Issue on Inheritance &amp; Classification), vol. 25, no. 10, pp. 40Ã¢ÂÂ52, Oct. 1992. [Online]. Available: http: //se.ethz.ch/Ã¢ÂÂ¼meyer/publications/computer/contract.pdf</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>E Evans</author>
+<author>M Fowler</author>
+</authors>
+<title>Ã¢Specifications,Ã¢</title>
+<date>1997</date>
+<booktitle>in Proceedings of the 1997 Conference on Pattern Languages of Programming,</booktitle>
+<pages>97--34</pages>
+<contexts>
+<context position="17845" citStr="[14]" startWordPosition="2892" endWordPosition="2892">File(final HttpEntity entity ) throws ClientProtocolException, IOException { if (entity == null) { throw new LibRuntimeException( LibResultCode.E_PARAM_ERROR); } . . . } Listing 1. Throwing a proper exception when the parameter is null. SOME_TYPE method1(Param p){ if(p==null){ return null; } METHOD_BODY } void method2(Param p){ if(p==null){ return; } METHOD_BODY } void method3(Param p){ if(p!=null){ METHOD_BODY } } Listing 2. The most recurrent usage scenarios of a parameter null check. More often than not, this indicates a poor API design. One can use, for instance, the specification pattern [14][15] to extract the validation code, which throws a proper exception, in a dedicated method or class. In any case, it is widely acknowledged that passing null as an argument to methods is a bad practice and Ã¢the rational approach is to forbid passing null by defaultÃ¢ [16]. Nevertheless, developers often add null checks on parameters because they expect null to be passed as a parameter. Our results show a clear gap between what is considered a good practice and how software is implemented in reality. C. Where Does The Null Come From? When the N-Comparand is a name expression, we analyze the</context>
+</contexts>
+<marker>[14]</marker>
+<rawString>E. Evans and M. Fowler, Ã¢ÂÂSpecifications,Ã¢ÂÂ in Proceedings of the 1997 Conference on Pattern Languages of Programming, 1997, pp. 97Ã¢ÂÂ34.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>E Evans</author>
+</authors>
+<title>Domain-Driven Design: Tacking Complexity In the Heart of Software.</title>
+<date>2003</date>
+<publisher>Addison-Wesley Longman Publishing Co., Inc.,</publisher>
+<location>Boston, MA, USA:</location>
+<contexts>
+<context position="17849" citStr="[15]" startWordPosition="2892" endWordPosition="2892">(final HttpEntity entity ) throws ClientProtocolException, IOException { if (entity == null) { throw new LibRuntimeException( LibResultCode.E_PARAM_ERROR); } . . . } Listing 1. Throwing a proper exception when the parameter is null. SOME_TYPE method1(Param p){ if(p==null){ return null; } METHOD_BODY } void method2(Param p){ if(p==null){ return; } METHOD_BODY } void method3(Param p){ if(p!=null){ METHOD_BODY } } Listing 2. The most recurrent usage scenarios of a parameter null check. More often than not, this indicates a poor API design. One can use, for instance, the specification pattern [14][15] to extract the validation code, which throws a proper exception, in a dedicated method or class. In any case, it is widely acknowledged that passing null as an argument to methods is a bad practice and Ã¢the rational approach is to forbid passing null by defaultÃ¢ [16]. Nevertheless, developers often add null checks on parameters because they expect null to be passed as a parameter. Our results show a clear gap between what is considered a good practice and how software is implemented in reality. C. Where Does The Null Come From? When the N-Comparand is a name expression, we analyze the NC-</context>
+</contexts>
+<marker>[15]</marker>
+<rawString>E. Evans, Domain-Driven Design: Tacking Complexity In the Heart of Software. Boston, MA, USA: Addison-Wesley Longman Publishing Co., Inc., 2003.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R C Martin</author>
+</authors>
+<title>Clean Code: A Handbook of Agile Software Craftsmanship, 1st ed. Upper Saddle River,</title>
+<date>2008</date>
+<publisher>Prentice Hall PTR,</publisher>
+<location>NJ, USA:</location>
+<contexts>
+<context position="18121" citStr="[16]" startWordPosition="2939" endWordPosition="2939">{ return null; } METHOD_BODY } void method2(Param p){ if(p==null){ return; } METHOD_BODY } void method3(Param p){ if(p!=null){ METHOD_BODY } } Listing 2. The most recurrent usage scenarios of a parameter null check. More often than not, this indicates a poor API design. One can use, for instance, the specification pattern [14][15] to extract the validation code, which throws a proper exception, in a dedicated method or class. In any case, it is widely acknowledged that passing null as an argument to methods is a bad practice and Ã¢the rational approach is to forbid passing null by defaultÃ¢ [16]. Nevertheless, developers often add null checks on parameters because they expect null to be passed as a parameter. Our results show a clear gap between what is considered a good practice and how software is implemented in reality. C. Where Does The Null Come From? When the N-Comparand is a name expression, we analyze the NC-Def-values assigned to it in all the NCDef-expressions preceding the null check within the same 78.46% Ã 14.68% Ã 5.42% Ã 0.79% Ã 0.62% Ã 0.01% Ã 0% Ã 10% Ã 20% Ã 30% Ã 40% Ã 50% Ã 60% Ã 70% Ã 80% Ã 90% Ã 100% Ã Name Ã MethodCall Ã FieldAccess Ã Enclosed Ã ArrayAccess Ã O</context>
+<context position="19882" citStr="[16]" startWordPosition="3256" endWordPosition="3256">in the invoking methods forcing developers to add null checks. There is a long debate about whether methods should return null or not. In a previous study [7], we found that missing null checks represent the most frequent bug in Java programs. In this study, we show that null checks are applied to the results of method invocations. Both studies combined provide evidence that returning null in methods is a major cause of bugs. Hence, we side with the opinion that developers should avoid returning null in their method implementations and either throw an exception or return a special case object [16] such as a Null Object [8][9]. Surprisingly, some Java standard libraries exhibit this questionable design [16]. In our manually inspected code samples, we find 5 null checks because of methods from the Java standard API e.g., Map.get(...), List.get(...), Iterator.next(). Another less frequent reason for checking a local variable for null is when it is initialized within a method call or a constructor that might throw an exception before completing. We observe this pattern in our manually-inspected code samples, as the code skeleton shows in Listing 3. The 70.93% Ã 10.09% Ã 6.93% Ã 4.15% Ã 3.1</context>
+<context position="23513" citStr="[16]" startWordPosition="3924" endWordPosition="3924"> and failures, one should use well-defined exceptions as they are easier to read and act upon. For the third usage, one can have a dedicated enum, class, or other data type to represent the semantics in a more readable and maintainable form. In fact, 19 out of the 100 inspected classes contain potential bugs in the form of potentially missing null checks. All of these 19 potential bugs exist when null represents an error or a meaningful value. We also argue that second usage scenario where null means the absence of a value is only tolerable and not ideal, as one should use special case object [16] like the Null Object [8][9] when applicable. Actually, even when the representation of absence of value is available for free (such as an empty string for a String variable), developers tend to not use it. Eight out of the inspected N-Comparands are of type String and seven are of type List. Carefully reading the code, we find out that uninitialized strings and lists are equivalent to empty strings and lists correspondingly in these samples. V. DISCUSSION Null usage often leads to various maintenance problems. Missing null check bugs, useless NullPointerException stack traces, and vague null </context>
+</contexts>
+<marker>[16]</marker>
+<rawString>R. C. Martin, Clean Code: A Handbook of Agile Software Craftsmanship, 1st ed. Upper Saddle River, NJ, USA: Prentice Hall PTR, 2008.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Fowler</author>
+<author>K Beck</author>
+<author>J Brant</author>
+<author>W Opdyke</author>
+<author>D Roberts</author>
+</authors>
+<title>Refactoring: Improving the Design of Existing Code.</title>
+<date>1999</date>
+<publisher>Addison Wesley,</publisher>
+<contexts>
+<context position="24239" citStr="[17]" startWordPosition="4040" endWordPosition="4040">free (such as an empty string for a String variable), developers tend to not use it. Eight out of the inspected N-Comparands are of type String and seven are of type List. Carefully reading the code, we find out that uninitialized strings and lists are equivalent to empty strings and lists correspondingly in these samples. V. DISCUSSION Null usage often leads to various maintenance problems. Missing null check bugs, useless NullPointerException stack traces, and vague null semantics are often the consequences of the careless use of null value. A disciplined usage of null is highly recommended [17], and alternatives, like the Null Object Pattern [8][9], should be considered. However, the results of this study suggest that null is often misused and overused in Java code. To demonstrate how null is often misused, we put the observations from this study and from our previous study on bug-fix patterns [7] into a hypothetical story that represents the most recurrent pattern of wrong null usage. A developer, A, adds a return null statement in the method body of m(...) to indicate that a problem has occurred and the method m(...) cannot continue its normal execution. Another developer, B, uses</context>
+</contexts>
+<marker>[17]</marker>
+<rawString>M. Fowler, K. Beck, J. Brant, W. Opdyke, and D. Roberts, Refactoring: Improving the Design of Existing Code. Addison Wesley, 1999.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>W R Bush</author>
+<author>J D Pincus</author>
+<author>D J Sielaff</author>
+</authors>
+<title>Ã¢A static analyzer for finding dynamic programming errors,Ã¢</title>
+<date>2000</date>
+<journal>Softw. Pract. Exper.,</journal>
+<volume>30</volume>
+<pages>775--802</pages>
+<contexts>
+<context position="28835" citStr="[18]" startWordPosition="4790" endWordPosition="4790">rn null is costly to maintain. They also found that the density of null checks are from one to four per 100 lines of code [3]. Our definition of null check ratio expresses null check usage better than null checks per LOC because it quantifies the added complexity null checks have on the code. Null-related bugs attract the attention of many researchers and practitioners who propose various approaches to detect them as early as possible. The first family of solutions incorporates data flow analysis techniques to detect possible null values. Some techniques are simple, fast, and intra-procedural [18][19][20][21][22] and some are more complex, thorough, and inter-procedural [23][24][25][26]. For instance, Hovemeyer and Pugh [22] perform intraprocedural forward data flow analysis to approximate the static single assignment for the values of variables. Then they analyze the dereferences as a backward data flow over the SSA approximation. This algorithm replaces the previous basic forward data flow analysis approach [27] and is now part of FindBugs [28], a static analysis tool for finding bugs in Java. An interesting study by Ayewah and Pugh [29] compares several null dereference analysis too</context>
+</contexts>
+<marker>[18]</marker>
+<rawString>W. R. Bush, J. D. Pincus, and D. J. Sielaff, Ã¢ÂÂA static analyzer for finding dynamic programming errors,Ã¢ÂÂ Softw. Pract. Exper., vol. 30, no. 7, pp. 775Ã¢ÂÂ802, Jun. 2000. [Online]. Available: http://dx.doi.org/10.1002/(SICI) 1097-024X(200006)30:7Ã£ÂÂ775::AID-SPE309Ã£ÂÂ3.0.CO;2-H</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>I Dillig</author>
+<author>T Dillig</author>
+<author>A Aiken</author>
+</authors>
+<title>Ã¢Static error detection using semantic inconsistency inference,Ã¢</title>
+<date>2007</date>
+<booktitle>in Proceedings of the 2007 ACM SIGPLAN Conference on Programming Language Design and Implementation, ser. PLDI Ã¢07.</booktitle>
+<pages>435--445</pages>
+<publisher>ACM,</publisher>
+<location>New York, NY, USA:</location>
+<note>[Online]. Available: http://doi.acm.org/10.1145/1250734.1250784</note>
+<contexts>
+<context position="28839" citStr="[19]" startWordPosition="4790" endWordPosition="4790">ull is costly to maintain. They also found that the density of null checks are from one to four per 100 lines of code [3]. Our definition of null check ratio expresses null check usage better than null checks per LOC because it quantifies the added complexity null checks have on the code. Null-related bugs attract the attention of many researchers and practitioners who propose various approaches to detect them as early as possible. The first family of solutions incorporates data flow analysis techniques to detect possible null values. Some techniques are simple, fast, and intra-procedural [18][19][20][21][22] and some are more complex, thorough, and inter-procedural [23][24][25][26]. For instance, Hovemeyer and Pugh [22] perform intraprocedural forward data flow analysis to approximate the static single assignment for the values of variables. Then they analyze the dereferences as a backward data flow over the SSA approximation. This algorithm replaces the previous basic forward data flow analysis approach [27] and is now part of FindBugs [28], a static analysis tool for finding bugs in Java. An interesting study by Ayewah and Pugh [29] compares several null dereference analysis tools a</context>
+</contexts>
+<marker>[19]</marker>
+<rawString>I. Dillig, T. Dillig, and A. Aiken, Ã¢ÂÂStatic error detection using semantic inconsistency inference,Ã¢ÂÂ in Proceedings of the 2007 ACM SIGPLAN Conference on Programming Language Design and Implementation, ser. PLDI Ã¢ÂÂ07. New York, NY, USA: ACM, 2007, pp. 435Ã¢ÂÂ445. [Online]. Available: http://doi.acm.org/10.1145/1250734.1250784</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Engler</author>
+<author>D Y Chen</author>
+<author>S Hallem</author>
+<author>A Chou</author>
+<author>B Chelf</author>
+</authors>
+<title>Ã¢Bugs as deviant behavior: A general approach to inferring errors in systems code,Ã¢</title>
+<date>2001</date>
+<booktitle>in Proceedings of the Eighteenth ACM Symposium on Operating Systems Principles, ser. SOSP Ã¢01.</booktitle>
+<pages>57--72</pages>
+<publisher>ACM,</publisher>
+<location>New York, NY, USA:</location>
+<note>[Online]. Available: http://doi.acm.org/10.1145/502034.502041</note>
+<contexts>
+<context position="28843" citStr="[20]" startWordPosition="4790" endWordPosition="4790">is costly to maintain. They also found that the density of null checks are from one to four per 100 lines of code [3]. Our definition of null check ratio expresses null check usage better than null checks per LOC because it quantifies the added complexity null checks have on the code. Null-related bugs attract the attention of many researchers and practitioners who propose various approaches to detect them as early as possible. The first family of solutions incorporates data flow analysis techniques to detect possible null values. Some techniques are simple, fast, and intra-procedural [18][19][20][21][22] and some are more complex, thorough, and inter-procedural [23][24][25][26]. For instance, Hovemeyer and Pugh [22] perform intraprocedural forward data flow analysis to approximate the static single assignment for the values of variables. Then they analyze the dereferences as a backward data flow over the SSA approximation. This algorithm replaces the previous basic forward data flow analysis approach [27] and is now part of FindBugs [28], a static analysis tool for finding bugs in Java. An interesting study by Ayewah and Pugh [29] compares several null dereference analysis tools and o</context>
+</contexts>
+<marker>[20]</marker>
+<rawString>D. Engler, D. Y. Chen, S. Hallem, A. Chou, and B. Chelf, Ã¢ÂÂBugs as deviant behavior: A general approach to inferring errors in systems code,Ã¢ÂÂ in Proceedings of the Eighteenth ACM Symposium on Operating Systems Principles, ser. SOSP Ã¢ÂÂ01. New York, NY, USA: ACM, 2001, pp. 57Ã¢ÂÂ72. [Online]. Available: http://doi.acm.org/10.1145/502034.502041</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>C Flanagan</author>
+<author>K R M Leino</author>
+<author>M Lillibridge</author>
+<author>G Nelson</author>
+<author>J B Saxe</author>
+<author>R Stata</author>
+</authors>
+<title>Ã¢Extended static checking for Java,Ã¢</title>
+<date>2002</date>
+<booktitle>in Proceedings of the ACM SIGPLAN 2002 Conference on Programming Language Design and Implementation, ser. PLDI Ã¢02.</booktitle>
+<pages>234--245</pages>
+<publisher>ACM,</publisher>
+<location>New York, NY, USA:</location>
+<note>[Online]. Available: http://doi.acm.org/10.1145/512529.</note>
+<contexts>
+<context position="28847" citStr="[21]" startWordPosition="4790" endWordPosition="4790">ostly to maintain. They also found that the density of null checks are from one to four per 100 lines of code [3]. Our definition of null check ratio expresses null check usage better than null checks per LOC because it quantifies the added complexity null checks have on the code. Null-related bugs attract the attention of many researchers and practitioners who propose various approaches to detect them as early as possible. The first family of solutions incorporates data flow analysis techniques to detect possible null values. Some techniques are simple, fast, and intra-procedural [18][19][20][21][22] and some are more complex, thorough, and inter-procedural [23][24][25][26]. For instance, Hovemeyer and Pugh [22] perform intraprocedural forward data flow analysis to approximate the static single assignment for the values of variables. Then they analyze the dereferences as a backward data flow over the SSA approximation. This algorithm replaces the previous basic forward data flow analysis approach [27] and is now part of FindBugs [28], a static analysis tool for finding bugs in Java. An interesting study by Ayewah and Pugh [29] compares several null dereference analysis tools and obser</context>
+</contexts>
+<marker>[21]</marker>
+<rawString>C. Flanagan, K. R. M. Leino, M. Lillibridge, G. Nelson, J. B. Saxe, and R. Stata, Ã¢ÂÂExtended static checking for Java,Ã¢ÂÂ in Proceedings of the ACM SIGPLAN 2002 Conference on Programming Language Design and Implementation, ser. PLDI Ã¢ÂÂ02. New York, NY, USA: ACM, 2002, pp. 234Ã¢ÂÂ 245. [Online]. Available: http://doi.acm.org/10.1145/512529.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Hovemeyer</author>
+<author>W Pugh</author>
+</authors>
+<title>Ã¢Finding more null pointer bugs, but not too many,Ã¢</title>
+<date>2007</date>
+<booktitle>in Proceedings of the 7th ACM SIGPLAN-SIGSOFT Workshop on Program Analysis for Software Tools and Engineering, ser. PASTE Ã¢07.</booktitle>
+<pages>9--14</pages>
+<publisher>ACM,</publisher>
+<location>New York, NY, USA:</location>
+<note>[Online]. Available: http://doi.acm.org/10.1145/1251535.1251537</note>
+<contexts>
+<context position="28851" citStr="[22]" startWordPosition="4790" endWordPosition="4790">y to maintain. They also found that the density of null checks are from one to four per 100 lines of code [3]. Our definition of null check ratio expresses null check usage better than null checks per LOC because it quantifies the added complexity null checks have on the code. Null-related bugs attract the attention of many researchers and practitioners who propose various approaches to detect them as early as possible. The first family of solutions incorporates data flow analysis techniques to detect possible null values. Some techniques are simple, fast, and intra-procedural [18][19][20][21][22] and some are more complex, thorough, and inter-procedural [23][24][25][26]. For instance, Hovemeyer and Pugh [22] perform intraprocedural forward data flow analysis to approximate the static single assignment for the values of variables. Then they analyze the dereferences as a backward data flow over the SSA approximation. This algorithm replaces the previous basic forward data flow analysis approach [27] and is now part of FindBugs [28], a static analysis tool for finding bugs in Java. An interesting study by Ayewah and Pugh [29] compares several null dereference analysis tools and observes </context>
+</contexts>
+<marker>[22]</marker>
+<rawString>D. Hovemeyer and W. Pugh, Ã¢ÂÂFinding more null pointer bugs, but not too many,Ã¢ÂÂ in Proceedings of the 7th ACM SIGPLAN-SIGSOFT Workshop on Program Analysis for Software Tools and Engineering, ser. PASTE Ã¢ÂÂ07. New York, NY, USA: ACM, 2007, pp. 9Ã¢ÂÂ14. [Online]. Available: http://doi.acm.org/10.1145/1251535.1251537</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Loginov</author>
+<author>E Yahav</author>
+<author>S Chandra</author>
+<author>S Fink</author>
+<author>N Rinetzky</author>
+<author>M Nanda</author>
+</authors>
+<title>Ã¢Verifying dereference safety via expandingscope analysis,Ã¢</title>
+<date>2008</date>
+<booktitle>in Proceedings of the 2008 International Symposium on Software Testing and Analysis, ser. ISSTA Ã¢08.</booktitle>
+<pages>213--224</pages>
+<publisher>ACM,</publisher>
+<location>New York, NY, USA:</location>
+<note>[Online]. Available: http://doi.acm.org/10.1145/1390630.1390657</note>
+<contexts>
+<context position="28914" citStr="[23]" startWordPosition="4799" endWordPosition="4799">are from one to four per 100 lines of code [3]. Our definition of null check ratio expresses null check usage better than null checks per LOC because it quantifies the added complexity null checks have on the code. Null-related bugs attract the attention of many researchers and practitioners who propose various approaches to detect them as early as possible. The first family of solutions incorporates data flow analysis techniques to detect possible null values. Some techniques are simple, fast, and intra-procedural [18][19][20][21][22] and some are more complex, thorough, and inter-procedural [23][24][25][26]. For instance, Hovemeyer and Pugh [22] perform intraprocedural forward data flow analysis to approximate the static single assignment for the values of variables. Then they analyze the dereferences as a backward data flow over the SSA approximation. This algorithm replaces the previous basic forward data flow analysis approach [27] and is now part of FindBugs [28], a static analysis tool for finding bugs in Java. An interesting study by Ayewah and Pugh [29] compares several null dereference analysis tools and observes that, besides the reported false positives, many of the reporte</context>
+<context position="30304" citStr="[23]" startWordPosition="5014" endWordPosition="5014">s bugs and Ã¢reviewing all potential null dereferences is often not as important as many other undone software quality tasksÃ¢[29]. We argue that Ayewah and Pugh underestimate the frequency of the bugs caused by dereferencing null as we show in our previous study [7]. The second family of solutions proposes to annotate the Ã¢nullnessÃ¢ in code. FaÃhndrich and Leino propose to distinguish the non-null references from the possibly-null ones at the type level (using annotations) to detect null-related bugs [30]. Papi and Ernst introduced the @NonNull annotation on types [31]. Loginov et al. [23], beside their inter-procedural null dereference analysis, propose null-related annotations to ensure the soundness and safety of the analysis. The idea of annotations made it to widely-used Java libraries like Checker Framework5 and Guava6. Also some programming languages introduce the idea of reference declarations that are not null. For instance the Spec# programming system extends the C# programming language with the support of 5http://types.cs.washington.edu/checker-framework/ 6https://github.com/google/guava contracts (like non-null types), allowing the Spec# compiler to statically enfor</context>
+</contexts>
+<marker>[23]</marker>
+<rawString>A. Loginov, E. Yahav, S. Chandra, S. Fink, N. Rinetzky, and M. Nanda, Ã¢ÂÂVerifying dereference safety via expandingscope analysis,Ã¢ÂÂ in Proceedings of the 2008 International Symposium on Software Testing and Analysis, ser. ISSTA Ã¢ÂÂ08. New York, NY, USA: ACM, 2008, pp. 213Ã¢ÂÂ224. [Online]. Available: http://doi.acm.org/10.1145/1390630.1390657</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Tomb</author>
+<author>G Brat</author>
+<author>W Visser</author>
+</authors>
+<title>Ã¢Variably interprocedural program analysis for runtime error detection,Ã¢</title>
+<date>2007</date>
+<booktitle>in Proceedings of the 2007 International Symposium on Software Testing and Analysis, ser. ISSTA Ã¢07.</booktitle>
+<pages>97--107</pages>
+<publisher>ACM,</publisher>
+<location>New York, NY, USA:</location>
+<note>[Online]. Available: http://doi.acm.org/10.</note>
+<contexts>
+<context position="28918" citStr="[24]" startWordPosition="4799" endWordPosition="4799">from one to four per 100 lines of code [3]. Our definition of null check ratio expresses null check usage better than null checks per LOC because it quantifies the added complexity null checks have on the code. Null-related bugs attract the attention of many researchers and practitioners who propose various approaches to detect them as early as possible. The first family of solutions incorporates data flow analysis techniques to detect possible null values. Some techniques are simple, fast, and intra-procedural [18][19][20][21][22] and some are more complex, thorough, and inter-procedural [23][24][25][26]. For instance, Hovemeyer and Pugh [22] perform intraprocedural forward data flow analysis to approximate the static single assignment for the values of variables. Then they analyze the dereferences as a backward data flow over the SSA approximation. This algorithm replaces the previous basic forward data flow analysis approach [27] and is now part of FindBugs [28], a static analysis tool for finding bugs in Java. An interesting study by Ayewah and Pugh [29] compares several null dereference analysis tools and observes that, besides the reported false positives, many of the reported nu</context>
+</contexts>
+<marker>[24]</marker>
+<rawString>A. Tomb, G. Brat, and W. Visser, Ã¢ÂÂVariably interprocedural program analysis for runtime error detection,Ã¢ÂÂ in Proceedings of the 2007 International Symposium on Software Testing and Analysis, ser. ISSTA Ã¢ÂÂ07. New York, NY, USA: ACM, 2007, pp. 97Ã¢ÂÂ107. [Online]. Available: http://doi.acm.org/10.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M G Nanda</author>
+<author>S Sinha</author>
+</authors>
+<title>Ã¢Accurate interprocedural null-dereference analysis for Java,Ã¢</title>
+<date>2009</date>
+<booktitle>in Proceedings of the 31st International Conference on Software Engineering, ser. ICSE Ã¢09.</booktitle>
+<pages>133--143</pages>
+<publisher>IEEE Computer Society,</publisher>
+<location>Washington, DC, USA:</location>
+<note>[Online]. Available: http: //dx.doi.org/10.1109/ICSE.2009.5070515</note>
+<contexts>
+<context position="28922" citStr="[25]" startWordPosition="4799" endWordPosition="4799"> one to four per 100 lines of code [3]. Our definition of null check ratio expresses null check usage better than null checks per LOC because it quantifies the added complexity null checks have on the code. Null-related bugs attract the attention of many researchers and practitioners who propose various approaches to detect them as early as possible. The first family of solutions incorporates data flow analysis techniques to detect possible null values. Some techniques are simple, fast, and intra-procedural [18][19][20][21][22] and some are more complex, thorough, and inter-procedural [23][24][25][26]. For instance, Hovemeyer and Pugh [22] perform intraprocedural forward data flow analysis to approximate the static single assignment for the values of variables. Then they analyze the dereferences as a backward data flow over the SSA approximation. This algorithm replaces the previous basic forward data flow analysis approach [27] and is now part of FindBugs [28], a static analysis tool for finding bugs in Java. An interesting study by Ayewah and Pugh [29] compares several null dereference analysis tools and observes that, besides the reported false positives, many of the reported null d</context>
+</contexts>
+<marker>[25]</marker>
+<rawString>M. G. Nanda and S. Sinha, Ã¢ÂÂAccurate interprocedural null-dereference analysis for Java,Ã¢ÂÂ in Proceedings of the 31st International Conference on Software Engineering, ser. ICSE Ã¢ÂÂ09. Washington, DC, USA: IEEE Computer Society, 2009, pp. 133Ã¢ÂÂ143. [Online]. Available: http: //dx.doi.org/10.1109/ICSE.2009.5070515</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>T Ekman</author>
+<author>G Hedin</author>
+</authors>
+<title>Ã¢Pluggable checking and inferencing of non-null types for</title>
+<date>2007</date>
+<journal>Java,Ã¢ Journal of Object Technology,</journal>
+<volume>6</volume>
+<pages>455--475</pages>
+<contexts>
+<context position="28926" citStr="[26]" startWordPosition="4799" endWordPosition="4799"> to four per 100 lines of code [3]. Our definition of null check ratio expresses null check usage better than null checks per LOC because it quantifies the added complexity null checks have on the code. Null-related bugs attract the attention of many researchers and practitioners who propose various approaches to detect them as early as possible. The first family of solutions incorporates data flow analysis techniques to detect possible null values. Some techniques are simple, fast, and intra-procedural [18][19][20][21][22] and some are more complex, thorough, and inter-procedural [23][24][25][26]. For instance, Hovemeyer and Pugh [22] perform intraprocedural forward data flow analysis to approximate the static single assignment for the values of variables. Then they analyze the dereferences as a backward data flow over the SSA approximation. This algorithm replaces the previous basic forward data flow analysis approach [27] and is now part of FindBugs [28], a static analysis tool for finding bugs in Java. An interesting study by Ayewah and Pugh [29] compares several null dereference analysis tools and observes that, besides the reported false positives, many of the reported null deref</context>
+</contexts>
+<marker>[26]</marker>
+<rawString>T. Ekman and G. Hedin, Ã¢ÂÂPluggable checking and inferencing of non-null types for Java,Ã¢ÂÂ Journal of Object Technology, vol. 6, no. 9, pp. 455Ã¢ÂÂ475, 2007.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Hovemeyer</author>
+<author>J Spacco</author>
+<author>W Pugh</author>
+</authors>
+<title>Ã¢Evaluating and tuning a static analysis to find null pointer bugs,Ã¢</title>
+<date>2005</date>
+<booktitle>in Proceedings of the 6th ACM SIGPLAN-SIGSOFT Workshop on Program Analysis for Software Tools and Engineering, ser. PASTE Ã¢05.</booktitle>
+<pages>13--19</pages>
+<publisher>ACM,</publisher>
+<location>New York, NY, USA:</location>
+<note>[Online]. Available: http://doi.acm.org/10.1145/</note>
+<contexts>
+<context position="29260" citStr="[27]" startWordPosition="4849" endWordPosition="4849">y as possible. The first family of solutions incorporates data flow analysis techniques to detect possible null values. Some techniques are simple, fast, and intra-procedural [18][19][20][21][22] and some are more complex, thorough, and inter-procedural [23][24][25][26]. For instance, Hovemeyer and Pugh [22] perform intraprocedural forward data flow analysis to approximate the static single assignment for the values of variables. Then they analyze the dereferences as a backward data flow over the SSA approximation. This algorithm replaces the previous basic forward data flow analysis approach [27] and is now part of FindBugs [28], a static analysis tool for finding bugs in Java. An interesting study by Ayewah and Pugh [29] compares several null dereference analysis tools and observes that, besides the reported false positives, many of the reported null dereferences (true positives) do not manifest themselves as bugs at run time. The authors claim that when the null dereference passes the initial software testing, it rarely causes bugs and Ã¢reviewing all potential null dereferences is often not as important as many other undone software quality tasksÃ¢[29]. We argue that Ayewah and P</context>
+</contexts>
+<marker>[27]</marker>
+<rawString>D. Hovemeyer, J. Spacco, and W. Pugh, Ã¢ÂÂEvaluating and tuning a static analysis to find null pointer bugs,Ã¢ÂÂ in Proceedings of the 6th ACM SIGPLAN-SIGSOFT Workshop on Program Analysis for Software Tools and Engineering, ser. PASTE Ã¢ÂÂ05. New York, NY, USA: ACM, 2005, pp. 13Ã¢ÂÂ19. [Online]. Available: http://doi.acm.org/10.1145/</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Hovemeyer</author>
+<author>W Pugh</author>
+</authors>
+<title>Ã¢Finding bugs is easy,Ã¢</title>
+<date>2004</date>
+<journal>ACM SIGPLAN Notices,</journal>
+<volume>39</volume>
+<pages>92--106</pages>
+<contexts>
+<context position="29293" citStr="[28]" startWordPosition="4856" endWordPosition="4856">f solutions incorporates data flow analysis techniques to detect possible null values. Some techniques are simple, fast, and intra-procedural [18][19][20][21][22] and some are more complex, thorough, and inter-procedural [23][24][25][26]. For instance, Hovemeyer and Pugh [22] perform intraprocedural forward data flow analysis to approximate the static single assignment for the values of variables. Then they analyze the dereferences as a backward data flow over the SSA approximation. This algorithm replaces the previous basic forward data flow analysis approach [27] and is now part of FindBugs [28], a static analysis tool for finding bugs in Java. An interesting study by Ayewah and Pugh [29] compares several null dereference analysis tools and observes that, besides the reported false positives, many of the reported null dereferences (true positives) do not manifest themselves as bugs at run time. The authors claim that when the null dereference passes the initial software testing, it rarely causes bugs and Ã¢reviewing all potential null dereferences is often not as important as many other undone software quality tasksÃ¢[29]. We argue that Ayewah and Pugh underestimate the frequency o</context>
+</contexts>
+<marker>[28]</marker>
+<rawString>D. Hovemeyer and W. Pugh, Ã¢ÂÂFinding bugs is easy,Ã¢ÂÂ ACM SIGPLAN Notices, vol. 39, no. 12, pp. 92Ã¢ÂÂ106, 2004.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>N Ayewah</author>
+<author>W Pugh</author>
+</authors>
+<title>Ã¢Null dereference analysis in practice,Ã¢</title>
+<date>2010</date>
+<booktitle>in Proceedings of the 9th ACM SIGPLANSIGSOFT Workshop on Program Analysis for Software Tools and Engineering, ser. PASTE Ã¢10.</booktitle>
+<pages>65--72</pages>
+<publisher>ACM,</publisher>
+<location>New York, NY, USA:</location>
+<note>[Online]. Available: http://doi.acm.org/10.1145/1806672.1806686</note>
+<contexts>
+<context position="29388" citStr="[29]" startWordPosition="4873" endWordPosition="4873">hniques are simple, fast, and intra-procedural [18][19][20][21][22] and some are more complex, thorough, and inter-procedural [23][24][25][26]. For instance, Hovemeyer and Pugh [22] perform intraprocedural forward data flow analysis to approximate the static single assignment for the values of variables. Then they analyze the dereferences as a backward data flow over the SSA approximation. This algorithm replaces the previous basic forward data flow analysis approach [27] and is now part of FindBugs [28], a static analysis tool for finding bugs in Java. An interesting study by Ayewah and Pugh [29] compares several null dereference analysis tools and observes that, besides the reported false positives, many of the reported null dereferences (true positives) do not manifest themselves as bugs at run time. The authors claim that when the null dereference passes the initial software testing, it rarely causes bugs and Ã¢reviewing all potential null dereferences is often not as important as many other undone software quality tasksÃ¢[29]. We argue that Ayewah and Pugh underestimate the frequency of the bugs caused by dereferencing null as we show in our previous study [7]. The second family</context>
+</contexts>
+<marker>[29]</marker>
+<rawString>N. Ayewah and W. Pugh, Ã¢ÂÂNull dereference analysis in practice,Ã¢ÂÂ in Proceedings of the 9th ACM SIGPLANSIGSOFT Workshop on Program Analysis for Software Tools and Engineering, ser. PASTE Ã¢ÂÂ10. New York, NY, USA: ACM, 2010, pp. 65Ã¢ÂÂ72. [Online]. Available: http://doi.acm.org/10.1145/1806672.1806686</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M FaÃhndrich</author>
+<author>R Leino</author>
+</authors>
+<title>Ã¢Declaring and checking nonnull types in an object-oriented language,Ã¢</title>
+<date>2003</date>
+<journal>ACM SIGPLAN Notices,</journal>
+<booktitle>in Proceedings of OOPSLA Ã¢03,</booktitle>
+<note>[Online]. Available: http://research.microsoft.com/Ã¢maf/Papers/non-null.pdf</note>
+<contexts>
+<context position="30218" citStr="[30]" startWordPosition="5000" endWordPosition="5000">im that when the null dereference passes the initial software testing, it rarely causes bugs and Ã¢reviewing all potential null dereferences is often not as important as many other undone software quality tasksÃ¢[29]. We argue that Ayewah and Pugh underestimate the frequency of the bugs caused by dereferencing null as we show in our previous study [7]. The second family of solutions proposes to annotate the Ã¢nullnessÃ¢ in code. FaÃhndrich and Leino propose to distinguish the non-null references from the possibly-null ones at the type level (using annotations) to detect null-related bugs [30]. Papi and Ernst introduced the @NonNull annotation on types [31]. Loginov et al. [23], beside their inter-procedural null dereference analysis, propose null-related annotations to ensure the soundness and safety of the analysis. The idea of annotations made it to widely-used Java libraries like Checker Framework5 and Guava6. Also some programming languages introduce the idea of reference declarations that are not null. For instance the Spec# programming system extends the C# programming language with the support of 5http://types.cs.washington.edu/checker-framework/ 6https://github.com/google/</context>
+</contexts>
+<marker>[30]</marker>
+<rawString>M. FaÃÂhndrich and R. Leino, Ã¢ÂÂDeclaring and checking nonnull types in an object-oriented language,Ã¢ÂÂ in Proceedings of OOPSLA Ã¢ÂÂ03, ACM SIGPLAN Notices, 2003. [Online]. Available: http://research.microsoft.com/Ã¢ÂÂ¼maf/Papers/non-null.pdf</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M M Papi</author>
+<author>M D Ernst</author>
+</authors>
+<title>Ã¢Compile-time type-checking for custom type qualifiers</title>
+<date>2007</date>
+<booktitle>in Java,Ã¢ in Companion to the 22Nd ACM SIGPLAN Conference on Object-oriented Programming Systems and Applications Companion, ser. OOPSLA Ã¢07.</booktitle>
+<pages>809--810</pages>
+<publisher>ACM,</publisher>
+<location>New York, NY, USA:</location>
+<note>[Online]. Available: http://doi.acm.org/10.1145/1297846.1297911</note>
+<contexts>
+<context position="30283" citStr="[31]" startWordPosition="5010" endWordPosition="5010">ting, it rarely causes bugs and Ã¢reviewing all potential null dereferences is often not as important as many other undone software quality tasksÃ¢[29]. We argue that Ayewah and Pugh underestimate the frequency of the bugs caused by dereferencing null as we show in our previous study [7]. The second family of solutions proposes to annotate the Ã¢nullnessÃ¢ in code. FaÃhndrich and Leino propose to distinguish the non-null references from the possibly-null ones at the type level (using annotations) to detect null-related bugs [30]. Papi and Ernst introduced the @NonNull annotation on types [31]. Loginov et al. [23], beside their inter-procedural null dereference analysis, propose null-related annotations to ensure the soundness and safety of the analysis. The idea of annotations made it to widely-used Java libraries like Checker Framework5 and Guava6. Also some programming languages introduce the idea of reference declarations that are not null. For instance the Spec# programming system extends the C# programming language with the support of 5http://types.cs.washington.edu/checker-framework/ 6https://github.com/google/guava contracts (like non-null types), allowing the Spec# compile</context>
+</contexts>
+<marker>[31]</marker>
+<rawString>M. M. Papi and M. D. Ernst, Ã¢ÂÂCompile-time type-checking for custom type qualifiers in Java,Ã¢ÂÂ in Companion to the 22Nd ACM SIGPLAN Conference on Object-oriented Programming Systems and Applications Companion, ser. OOPSLA Ã¢ÂÂ07. New York, NY, USA: ACM, 2007, pp. 809Ã¢ÂÂ810. [Online]. Available: http://doi.acm.org/10.1145/1297846.1297911</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Barnett</author>
+<author>K R M Leino</author>
+<author>W Schulte</author>
+</authors>
+<title>Ã¢The Spec# programming system: An overview,Ã¢ in Construction and analysis of safe, secure, and interoperable smart devices.</title>
+<date>2005</date>
+<pages>49--69</pages>
+<publisher>Springer,</publisher>
+<contexts>
+<context position="30927" citStr="[32]" startWordPosition="5092" endWordPosition="5092">r-procedural null dereference analysis, propose null-related annotations to ensure the soundness and safety of the analysis. The idea of annotations made it to widely-used Java libraries like Checker Framework5 and Guava6. Also some programming languages introduce the idea of reference declarations that are not null. For instance the Spec# programming system extends the C# programming language with the support of 5http://types.cs.washington.edu/checker-framework/ 6https://github.com/google/guava contracts (like non-null types), allowing the Spec# compiler to statically enforce these contracts [32]. The third family of solutions tries to solve the problem by introducing language constructs. Haskell [33] and Scala [34] have the Ã¢MaybeÃ¢ and the Ã¢OptionÃ¢ types, which are object containers. In a similar fashion, Oracle introduced the Ã¢OptionalÃ¢ type in Java 8 recently [35]. Groovy and C# have the safe navigation Ã¢?.Ã¢ to safely invoke a method on a possibly-null object. None of the above solutions deals with null usage problem thoroughly. The first family of solutions does not reduce null usage but points out potential null dereferencing locations in the code, encouraging dev</context>
+</contexts>
+<marker>[32]</marker>
+<rawString>M. Barnett, K. R. M. Leino, and W. Schulte, Ã¢ÂÂThe Spec# programming system: An overview,Ã¢ÂÂ in Construction and analysis of safe, secure, and interoperable smart devices. Springer, 2005, pp. 49Ã¢ÂÂ69.</rawString>
+</citation>
+<citation valid="false">
+<note>Ã¢Haskel 98 Report.Ã¢ [Online]. Available: https://www.haskell. org/onlinereport/index98.html</note>
+<contexts>
+<context position="31034" citStr="[33]" startWordPosition="5108" endWordPosition="5108"> of the analysis. The idea of annotations made it to widely-used Java libraries like Checker Framework5 and Guava6. Also some programming languages introduce the idea of reference declarations that are not null. For instance the Spec# programming system extends the C# programming language with the support of 5http://types.cs.washington.edu/checker-framework/ 6https://github.com/google/guava contracts (like non-null types), allowing the Spec# compiler to statically enforce these contracts [32]. The third family of solutions tries to solve the problem by introducing language constructs. Haskell [33] and Scala [34] have the Ã¢MaybeÃ¢ and the Ã¢OptionÃ¢ types, which are object containers. In a similar fashion, Oracle introduced the Ã¢OptionalÃ¢ type in Java 8 recently [35]. Groovy and C# have the safe navigation Ã¢?.Ã¢ to safely invoke a method on a possibly-null object. None of the above solutions deals with null usage problem thoroughly. The first family of solutions does not reduce null usage but points out potential null dereferencing locations in the code, encouraging developers to add even more null checks. The second family of solutions can mainly ensure that method paramete</context>
+</contexts>
+<marker>[33]</marker>
+<rawString>Ã¢ÂÂHaskel 98 Report.Ã¢ÂÂ [Online]. Available: https://www.haskell. org/onlinereport/index98.html</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Odersky</author>
+</authors>
+<title>Ã¢Scala language specification v. 2.4,Ã¢ EÃcole Polytechnique FeÃdeÃrale de Lausanne,</title>
+<date>2007</date>
+<pages>1015</pages>
+<location>Lausanne, Switzerland, Tech. Rep.,</location>
+<contexts>
+<context position="31049" citStr="[34]" startWordPosition="5111" endWordPosition="5111">s. The idea of annotations made it to widely-used Java libraries like Checker Framework5 and Guava6. Also some programming languages introduce the idea of reference declarations that are not null. For instance the Spec# programming system extends the C# programming language with the support of 5http://types.cs.washington.edu/checker-framework/ 6https://github.com/google/guava contracts (like non-null types), allowing the Spec# compiler to statically enforce these contracts [32]. The third family of solutions tries to solve the problem by introducing language constructs. Haskell [33] and Scala [34] have the Ã¢MaybeÃ¢ and the Ã¢OptionÃ¢ types, which are object containers. In a similar fashion, Oracle introduced the Ã¢OptionalÃ¢ type in Java 8 recently [35]. Groovy and C# have the safe navigation Ã¢?.Ã¢ to safely invoke a method on a possibly-null object. None of the above solutions deals with null usage problem thoroughly. The first family of solutions does not reduce null usage but points out potential null dereferencing locations in the code, encouraging developers to add even more null checks. The second family of solutions can mainly ensure that method parameters are not null</context>
+</contexts>
+<marker>[34]</marker>
+<rawString>M. Odersky, Ã¢ÂÂScala language specification v. 2.4,Ã¢ÂÂ EÃÂcole Polytechnique FeÃÂdeÃÂrale de Lausanne, 1015 Lausanne, Switzerland, Tech. Rep., Mar. 2007.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R-G Urma</author>
+</authors>
+<title>Ã¢Tired of null pointer exceptions? Consider using Java SE 8Ã¢s optional!Ã¢ Oracle,</title>
+<date>2014</date>
+<location>Tech. Rep.,</location>
+<note>[Online]. Available: http://www.oracle.com/ technetwork/articles/java/java8-optional-2175753.html</note>
+<contexts>
+<context position="31215" citStr="[35]" startWordPosition="5136" endWordPosition="5136">eclarations that are not null. For instance the Spec# programming system extends the C# programming language with the support of 5http://types.cs.washington.edu/checker-framework/ 6https://github.com/google/guava contracts (like non-null types), allowing the Spec# compiler to statically enforce these contracts [32]. The third family of solutions tries to solve the problem by introducing language constructs. Haskell [33] and Scala [34] have the Ã¢MaybeÃ¢ and the Ã¢OptionÃ¢ types, which are object containers. In a similar fashion, Oracle introduced the Ã¢OptionalÃ¢ type in Java 8 recently [35]. Groovy and C# have the safe navigation Ã¢?.Ã¢ to safely invoke a method on a possibly-null object. None of the above solutions deals with null usage problem thoroughly. The first family of solutions does not reduce null usage but points out potential null dereferencing locations in the code, encouraging developers to add even more null checks. The second family of solutions can mainly ensure that method parameters are not null, but cannot, for instance, prevent methods from returning null. The third family of solutions just encapsulates the problem with syntactic sugar rather than solving </context>
+</contexts>
+<marker>[35]</marker>
+<rawString>R.-G. Urma, Ã¢ÂÂTired of null pointer exceptions? Consider using Java SE 8Ã¢ÂÂs optional!Ã¢ÂÂ Oracle, Tech. Rep., Mar. 2014. [Online]. Available: http://www.oracle.com/ technetwork/articles/java/java8-optional-2175753.html</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

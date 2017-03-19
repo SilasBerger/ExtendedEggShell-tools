@@ -1,0 +1,1559 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.000000">
+<title confidence="0.5942585">
+A Case Study on Type Hints in Method Argument
+Names in Pharo Smalltalk Projects
+</title>
+<author confidence="0.635888">
+Boris SpasojevicÃÂ
+</author>
+<affiliation confidence="0.681587">
+University of Bern
+</affiliation>
+<figure confidence="0.5661082">
+Switzerland
+Email: spasojev@inf.unibe.ch
+Mircea Lungu
+University of Groningen
+Netherlands
+Email: m.f.lungu@rug.nl
+Oscar Nierstrasz
+University of Bern
+Switzerland
+Email: oscar@inf.unibe.ch
+</figure>
+<bodyText confidence="0.995121375">
+AbstractÃ¢ÂÂA common practice when writing Smalltalk source
+code is to name method arguments in a way that hints at their
+expected type (i.e., aString, anInteger, aDictionary). This practice
+makes code more readable, but the prevalence of this practice
+is unknown, thus its reliability is questionable. Tools such as
+the auto complete feature in the Pharo Smalltalk code editor
+rely on these hints to improve the developer experience. The
+default algorithm used in Pharo to extract type information from
+these hints succeeds in extracting a type in slightly over 36% of
+method arguments taken from 114 Pharo projects. In this paper
+we present the results of analyzing the failing method argument
+names, and provide several simple heuristics that can increase
+the rate of success to slightly over 50%. We also present a case
+study on the relation between type hints and run-time types of
+method arguments that shows that type hints, in a great majority
+of cases, reflect run-time types.
+</bodyText>
+<sectionHeader confidence="0.517305" genericHeader="method">
+I. INTRODUCTION
+</sectionHeader>
+<bodyText confidence="0.9932052">
+Programming languages are usually divided into two groups
+based on their type system: statically typed languages and
+dynamically typed languages. Dynamically typed languages
+are usually considered to be more flexible and more productive
+[1], but lack the explicit type declarations that typical statically
+typed languages provide. These explicit type annotations are
+helpful for program comprehension [2], but can also be used
+by developer tools (e.g., code completion) to improve the
+developer experience and productivity.
+To partially compensate for the lack of explicit type an-
+notations many Smalltalk developers [3] follow a convention
+of naming method arguments in a way that hints at the
+expected type of the method argument [4]. This means that
+it is recommended to name method arguments by prefixing
+the expected type with the indefinite article Ã¢ÂÂaÃ¢ÂÂ or Ã¢ÂÂanÃ¢ÂÂ.
+We call this convention Ã¢ÂÂtype hintsÃ¢ÂÂ. Listing 1 presents the
+implementation of the indexOf: method in the String class
+in Pharo Smalltalk [5]. The only argument of this method is
+named aCharacter clearly hinting that the method expects to
+be called with an object of type Character as the parameter.
+This convention obviously helps to provide type information
+about method arguments in a dynamically typed language, but,
+as any convention not strictly enforced, is only as good as the
+discipline of developers to follow it.
+In this paper we present a case study of the extent of
+usage of this convention. We gathered all method arguments
+from 114 Pharo Smalltalk projects and applied PharoÃ¢ÂÂs built-in
+system for extracting type information from argument names.
+We found that this system was able to extract type information
+from 36.21% of argument names.
+</bodyText>
+<footnote confidence="0.77639925">
+1 String&gt;&gt;indexOf: aCharacter
+2 aCharacter isCharacter ifFalse: [ÃÂ 0].
+3 ÃÂ self class
+4 indexOfAscii: aCharacter asciiValue
+</footnote>
+<sectionHeader confidence="0.270477" genericHeader="method">
+5 inString: self
+6 startingAt: 1.
+</sectionHeader>
+<bodyText confidence="0.976417423076923">
+Listing 1. The implementation of the indexOf: method in the String
+class in Pharo Smalltalk. Note that the argument of the method is named
+aCharacter hinting that the expected type is Character.
+Afterwords we analyzed the argument names that did not
+yield any type information and, based on the data we observed,
+developed a few simple heuristics that, when applied, can
+increase the success rate to 50.69%.
+We also note a pattern of expressing so called Ã¢ÂÂDuck-
+TypedÃ¢ÂÂ method arguments i.e., arguments that are expected
+to be bound to parameters of multiple different types. Almost
+1.5% of all method arguments are named in this manner, so
+any tool attempting to extract type information from method
+arguments should be aware of this pattern.
+To explore whether type hints actually reflect run-time types
+of arguments we conducted a small study by collecting run-
+time type information for arguments of two projects and
+comparing them to their type hints. We find that, on average
+76% of type hints reflect run-time types. We discuss the
+misleading arguments, most of which would be understood
+by a developer with domain knowledge, and classify most of
+them into several patterns.
+This paper is organized as follows: section II describes the
+process of gathering the argument names and PharoÃ¢ÂÂs built-in
+system for extracting type information from argument names;
+section III discusses the duck-typed method arguments and
+explains that they are treated as a special case; section IV
+discusses the proposed heuristics to improve the success rate;
+section V gives a final overview of the data and conclusions
+in the previous sections; The study of the correlation between
+type hints are run-time types is shown in section VI; sec-
+tion VII and section VIII discuss related and future work
+respectively and finally section IX concludes.
+II. DATA ACQUISITION
+To evaluate the scope of usage of type hints we first gather
+a large set of method arguments from open source Pharo
+Smalltalk projects. For our data source we chose 114 projects
+defined in the Ã¢ÂÂConfiguration BrowserÃ¢ÂÂ. The configuration
+browser is a tool to automatically load Smalltalk project
+source code, similar to Maven1 for Java. At the time of data
+acquisition2 the configuration browser defined 145 projects,
+but 31 projects failed to load so they where removed from the
+data set.
+From these 114 projects we extracted a total of 146,297
+arguments. We call this set of all arguments Arg. To proceed
+further in our analysis we first need to understand how the
+process of extracting type information from argument names
+in Pharo works.
+A. The Type Guesser Built into Pharo
+The default tool used for extracting type information from
+argument names in Pharo is part of the code completion tool.
+The code completion tool is called Ã¢ÂÂNECÃ¢ÂÂ and is based on
+the eCompletion3 package developed by Ruben Baker. The
+process of extracting type information from argument names
+is refereed to as Ã¢ÂÂType GuessingÃ¢ÂÂ and is encapsulated in the
+class side method getClassFromTypeSuggestingName: of class
+NECVarTypeGuesser4.
+The implementation of this method is quite simple and is
+presented in graphical notation in Figure 1. The edge labels
+represent the data flow for two example input strings (argu-
+ment names) i.e., Ã¢ÂÂaCharacterÃ¢ÂÂ and Ã¢ÂÂanIntegerÃ¢ÂÂ. This method
+first removes the leading character of the input argument, and
+attempts to find and return a class with that name in the system.
+Failing that, the method removes all characters before the first
+capital letter of the input arguments, and repeats the attempt.
+Failing both times, the methods returns nil5.
+B. Initial Results
+Using the type guesser in Pharo we divided the Arg set into
+two subsets: Succ (Successfully guessed) - those from which
+a type was successfully extracted; and Fail (Guess failed) -
+those that did not yield any type. The definition of these sets
+is given in Figure 2. The function guessType is an abstraction
+of the method getClassFromTypeSuggestingName, and returns
+a set of possible types.
+The results of applying NECVarTypeGuesser to our data set
+are shown in Table I. We can see that NECVarTypeGuesser
+guessed the types of fewer than 37% of all arguments. These
+arguments contain clear type hints and thus are of no further
+interest to us for further analysis. We continue only on the
+</bodyText>
+<footnote confidence="0.930376">
+63.79% of method arguments that failed to yield a type (the
+Fail set), in an attempt to understand why this is and to
+improve the success rate.
+1http://maven.apache.org
+2Date: 09.03.2015.
+3http://uncomplex.net/ecompletion/
+4This class is part of the base Pharo image which can be obtained at http:
+//get.pharo.org
+5nil is the Smalltalk equivalent of null in Java or nullptr in C++
+</footnote>
+<figure confidence="0.970243782608696">
+Start
+Get method argument
+Remove first character
+Does the
+class exist?
+Ã¢ÂÂanIntegerÃ¢ÂÂ Ã¢ÂÂaCharacterÃ¢ÂÂ
+Ã¢ÂÂnIntegerÃ¢ÂÂ Ã¢ÂÂCharacterÃ¢ÂÂ
+Get method argument return the class
+Stop
+Character class
+YesNo
+Remove everything
+before first capital letter
+Ã¢ÂÂanIntegerÃ¢ÂÂ
+Does the
+class exist?
+Return nil Return the class
+Ã¢ÂÂIntegerÃ¢ÂÂ
+Yes
+Stop
+Integer class
+No
+nil
+</figure>
+<figureCaption confidence="0.802056">
+Fig. 1. An activity diagram of the implementation of
+NECVarTypeGuesser&gt;&gt;getClassFromTypeSuggestingName. Edge labels
+</figureCaption>
+<bodyText confidence="0.798943">
+represent data flow for example inputs Ã¢ÂÂaCharacterÃ¢ÂÂ and Ã¢ÂÂanIntegerÃ¢ÂÂ
+</bodyText>
+<equation confidence="0.994352666666667">
+guessType : ArgÃ¢ÂÂ {Type} (1)
+Succ = {a|a Ã¢ÂÂ Arg, guessType(a) 6= Ã¢Â } (2)
+Fail = {a|a Ã¢ÂÂ Arg, guessType(a) = Ã¢Â } (3)
+</equation>
+<figureCaption confidence="0.899884">
+Fig. 2. The core sets. Arg = all arguments, Succ = type guessed, Fail = type
+not guessed.
+</figureCaption>
+<table confidence="0.954581571428571">
+TABLE I
+THE NUMBER AND PERCENTAGE OF METHOD ARGUMENTS WHICH DO
+AND DO NOT PRODUCE A TYPE USING NECVarTypeGuesser.
+# % of |Args|
+|Arg |146,297 100%
+|Succ |52,981 36.21%
+|Fail |93,316 63.79%
+</table>
+<sectionHeader confidence="0.558716" genericHeader="method">
+III. DUCK-TYPED METHOD ARGUMENTS
+</sectionHeader>
+<bodyText confidence="0.993141807692308">
+After starting the manual inspection of the method argu-
+ments for which NECVarTypeGuesser failed to guess a type,
+we noticed that a substantial number of argument names refer
+to more than one type. This kind of method arguments are
+usually referred to as Ã¢ÂÂDuck-TypedÃ¢ÂÂ6 [6]. The term comes
+from the duck test, attributed to James Whitcomb Riley:
+Ã¢ÂÂWhen I see a bird that walks like a duck and swims like
+a duck and quacks like a duck, I call that bird a duckÃ¢ÂÂ. In
+the context of method arguments, this means that the method
+does not expect a parameter of a particular type, but rather
+of any type that follows a certain interface. For the sake of
+simplicity, we consider any method argument that specifies
+multiple possible types to be duck-typed.
+We find that the pattern for expressing that an argument can
+take on multiple potential types is to concatenate all possible
+types with the word Ã¢ÂÂOrÃ¢ÂÂ. For example, one of the most com-
+mon argument names with this property is aStringOrByteArray
+appearing 99 times in our corpus. To a developer this is a clear
+message that this argument should be either of type String
+or ByteArray, but the implementation of NECVarTypeGuesser
+does not consider this pattern and unsuccessfully attempts to
+find a class called StringOrByteArray.
+A. Impact of Duck-Typed Arguments
+To calculate the impact of duck-typed arguments, we ex-
+tracted all argument names that match the following regular
+expression.
+</bodyText>
+<equation confidence="0.763132">
+. Ã¢ÂÂOr[AÃ¢ÂÂ Z].Ã¢ÂÂ (4)
+</equation>
+<bodyText confidence="0.975965172413793">
+The word Ã¢ÂÂOrÃ¢ÂÂ should be followed by a capital letter to
+ensure that, due to Camel Notation [7], we only match that
+word and not words like Ã¢ÂÂOriginalÃ¢ÂÂ, Ã¢ÂÂOrderedÃ¢ÂÂ etc. A total of
+2139 method arguments matched this regular expression.
+Manual inspection revealed that 36 occurrences of the
+extracted arguments do not in fact refer to multiple types.
+These are all occurrences of two different argument names:
+aBlockWithZeroOrOneParameter and aZeroOrOneArgBlock.
+It is obvious that these argument names refer to a varying
+number of arguments of a BlockClosure i.e., Lambda expres-
+sion, and not multiple possible types.
+So the very simple regular expression based heuristic we
+used thus far can easily be integrated in any tool, and on our
+data set has a false positive rate of only 1.68%. We consider
+all arguments whose name match the regular expression from
+Equation 4 but are not duck-typed to be false positives
+i.e., 36 occurrences of aBlockWithZeroOrOneParameter and
+aZeroOrOneArgBlock. A more complex heuristic based on
+natural language processing could also be an option.
+With this in mind, we define the set of duck-typed method
+arguments (Duck) in Figure 3 as the set that matches our
+6We acknowledge that all arguments in Smalltalk are potentially Ã¢ÂÂDuck-
+TypedÃ¢ÂÂ. We use this term to note the user-specified occurrence of an argument
+being potentially bound to different types at run time.
+regular expression from Equation 4 excluding aBlockWith-
+ZeroOrOneParameter and aZeroOrOneArgBlock. The name
+function extracts the name of the argument as a string.
+Duck = {a|a Ã¢ÂÂ Fail,
+regexMatch(a, Ã¢ÂÂ. Ã¢ÂÂOr. Ã¢ÂÂ [AÃ¢ÂÂ Z]Ã¢ÂÂ),
+</bodyText>
+<equation confidence="0.889925333333333">
+name(a) 6= Ã¢ÂÂaBlockWithZeroOrOneParameterÃ¢ÂÂ,
+name(a) 6= Ã¢ÂÂaZeroOrOneArgBlockÃ¢ÂÂ}
+(5)
+</equation>
+<figureCaption confidence="0.963905">
+Fig. 3. The Duck set contains all arguments that hint at multiple types.
+</figureCaption>
+<bodyText confidence="0.998002263157895">
+The Duck set contains a total of 2,103 method arguments or
+1.44% of the Arg set. This is not an insignificant percentage
+and any tool attempting to guess types should be aware of the
+existence of this pattern.
+B. Distribution of Number of Types in Duck-Typed Arguments
+A followup question regarding duck-typed method argu-
+ments is how many different types are hinted at in these
+arguments. The distribution is presented in Table II. As
+per intuition, the vast majority (94.82%) of duck-typed ar-
+guments hint at two types (e.g., aStringOrByteArray, aUr-
+lOrString, aStringOrText). Around 7% hint at three types (e.g.,
+aStringOrCollectionOrBlock, aDateOrNumberOrString), and
+less than half of a percent hint at more. The maximum
+number of different hinted types is 5, with the argument name
+aSelectorOrElementOrjQueryOrBooleanOrNumber [sic]. This
+might be considered an unwieldy argument name, but on the
+other hand, it completely defines the number of expected
+types within the source code with no need for additional
+documentation.
+</bodyText>
+<sectionHeader confidence="0.96874" genericHeader="method">
+TABLE II
+DISTRIBUTION OF THE NUMBER OF DIFFERENT TYPES IN DUCK-TYPED
+</sectionHeader>
+<figure confidence="0.920141875">
+METHOD ARGUMENTS.
+Different
+hinted types
+Number of
+occurrences
+%
+(of |Arg|)
+%
+</figure>
+<table confidence="0.8173178">
+(of |Duck|)
+5 5 0.00% 0.24%
+4 5 0.00% 0.24%
+3 149 0.10% 7.09%
+2 1994 1.36% 94.82%
+</table>
+<sectionHeader confidence="0.640109" genericHeader="method">
+IV. HEURISTICS FOR TYPE HINTS
+</sectionHeader>
+<bodyText confidence="0.963005375">
+We continue the manual inspection of arguments that failed
+to yield a type is on the set Fnd defined in Figure 4. This is a
+set of all arguments from the Fail set that are not duck-typed
+(Fnd Ã¢ÂÂ failed, non duck-typed). It contains 91,213 arguments
+which is 62.35% of the Arg set or 97.75% of the Fail set. The
+aim of further inspection is to identify subsets of Fnd that
+contain type hints, and identify heuristics for identifying the
+types.
+</bodyText>
+<equation confidence="0.996888">
+Fnd = Fail\Duck (6)
+</equation>
+<figureCaption confidence="0.778864666666667">
+Fig. 4. The Fnd set contains all arguments from the Fail set that are not
+duck-typed.
+A. spec and html
+</figureCaption>
+<bodyText confidence="0.992843619047619">
+In the Fnd set we find a frequent occurrence of the argu-
+ments spec and html.
+Inspection of the source code reveals that spec is the
+standard name used for specifications of Metcello versions.
+Metacello is a package management system for Monticello,
+a distributed version control system for Smalltalk. The im-
+plementation details are not important, but we can claim that
+the arguments named spec are of type MetacelloAbstractVer-
+sionConstructor, as it is the superclass for all classes used
+to construct Metacello versions. So we define the Spec set
+in Figure 5 Equation 7. This set contains 6,132 elements or
+4.19% of the Arg set.
+A similar situation exists with the arguments named html. A
+common practice when writing applications using Seaside [8],
+a web development framework for Smalltalk, is to pass the
+object representation of the HTML element as an argument
+to methods of objects that perform an action on it (usually
+the object renders itself on the HTML element). All of these
+arguments are instances of WAHtmlCanvas. As with the spec
+argument name we define the Html set in Figure 5 Equation 8,
+which contains 2,935 elements or 2.01% of the Arg set.
+</bodyText>
+<equation confidence="0.996939">
+Spec = {a|a Ã¢ÂÂ Fnd, name(a) = Ã¢ÂÂspecÃ¢ÂÂ} (7)
+Html = {a|a Ã¢ÂÂ Fnd, name(a) = Ã¢ÂÂhtmlÃ¢ÂÂ} (8)
+</equation>
+<figureCaption confidence="0.704921666666667">
+Fig. 5. The Spec and Html sets contain arguments from the Fnd set that are
+named spec and html respectively
+B. Blocks, Strings and Collections
+</figureCaption>
+<bodyText confidence="0.994680111111111">
+Using block closures in Smalltalk is common practice. The
+class BlockClosure offers the default implementation. Unfor-
+tunately for the default type guessing algorithm, a majority of
+method arguments that are expected to be an instance of Block-
+Closure are not named aBlockClosure (only 47 occurrences
+of arguments named aBlockClosure in Arg) but rather aBlock
+(6,167 occurrences of arguments named aBlock in Arg) as
+Figure 6 summarizes. Using aBlock rather than aBlockClosure
+is even present in the book Ã¢ÂÂSmalltalk Best Practice PatternsÃ¢ÂÂ
+[4] by Kent Beck.
+To give more context to arguments hinting at BlockClo-
+sure, developers often add additional descriptors to the argu-
+ment name. Examples of such argument names are toBlock,
+fromBlock, anErrorBlock, aOneArgBlock, aFormatBlock etc.
+Also, a substantial number of arguments are named simply
+block, ignoring the article.
+In order to group all these different ways of specifying
+arguments of type BlockClosure we define a set called BlockÃ¢ÂÂ²
+</bodyText>
+<equation confidence="0.999401666666667">
+|{a|a Ã¢ÂÂ Arg, name(a) = Ã¢ÂÂaBlockClosureÃ¢ÂÂ} |= 47 (9)
+Block = {a|a Ã¢ÂÂ Arg, name(a) = Ã¢ÂÂaBlockÃ¢ÂÂ} (10)
+|Block |= 6, 167 (11)
+</equation>
+<figureCaption confidence="0.7420105">
+Fig. 6. Many more arguments are named aBlock than aBlockClosure
+as the set of all arguments whose name matches the regular
+expression Ã¢ÂÂ. Ã¢ÂÂ (B|b)lock.Ã¢ÂÂÃ¢ÂÂ. This is formally defined in
+Figure 7 Equation 12.
+Following the same logic we define two more sets. The first
+attempts to group all arguments hinting at the Collection type
+</figureCaption>
+<bodyText confidence="0.882011857142857">
+- Coll (Figure 6 Equation 13) and the second for arguments
+ginting at the String type - String (Figure 6 Equation 14).
+The number of elements in all of these sets can be found in
+Table III. It is worth noting that the set BlockÃ¢ÂÂ² contains over
+a thousand more elements than set Block, showing that using
+the simple heuristic can attach a type to a much larger set of
+arguments.
+</bodyText>
+<sectionHeader confidence="0.544223" genericHeader="method">
+TABLE III
+</sectionHeader>
+<table confidence="0.9622076">
+THE CARDINALITY OF THE BlockÃ¢ÂÂ² , Coll AND String SETS.
+# % (|Arg|)
+|BlockÃ¢ÂÂ² |7,886 5.39%
+|Coll |559 0.38%
+|String |1,793 1.23%
+</table>
+<bodyText confidence="0.97829988">
+C. Duplicate entries in sets BlockÃ¢ÂÂ², Coll and String
+The regular expression based definitions of sets BlockÃ¢ÂÂ²,
+Coll and String are quite naive, and further inspection of the
+elements of these sets reveals that certain arguments appear
+in multiple sets as shown in Figure 7 Equation 17. The
+problem arises in argument names that match multiple regular
+expressions.
+The number of such elements is fairly small. A total of
+18 arguments appear in the String and Coll sets, and all are
+named aCollectionOfStrings. Their name is a clearly hinting at
+the type Collection rather than String. Similarly, 12 arguments
+appear in the BlockÃ¢ÂÂ² and String sets, and are all named
+aBlockAnsweringAString, hinting at the type BlockClosure and
+not String. No arguments are present in both BlockÃ¢ÂÂ² and Coll
+sets.
+With this in mind we can conclude that, in the Fnd set, a
+clear rule can be observed for dealing with these ambiguities.
+We notice that all arguments that appear in these three sets can
+be placed in the adequate set by following a strict hierarchy of
+set priorities: blocks are higher priority than collections which
+are higher priority than strings.
+Namely, all duplicate arguments from the Coll set, are
+properly placed, since the duplicates named aCollectionOf-
+Strings are clearly collections, thus collections have a higher
+priority than strings. Similarly, all duplicate arguments from
+</bodyText>
+<equation confidence="0.9754877">
+BlockÃ¢ÂÂ² = {a|a Ã¢ÂÂ Fnd,
+regexMatch(a, Ã¢ÂÂ. Ã¢ÂÂ (b|B)lock. Ã¢ÂÂ Ã¢ÂÂ)}
+(12)
+Coll = {a|a Ã¢ÂÂ Fnd,
+regexMatch(a, Ã¢ÂÂ. Ã¢ÂÂ (c|C)ollection. Ã¢ÂÂ Ã¢ÂÂ)}
+(13)
+String = {a|a Ã¢ÂÂ Fnd,
+regexMatch(a, Ã¢ÂÂ. Ã¢ÂÂ (s|S)tring. Ã¢ÂÂ Ã¢ÂÂ)}
+(14)
+CollÃ¢ÂÂ² = {a|a Ã¢ÂÂ Fnd,
+</equation>
+<bodyText confidence="0.501168">
+regexMatch(a, Ã¢ÂÂ. Ã¢ÂÂ (c|C)ollection. Ã¢ÂÂ Ã¢ÂÂ),
+notRegexMatch(a, Ã¢ÂÂ. Ã¢ÂÂ (b|B)lock. Ã¢ÂÂ Ã¢ÂÂ)}
+</bodyText>
+<equation confidence="0.9513825">
+(15)
+StringÃ¢ÂÂ² = {a|a Ã¢ÂÂ Fnd,
+</equation>
+<bodyText confidence="0.76736075">
+regexMatch(a, Ã¢ÂÂ. Ã¢ÂÂ (s|S)tring. Ã¢ÂÂ Ã¢ÂÂ),
+notRegexMatch(a, Ã¢ÂÂ. Ã¢ÂÂ (b|B)lock. Ã¢ÂÂ Ã¢ÂÂ),
+notRegexMatch(a,
+Ã¢ÂÂ. Ã¢ÂÂ (c|C)ollection. Ã¢ÂÂ Ã¢ÂÂ)}
+</bodyText>
+<equation confidence="0.995107333333333">
+(16)
+BlockÃ¢ÂÂ² Ã¢ÂÂ© Coll = Ã¢Â
+|BlockÃ¢ÂÂ² Ã¢ÂÂ© String |= 12
+|String Ã¢ÂÂ© Coll |= 18
+(17)
+BlockÃ¢ÂÂ² Ã¢ÂÂ© CollÃ¢ÂÂ² = Ã¢Â
+BlockÃ¢ÂÂ² Ã¢ÂÂ© StringÃ¢ÂÂ² = Ã¢Â
+StringÃ¢ÂÂ² Ã¢ÂÂ© Coll = Ã¢Â
+(18)
+</equation>
+<figureCaption confidence="0.876867">
+Fig. 7. Sets of arguments based on regular expressions
+</figureCaption>
+<bodyText confidence="0.9974218125">
+the BlockÃ¢ÂÂ² set, are properly placed, since the duplicates named
+aBlockAnsweringAString are clearly blocks. Thus blocks have
+a higher priority than strings. We artificially introduce the
+rule that blocks are higher priority than collections in order
+to make our heuristic complete. This rule might cause false
+positives in the cases such as the hypothetical argument name
+aCollectionOfBlocks, placing such an argument in the set of
+blocks rather than in the set of collections where it would
+belong.
+Another approach to removing duplicate entries requires
+a more thorough analysis of these cases, either by natural
+language processing techniques or by focusing on splitting
+the argument name by Ã¢ÂÂOfÃ¢ÂÂ and determining the priorities by
+the order. We feel this would introduce a lot of complexity for
+not much gain and leave out such attempts.
+We apply these hierarchy rules in defining the sets CollÃ¢ÂÂ²
+</bodyText>
+<figureCaption confidence="0.525487">
+(Figure 7 Equation 15) and StringÃ¢ÂÂ² (Figure 7 Equation 16), and
+</figureCaption>
+<bodyText confidence="0.844769">
+ensure that there is no overlap between these sets (Figure 7
+Equation 18). The function notRegexMatch is, as the name
+</bodyText>
+<sectionHeader confidence="0.510864" genericHeader="method">
+TABLE IV
+</sectionHeader>
+<table confidence="0.7097382">
+THE CARDINALITY OF THE DuckS AND DuckF SETS.
+# % (|Arg|)
+|DuckS |1,905 1.30%
+|DuckF |198 0.14%
+DuckF = Duck\DuckS (19)
+</table>
+<figureCaption confidence="0.985642">
+Fig. 8. The DuckF set contains all duck-typed arguments whose type could
+</figureCaption>
+<bodyText confidence="0.900946625">
+not be guessed.
+hints, a negation of the regexMatch function.
+D. Guessing types of duck-typed arguments
+All the sets defined in this section thus far are subsets of
+Fnd, meaning that the arguments we defined as duck-typed are
+not included in any of the sets. To determine the set of duck-
+typed arguments whose type can be guessed (DuckS Ã¢ÂÂ Duck)
+we follow a simple algorithm:
+</bodyText>
+<listItem confidence="0.981263818181818">
+1) Split the name of the argument a Ã¢ÂÂ Duck by the
+keyword Or
+2) Treat each of the sub-names as a valid name of a
+hypothetical argument b
+3) If guessType(b) 6= Ã¢Â than we guessed the type of a, and
+a Ã¢ÂÂ DuckS.
+4) If not, assume that b Ã¢ÂÂ Fnd
+5) If it holds that
+b Ã¢ÂÂ SpecÃ¢ÂÂ¨b Ã¢ÂÂ HtmlÃ¢ÂÂ¨b Ã¢ÂÂ BlockÃ¢ÂÂ²Ã¢ÂÂ¨b Ã¢ÂÂ CollÃ¢ÂÂ²Ã¢ÂÂ¨b Ã¢ÂÂ StringÃ¢ÂÂ²
+then we guessed the type of a, and a Ã¢ÂÂ DuckS.
+6) If not, a /Ã¢ÂÂ DuckS
+</listItem>
+<bodyText confidence="0.973837045454545">
+Essentially, if we can guess one of the types that the
+argument name hints at, we declare the argument type guessed.
+So the set DuckS holds all arguments from the set Duck
+whose type can be guessed. The remaining arguments make
+up the DuckF set defined in Figure 8. The cardinality of these
+sets is given in Table IV.
+V. FINAL RESULTS
+With all the heuristic based sets defined in section IV we
+have exhausted the ways in which we can guess types in
+the Arg set. The potential for other heuristics still exists, i.e.,
+arguments named index can be considered to be integers, plural
+nouns can be considered collections etc. but without additional
+studies dedicated to these situations we cannot claim that these
+potential heuristics are well-reasoned.
+The set H , defined in Figure 9 Equation 20, is the union of
+all sets defined by heuristics and accounts for 13.18% of all
+arguments. Now, we can finally define a set of all arguments
+whose type can be guessed from the name. We call this set
+SuccÃ¢ÂÂ² and define it in Figure 9 Equation 21. Also, in Figure 9
+Equation 23, we define the set FailÃ¢ÂÂ², as the set of all arguments
+whose types can not be guessed from the name. It is defined
+as the union of all duck-typed arguments whose type is not
+</bodyText>
+<table confidence="0.9703367">
+TABLE V
+THE TOP TEN MOST FREQUENT ARGUMENT NAMES IN THE F SET.
+Argument name # % (|Arg|)
+n 1511 1.03%
+aName 1440 0.98%
+a 1118 0.76%
+lda 1092 0.75%
+nodes 868 0.59%
+aBrick 825 0.56%
+work 816 0.56%
+aValue 786 0.54%
+info 753 0.51%
+evt 670 0.46%
+TABLE VI
+THE CARDINALITY OF ALL DEFINED SETS. HIERARCHY REPRESENTS
+SUBSET RELATION.
+# %|Args|
+|Arg |146,297 100%
+|Ã¢ÂÂÃ¢ÂÂ |SuccÃ¢ÂÂ² |74,161 50.69%
+ ||Ã¢ÂÂÃ¢ÂÂ |Succ |52,981 36.21%
+ ||Ã¢ÂÂÃ¢ÂÂ |DuckS |1,905 1.30%
+ ||Ã¢ÂÂÃ¢ÂÂ |H |19,275 13.18%
+ ||Ã¢ÂÂÃ¢ÂÂ |BlockÃ¢ÂÂ² |7,886 5.39%
+ ||Ã¢ÂÂÃ¢ÂÂ |StringÃ¢ÂÂ² |1,793 1.92%
+ ||Ã¢ÂÂÃ¢ÂÂ |CollÃ¢ÂÂ² |559 0.38%
+ ||Ã¢ÂÂÃ¢ÂÂ |Spec |6,132 4.19%
+ ||Ã¢ÂÂÃ¢ÂÂ |Html |2,935 2.01%
+|Ã¢ÂÂÃ¢ÂÂ |FailÃ¢ÂÂ² |71938 49.31%
+|Ã¢ÂÂÃ¢ÂÂ |DuckF |198 0.14%
+|Ã¢ÂÂÃ¢ÂÂ |F  |71,938 49.17%
+</table>
+<bodyText confidence="0.980805458333333">
+guessable (DuckF) and all non-duck-typed arguments whose
+type is not guessable (F ).
+The cardinality of these sets, as well as all their subsets
+is presented in Table VI. We can see that the default type
+guessing implementation can be substantially improved by
+incorporating the proposed heuristics. The total number of
+arguments whose type can be guessed is 74,161 or 50.69% of
+all arguments. This set is by no means complete. If we look
+at just the top ten most frequent names of arguments from
+the F set show in Table V, we can see that there are still
+argument names that contain hints i.e., aName, aBrick and
+aValue. These hints are more delicate and might carry a lot
+more meaning for a developer with domain knowledge, but
+providing tool support for such cases is a more challenging
+task. With all this in mind, we can thus conclude that type
+hints are a commonly used way to name method arguments
+in Smalltalk projects, and that even fairly simple tool support
+can work about 50% of the time.
+VI. QUALITY OF TYPE HINTS
+So far we have focused on the quantity of type hints in a
+large number of Smalltalk projects. In this section we conduct
+a separate analysis on the quality of type hints in two Smalltalk
+projects: Glamour [9] , a framework for describing navigation
+flow of GUI data browsers; and Roassal [10], a visualization
+</bodyText>
+<equation confidence="0.99990225">
+H = Spec Ã¢ÂÂª Html Ã¢ÂÂª BlockÃ¢ÂÂ² Ã¢ÂÂª CollÃ¢ÂÂ² Ã¢ÂÂª StringÃ¢ÂÂ² (20)
+SuccÃ¢ÂÂ² = Succ Ã¢ÂÂªH Ã¢ÂÂª DuckS (21)
+F = Fnd\H (22)
+FailÃ¢ÂÂ² = F Ã¢ÂÂª DuckF (23)
+</equation>
+<figureCaption confidence="0.78852725">
+Fig. 9. The H set contains all arguments all sets defined by heuristics in
+section IV, the SuccÃ¢ÂÂset contains all arguments whose type is guessable and
+FailÃ¢ÂÂ² contains all arguments whose type is not guessable.
+engine for Smalltalk. The reason we chose these two projects
+</figureCaption>
+<bodyText confidence="0.984312703703704">
+for our analysis is their rich example library which enables us
+to easily run a dynamic analysis similar to real-world usage
+of these projects. The end goal of this analysis is to verify
+whether types extracted from type hints match run-time types
+of arguments.
+A. Acquisition of run-time types
+In order to collect run-time types of method arguments
+in our case projects we instrumented the source code of
+these projects using a slightly modified version of a tool
+called Ã¢ÂÂVariable TrackerÃ¢ÂÂ7 used for gathering run-time type
+information from Smalltalk projects. The modification was to
+limit the tool to method arguments only.
+After instrumenting the source code, we executed the exam-
+ples for each project. Glamour defines 68 examples of which
+one failed to execute. Roassal defines 63 examples of which
+four failed to execute. This is by no means an exhaustive
+dynamic analysis, but it does provide a usage similar to real
+world applications of these frameworks.
+The result of this is presented in the Ã¢ÂÂTotal argumentsÃ¢ÂÂ entry
+of Table VII. As the table shows, we collected run-time type
+information on 251 and 559 arguments from Glamour and
+Roassal respectively.
+During normal execution some of these arguments might
+get multiple different types due to Smalltalks dynamic type
+system. We did not encounter such situations during our
+dynamic analysis. A more thorough dynamic analysis might
+yield such cases.
+</bodyText>
+<table confidence="0.801457285714286">
+TABLE VII
+A SUMMARY OF THE DYNAMIC ANALYSIS RESULTS.
+Glamour Roassal
+Total arguments 251 559
+Contain type hint 141 159
+Good type hints 126 103
+Misleading type hints 15 56
+</table>
+<bodyText confidence="0.914511">
+B. Type hints and run-time types
+To assess the quality of type hints we first extract the
+arguments that contain type hints. We include all arguments
+that contain type hints according to the type guesser described
+</bodyText>
+<subsectionHeader confidence="0.301779">
+7http://smalltalkhub.com/#!/Ã¢ÂÂ¼rostebler/VariableTracker
+</subsectionHeader>
+<bodyText confidence="0.980418524752476">
+in subsection II-A as well as all those that match the heuristics
+described in section IV. The result is presented in the Ã¢ÂÂContain
+type hintÃ¢ÂÂ entry in Table VII. A total of 141 and 160 arguments
+contain type hints in Glamour and Roassal.
+Finally, we separate the arguments whose names contain
+type hints that match the run-time type or one of its su-
+perclasses. We include the superclasses of the run-time type
+in order to include occurrences of subtype polymorphism
+[11]. A typical toy example would be an argument named
+anAbstractShape getting the type Ã¢ÂÂCircleÃ¢ÂÂ (a subclass of
+AbstractShape) at run time. The results of this separation is
+shown in the Ã¢ÂÂGood type hintsÃ¢ÂÂ entries in Table VII. We can
+see that in Glamour 89.36% of type hints are good, meaning
+the guessed type or one of its subtypes is used at run time. In
+Roassal this number is much lower at 64.77% and the average
+across both applications is 76%.
+C. Misleading type hints
+The last entry in Table VII (Ã¢ÂÂMisleading type hintsÃ¢ÂÂ) shows
+the number of arguments whose type hint did not match the
+run-time type. There is a total of 71 such arguments, 15 from
+Glamour and 57 from Roassal. Many of these arguments are
+misleading to our tools, but might not be to a developer with
+more context and domain knowledge. An overview of all these
+arguments is presented in Table VIII.
+We can notice a few distinct patterns in this data, and their
+description follows. All but 11 arguments (15.49%) fall into
+one of these patterns.
+1) Class clash: This situation emerges when the guessed
+type exists, but the run-time type has a similar name and no
+hierarchical connection. Examples of this are
+Ã¢ÂÂ¢ Arguments that hint at the type Browser (a class present
+in the default Pharo image) but at run time receive
+GMLBrowser (GLM stands for Glamour)
+Ã¢ÂÂ¢ Arguments that hint at the type Shape or Canvas (both
+classes present in the default Pharo image) but at run
+time receive some subclass of TRShape or TRCanvas (TR
+stands for Trachel, a module used in Roassal) etc.
+This pattern accounts for 36.62% (26 out of 71) arguments
+with misleading type hints.
+2) Any Object data model: Roassal is a very flexible
+visualization engine and can visualize any set of objects and
+their connections. To make this possible, it relies on using
+any object as a data model for generating the visualization,
+and specifying through dynamic features of Smalltalk i.e.,
+metaprogramming, how to interact with the model. That is
+why it is common to find arguments named aModel that get
+bound to many different types at run time. The problem comes
+due to the fact that Model is a class in the default Pharo image.
+In our set of misleading type hints this pattern accounts for
+8.45% (6 out of 71) arguments.
+3) Block or Value: In 18.3% (13 out of 71) cases of mis-
+leading types we notice a duck-typed argument that starts with
+aValue and also hints at expecting a BlockClosure. A Ã¢ÂÂValueÃ¢ÂÂ
+in this case can be any object, and in case a BlockClosure
+is provided, it is assumed that evaluating it will produce the
+expected value. A more exhaustive dynamic analysis might
+produce cases where this argument is bound to an instance
+of BlockClosure. This pattern is very similar to Ã¢ÂÂany object
+as a data modelÃ¢ÂÂ but we separate them because Model is a
+class in the Pharo image, and Value is not. The type hint in
+this pattern comes from the hinted option of using instances
+of BlockClosure.
+The reason why Roassal can expect any object as a value
+is that it extends the class Object8 with the method rtValue:
+which is the only method invoked on arguments from this
+pattern. The default implementation of this method just returns
+the receiver object, but it is overridden in the BlockClosure
+class to evaluate the closure with the method arguments.
+4) Block or Symbol: A common idiom in Smalltalk source
+code is that methods that expect an instance of BlockClosure
+can also accept an instance of Symbol [5].
+This is illustrated well by the filtering method select: of
+the collections package in Smalltalk. This method expects
+an instance of BlockClosure that describes the criteria for
+selection of elements of the collection. If this criteria is to
+only invoke a single method with no arguments (for example,
+the isZero method of class Number), than we can provide just
+the selector (method name) as an instance of Symbol. The
+result is smaller code that is more readable. This idiom exploits
+duck-typing by implementing the value: method Ã¢ÂÂ normally
+associated with block closures Ã¢ÂÂ for the Symbol class in the
+obvious way.
+This pattern accounts for 18.3% (13 out of 71) of the
+misleading type hints. As with the Ã¢ÂÂValue or BlockÃ¢ÂÂ pattern,
+a more thorough dynamic analysis would most likely find
+cases where these arguments would be bound to instances of
+BlockClosure.
+5) Convertible: We found only two occurrences of this
+pattern, but it is a situation that can theoretically happen much
+more often. Essentially, the argument was hinting at expecting
+an instance of the class Float, but received an instance of
+the class SmallInteger at run time. The SmallInteger class is
+not a specialization of the Float class, but implicitly, because
+N Ã¢ÂÂ R, any integer is also a float.
+The usage of this argument is restricted to arithmetic
+operations making the instance of SmallInteger completely
+indistinguishable from an instance of Float. This is because
+all the arithmetic operations in Pharo are developed in a way
+that provides implicit conversion to the appropriate type when
+necessary i.e., before invoking the VM primitive that performs
+the calculation.
+</bodyText>
+<sectionHeader confidence="0.537692" genericHeader="method">
+VII. RELATED WORK
+</sectionHeader>
+<bodyText confidence="0.985285">
+To the best of our knowledge this is the only conducted
+study of type hints. The closest body of related work consists
+of type inference approaches for dynamically typed languages.
+Such type inference is similar to type guessing as both aim
+to increase program comprehension and tool support. This
+</bodyText>
+<footnote confidence="0.743947">
+8Just like in Java, all classes in Smalltalk eventually inherit from the Object
+class
+</footnote>
+<sectionHeader confidence="0.501501" genericHeader="method">
+TABLE VIII
+OVERVIEW OF ALL ARGUMENT NAMES THAT HAVE MISLEADING TYPE HINTS.
+</sectionHeader>
+<reference confidence="0.775749666666667">
+Project Argument name Run time class Pattern #
+Glamour aBrowser GMLBrowser Class clash 12
+anAnnouncement Announcement class - 2
+aSymbolOrABlock ByteString - 1
+Roassal aModel ByteString, Association, SmallInteger, etc. Any object data model 6
+toBlock, fromBlock, followBlock ByteSymbol Block or symbol 13
+aValueOrOneArgBlock Color, SmallInteger, ByteSymbol, etc. Block or value 11
+aValueOrASymbolOrOneArgBlock SmallInteger Block or value 2
+trachelShape, anotherShape, aShape some subclass of TRShape Class clash 11
+</reference>
+<table confidence="0.7437234">
+trachelCanvas TRCanvas Class clash 2
+aBehaviour TRNoBehaviour Class clash 1
+aFloat SmallInteger Convertable 2
+aKey ByteSymbol - 2
+aBlock SmallInteger - 1
+aLineShapeOrBlock TRLine class - 1
+aTRLine TRBezierLine - 1
+aTRShape TRLine class - 1
+depClass String class - 1
+listOfElementsOrOneArgBlock TRGroup - 1
+</table>
+<bodyText confidence="0.998322696969697">
+is known to be used for better comprehension of COBOL
+programs [12], [13], [14], [15]. The main insight in such work
+is that comparing variables using relational operators shows
+that their types must be compatible, and that if an expression
+is assigned to a variable, the type of the expression must be a
+subtype of that variable.
+Guo et al. developed an analysis for x86 compiled binaries
+and Java bytecode that infers abstract types, and conducted
+a user study showing that having type information can help
+with reverse engineering problems. Their main insight was,
+similarly to the COBOL community, to track interactions
+between variables and infer abstract types. Their approach is
+based on run-time information. A similar goal was achieved
+using static analysis by Robert OCallahan and Daniel Jackson
+with their Lackwit tool [16] for C.
+In our previous work we used heuristics based on ecosys-
+tem data to improve an existing type inference engine for
+Smalltalk [17]. By observing the methodÃ¢ÂÂtype relations in the
+ecosystem and extending an existing type inference engine
+with this knowledge we achieved a 100% improvement on
+our evaluation.
+A different motivation for type inference techniques in
+statically typed languages like Scala [18], or ML [19] is to
+free the developer from having to specify types that can be
+inferred, or identifying run-time types at compile type in the
+presents of subtype polymorphism [20].
+Many different type inference techniques are developed with
+the aim to impose a more strictly controlled type system, and
+enable certain type checks at compile time. This is a different
+goal compared to type hints, which are intended primarily for
+program comprehension. Many such attempts for Smalltalk
+[21], [22], [23] and other dynamically typed languages such
+as Python [24] and Ruby [25] have been made.
+</bodyText>
+<sectionHeader confidence="0.510547" genericHeader="method">
+VIII. FUTURE WORK
+</sectionHeader>
+<bodyText confidence="0.993500787878788">
+We envision three directions of future work: continuously
+monitoring the way arguments in given projects change over
+time (subsection VIII-A); attempting to integrate dynamic
+analysis to infer patterns between argument names and their
+run-time types (subsection VIII-B); and performing a compar-
+ison to type inference engines (subsection VIII-C).
+A. Continuous monitoring
+Code evolves, and with time new patterns in type hints
+might appear. A heuristic based type guessing tool would be
+only as good as its heuristics, so continuously monitoring argu-
+ment names from projects of interest could identify emerging
+trends in argument names, and notify the tool developer of the
+new patterns. This would prompt the developer to investigate
+the new patterns, develop an appropriate heuristic and integrate
+it in the tool.
+B. Dynamic analysis
+An alternative to observing static changes in source code
+could be observing a system in question at run time, and
+attempting to find patterns of mappings between argument
+names and run-time types. This could be done automatically
+through machine learning techniques, and could be tailored to
+the project domain helping with some of the bad type hints
+from section VI i.e., an argument named aShape can hint at
+the Shape class or TRShape class, and run-time information
+can distinguish which.
+C. Comparison with type inference engines
+The standard approach for statically obtaining type infor-
+mation in dynamically typed languages is to perform type
+inference. Many different type inference approaches exist
+[26], [27] and some approaches have existing implementations
+in Pharo [17], [28]. The question is whether type hints or
+type inference can provide more type information for method
+arguments in Smalltalk, or whether their combination is worth
+the effort.
+IX. CONCLUSION
+In this paper we present two case studies, one on how
+frequently type hints are used in method argument names in
+Smalltalk and one on the quality of those type hints in relation
+to run-time types.
+In the first study we analyze a total of 146,297 arguments
+taken from 114 Pharo Smalltalk projects, and conclude that
+the existing tool for type guessing has a 36.21% success rate.
+We manually analyze the arguments that failed to yield a type,
+and propose several heuristics that improve the percentage of
+guessed types to 50.69%. This percentage is not final, as many
+other heuristics potentially exist, but further inquiry and more
+domain knowledge is required to formulate them. So the main
+conclusion of the study is that at least one in two method
+arguments in Smalltalk projects contains a useful type hint.
+Another conclusion drawn from this case study is that 1.44%
+of method arguments hint at multiple types We present a very
+simple heuristic for identifying such method arguments with
+a false positive rate of only 1.68% in our data set.
+In the second study we collected run-time types of method
+arguments from two projects with a rich set of examples
+used as input, and compared the run-time types to the types
+extracted from type hints. We find that in 76% of cases the
+type hint matches the run-time type when controlling for
+subtype polymorphism. We also present an analysis of the
+misleading type hints, and identify several patterns that better
+our understanding of why the type hints are misleading.
+We propose several directions of future work, most on
+improving Smalltalk tools for type guessing using the infor-
+mation from the conducted studies. Beside that, replicating
+these studies with different languages would help broaden and
+generalize the understanding of type hints.
+</bodyText>
+<sectionHeader confidence="0.971436" genericHeader="conclusions">
+ACKNOWLEDGMENT
+</sectionHeader>
+<bodyText confidence="0.809502">
+We gratefully acknowledge the financial support of the
+</bodyText>
+<reference confidence="0.965221428571429">
+Swiss National Science Foundation for the project Ã¢ÂÂAgile
+Software AssessmentÃ¢ÂÂ (SNSF project No. 200020-144126/1,
+Jan 1, 2013 - Dec. 30, 2015). We also gratefully acknowledge
+the financial support of the Swiss Group for Object Oriented
+Systems and Environments (CHOOSE Ã¢ÂÂ http://choose.s-i.ch/)
+and the European Smalltalk User Group (ESUG Ã¢ÂÂ http://www.
+esug.org/).
+</reference>
+<sectionHeader confidence="0.68207" genericHeader="references">
+REFERENCES
+</sectionHeader>
+<reference confidence="0.991296640776699">
+[1] S. Hanenberg, Ã¢ÂÂAn experiment about static and dynamic type systems:
+Doubts about the positive impact of static type systems on development
+time,Ã¢ÂÂ SIGPLAN Not., vol. 45, no. 10, pp. 22Ã¢ÂÂ35, Oct. 2010. [Online].
+Available: http://doi.acm.org/10.1145/1932682.1869462
+[2] C. Mayer, S. Hanenberg, R. Robbes, E. Tanter, and A. Stefik, Ã¢ÂÂAn
+empirical study of the influence of static type systems on the usability
+of undocumented software,Ã¢ÂÂ SIGPLAN Not., vol. 47, no. 10, pp.
+683Ã¢ÂÂ702, Oct. 2012. [Online]. Available: http://doi.acm.org/10.1145/
+2398857.2384666
+[3] A. Goldberg and D. Robson, Smalltalk 80: the Language
+and its Implementation. Reading, Mass.: Addison Wesley, May
+1983. [Online]. Available: http://stephane.ducasse.free.fr/FreeBooks/
+BlueBook/Bluebook.pdf
+[4] K. Beck, Smalltalk Best Practice Patterns. Prentice-
+Hall, 1997. [Online]. Available: http://stephane.ducasse.
+free.fr/FreeBooks/BestSmalltalkPractices/Draft-Smalltalk%20Best%
+20Practice%20Patterns%20Kent%20Beck.pdf
+[5] A. Black, S. Ducasse, O. Nierstrasz, D. Pollet, D. Cassou, and
+M. Denker, Pharo by Example. Square Bracket Associates, 2009.
+[Online]. Available: http://pharobyexample.org
+[6] D. Thomas, C. Fowler, and A. Hunt, Programming Ruby 1.9: The
+Pragmatic ProgrammersÃ¢ÂÂ Guide, 3rd ed. Pragmatic Bookshelf, 2009.
+[7] A. Wiese, V. Ho, and E. Hill, Ã¢ÂÂA comparison of stemmers on source
+code identifiers for software search,Ã¢ÂÂ in Software Maintenance (ICSM),
+2011 27th IEEE International Conference on, Sep. 2011, pp. 496Ã¢ÂÂ499.
+[8] S. Ducasse, A. Lienhard, and L. Renggli, Ã¢ÂÂSeaside: A flexible
+environment for building dynamic web applications,Ã¢ÂÂ IEEE Software,
+vol. 24, no. 5, pp. 56Ã¢ÂÂ63, 2007. [Online]. Available: http://scg.unibe.
+ch/archive/papers/Duca07a-SeasideIEEE-SCG.pdf
+[9] P. Bunge, T. GÃÂ±ÃÂrba, L. Renggli, J. Ressia, and D. RoÃÂthlisberger,
+Ã¢ÂÂScripting browsers with Glamour,Ã¢ÂÂ European Smalltalk User Group
+2009 Technology Innovation Awards, Aug. 2009, glamour was awarded
+the 3rd prize. [Online]. Available: http://scg.unibe.ch/archive/reports/
+Bung09bGlamour.pdf
+[10] V. P. Araya, A. Bergel, D. Cassou, S. Ducasse, and J. Laval, Ã¢ÂÂAgile
+visualization with Roassal,Ã¢ÂÂ in Deep Into Pharo. Square Bracket
+Associates, Sep. 2013, pp. 209Ã¢ÂÂ239.
+[11] L. Cardelli and P. Wegner, Ã¢ÂÂOn understanding types, data abstraction,
+and polymorphism,Ã¢ÂÂ ACM Computing Surveys, vol. 17, no. 4, pp.
+471Ã¢ÂÂ522, Dec. 1985. [Online]. Available: http://lucacardelli.namehttp:
+//lucacardelli.name/Papers/OnUnderstanding.A4.pdf
+[12] A. Deursen and L. Moonen, Ã¢ÂÂType inference for COBOL systems,Ã¢ÂÂ in
+Proceedings of WCRE Ã¢ÂÂ98. IEEE Computer Society, 1998, pp. 220Ã¢ÂÂ229,
+iSBN: 0-8186-89-67-6.
+[13] A. Deursen and L. M. Moonen, Ã¢ÂÂUnderstanding cobol systems using
+inferred types,Ã¢ÂÂ Amsterdam, The Netherlands, The Netherlands, Tech.
+Rep., 1999.
+[14] A. van Deursen and L. Moonen, Ã¢ÂÂAn empirical study into COBOL type
+inferencing,Ã¢ÂÂ Sci. Comput. Program., vol. 40, no. 2-3, pp. 189Ã¢ÂÂ211,
+2001. [Online]. Available: http://dx.doi.org/10.1016/S0167-6423(01)
+00015-6
+[15] R. Komondoor, G. Ramalingam, S. Ch, and J. Field, Ã¢ÂÂDependent types
+for program understanding,Ã¢ÂÂ in In Proc. Intl. Conf. on Tools and
+Algorithms for the Construction and Analysis of Systems. Springer,
+2005, pp. 157Ã¢ÂÂ173.
+[16] R. OÃ¢ÂÂCallahan and D. Jackson, Ã¢ÂÂLackwit: a program understanding
+tool based on type inference,Ã¢ÂÂ in ICSE Ã¢ÂÂ97: Proceedings of the 19th
+international conference on Software engineering. New York, NY,
+USA: ACM, 1997, pp. 338Ã¢ÂÂ348.
+[17] B. SpasojevicÃÂ, M. Lungu, and O. Nierstrasz, Ã¢ÂÂMining the ecosystem
+to improve type inference for dynamically typed languages,Ã¢ÂÂ in
+Proceedings of the 2014 ACM International Symposium on New Ideas,
+New Paradigms, and Reflections on Programming and Software, ser.
+Onward! Ã¢ÂÂ14. New York, NY, USA: ACM, 2014, pp. 133Ã¢ÂÂ142.
+[Online]. Available: http://scg.unibe.ch/archive/papers/Spas14c.pdf
+[18] M. Odersky, P. Altherr, V. Cremet, I. Dragos, G. Dubochet, B. Emir,
+S. McDirmid, S. Micheloud, N. Mihaylov, M. Schinz, L. Spoon, E. Sten-
+man, and M. Zenger, Ã¢ÂÂAn Overview of the Scala Programming Language
+(2. edition),Ã¢ÂÂ EÃÂcole Polytechnique FeÃÂdeÃÂrale de Lausanne, Tech. Rep.,
+2006.
+[19] B. C. Pierce and D. N. Turner, Ã¢ÂÂLocal type inference,Ã¢ÂÂ ACM Trans.
+Program. Lang. Syst., vol. 22, no. 1, pp. 1Ã¢ÂÂ44, Jan. 2000. [Online].
+Available: http://doi.acm.org/10.1145/345099.345100
+[20] D. V. H. Matthew Might, Yannis Smaragdakis, Ã¢ÂÂResolving and
+exploiting the k-CFA paradox,Ã¢ÂÂ in PLDI, 2010, pp. 305Ã¢ÂÂ315. [Online].
+Available: http://matt.might.net/papers/might2010mcfa.pdf
+[21] A. H. Borning and D. H. H. Ingalls, Ã¢ÂÂA type declaration and inference
+system for Smalltalk,Ã¢ÂÂ in Proceedings of the 9th ACM SIGPLAN-
+SIGACT Symposium on Principles of Programming Languages, ser.
+POPL Ã¢ÂÂ82. New York, NY, USA: ACM, 1982, pp. 133Ã¢ÂÂ141. [Online].
+Available: http://doi.acm.org/10.1145/582153.582168
+[22] N. Suzuki, Ã¢ÂÂInferring types in Smalltalk,Ã¢ÂÂ in POPL Ã¢ÂÂ81: Proceedings
+of the 8th ACM SIGPLAN-SIGACT symposium on Principles of pro-
+gramming languages. New York, NY, USA: ACM Press, 1981, pp.
+187Ã¢ÂÂ199.
+[23] R. E. Johnson, Ã¢ÂÂType-checking Smalltalk,Ã¢ÂÂ SIGPLAN Not., vol. 21,
+no. 11, pp. 315Ã¢ÂÂ321, Jun. 1986. [Online]. Available: http://doi.acm.org/
+10.1145/960112.28728
+[24] M. Salib, Ã¢ÂÂFaster than C: Static type inference with Starkiller,Ã¢ÂÂ in in
+PyCon Proceedings, Washington DC. SpringerVerlag, 2004, pp. 2Ã¢ÂÂ26.
+[25] M. Furr, J.-h. D. An, J. S. Foster, and M. Hicks, Ã¢ÂÂStatic type inference
+for Ruby,Ã¢ÂÂ in Proceedings of the 2009 ACM Symposium on Applied
+Computing, ser. SAC Ã¢ÂÂ09. New York, NY, USA: ACM, 2009, pp. 1859Ã¢ÂÂ
+1866. [Online]. Available: http://doi.acm.org/10.1145/1529282.1529700
+[26] R. Milner, Ã¢ÂÂA theory of type polymorphism in programming,Ã¢ÂÂ Journal
+of Computer and System Sciences, vol. 17, pp. 348Ã¢ÂÂ375, 1978.
+[27] R. Cartwright and M. Fagan, Ã¢ÂÂSoft typing,Ã¢ÂÂ in PLDI Ã¢ÂÂ91: Proceedings of
+the ACM SIGPLAN 1991 conference on Programming language design
+and implementation. New York, NY, USA: ACM, 1991, pp. 278Ã¢ÂÂ292.
+[28] F. Pluquet, A. Marot, and R. Wuyts, Ã¢ÂÂFast type reconstruction for
+dynamically typed programming languages,Ã¢ÂÂ in DLS Ã¢ÂÂ09: Proceedings
+of the 5th symposium on Dynamic languages. New York, NY, USA:
+ACM, 2009, pp. 69Ã¢ÂÂ78.
+</reference>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.857371">
+<title confidence="0.999048">A Case Study on Type Hints in Method Argument Names in Pharo Smalltalk Projects</title>
+<author confidence="0.999582">Boris SpasojevicÃÂ</author>
+<affiliation confidence="0.999988">University of Bern</affiliation>
+<address confidence="0.994183">Switzerland</address>
+<email confidence="0.997736">spasojev@inf.unibe.ch</email>
+<author confidence="0.969552">Mircea Lungu</author>
+<affiliation confidence="0.999954">University of Groningen</affiliation>
+<address confidence="0.994647">Netherlands</address>
+<email confidence="0.999428">m.f.lungu@rug.nl</email>
+<author confidence="0.920783">Oscar Nierstrasz</author>
+<affiliation confidence="0.999969">University of Bern</affiliation>
+<address confidence="0.994212">Switzerland</address>
+<email confidence="0.998258">oscar@inf.unibe.ch</email>
+<abstract confidence="0.998949875">AbstractÃ¢ÂÂA common practice when writing Smalltalk source code is to name method arguments in a way that hints at their expected type (i.e., aString, anInteger, aDictionary). This practice makes code more readable, but the prevalence of this practice is unknown, thus its reliability is questionable. Tools such as the auto complete feature in the Pharo Smalltalk code editor rely on these hints to improve the developer experience. The default algorithm used in Pharo to extract type information from these hints succeeds in extracting a type in slightly over 36% of method arguments taken from 114 Pharo projects. In this paper we present the results of analyzing the failing method argument names, and provide several simple heuristics that can increase the rate of success to slightly over 50%. We also present a case study on the relation between type hints and run-time types of method arguments that shows that type hints, in a great majority of cases, reflect run-time types.</abstract>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="false">
+<title>Project Argument name Run time class Pattern # Glamour aBrowser GMLBrowser Class clash 12 anAnnouncement Announcement class - 2 aSymbolOrABlock ByteString - 1 Roassal aModel ByteString, Association, SmallInteger, etc. Any object data model 6 toBlock, fromBlock, followBlock ByteSymbol Block or symbol 13 aValueOrOneArgBlock Color, SmallInteger, ByteSymbol, etc. Block or value 11 aValueOrASymbolOrOneArgBlock SmallInteger Block or value 2 trachelShape, anotherShape, aShape some subclass of TRShape</title>
+<date>2013</date>
+<booktitle>Class clash 11 Swiss National Science Foundation for the project Ã¢Agile Software AssessmentÃ¢ (SNSF project No. 200020-144126/1,</booktitle>
+<volume>30</volume>
+<note>http://www. esug.org/).</note>
+<marker>2013</marker>
+<rawString> Project Argument name Run time class Pattern # Glamour aBrowser GMLBrowser Class clash 12 anAnnouncement Announcement class - 2 aSymbolOrABlock ByteString - 1 Roassal aModel ByteString, Association, SmallInteger, etc. Any object data model 6 toBlock, fromBlock, followBlock ByteSymbol Block or symbol 13 aValueOrOneArgBlock Color, SmallInteger, ByteSymbol, etc. Block or value 11 aValueOrASymbolOrOneArgBlock SmallInteger Block or value 2 trachelShape, anotherShape, aShape some subclass of TRShape Class clash 11 Swiss National Science Foundation for the project Ã¢ÂÂAgile Software AssessmentÃ¢ÂÂ (SNSF project No. 200020-144126/1, Jan 1, 2013 - Dec. 30, 2015). We also gratefully acknowledge the financial support of the Swiss Group for Object Oriented Systems and Environments (CHOOSE Ã¢ÂÂ http://choose.s-i.ch/) and the European Smalltalk User Group (ESUG Ã¢ÂÂ http://www. esug.org/).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Hanenberg</author>
+</authors>
+<title>Ã¢An experiment about static and dynamic type systems: Doubts about the positive impact of static type systems on development time,Ã¢</title>
+<date>2010</date>
+<journal>SIGPLAN Not.,</journal>
+<volume>45</volume>
+<pages>22--35</pages>
+<note>[Online]. Available: http://doi.acm.org/10.1145/1932682.1869462</note>
+<contexts>
+<context position="1547" citStr="[1]" startWordPosition="232" endWordPosition="232">ent the results of analyzing the failing method argument names, and provide several simple heuristics that can increase the rate of success to slightly over 50%. We also present a case study on the relation between type hints and run-time types of method arguments that shows that type hints, in a great majority of cases, reflect run-time types. I. INTRODUCTION Programming languages are usually divided into two groups based on their type system: statically typed languages and dynamically typed languages. Dynamically typed languages are usually considered to be more flexible and more productive [1], but lack the explicit type declarations that typical statically typed languages provide. These explicit type annotations are helpful for program comprehension [2], but can also be used by developer tools (e.g., code completion) to improve the developer experience and productivity. To partially compensate for the lack of explicit type annotations many Smalltalk developers [3] follow a convention of naming method arguments in a way that hints at the expected type of the method argument [4]. This means that it is recommended to name method arguments by prefixing the expected type with the indef</context>
+</contexts>
+<marker>[1]</marker>
+<rawString>S. Hanenberg, Ã¢ÂÂAn experiment about static and dynamic type systems: Doubts about the positive impact of static type systems on development time,Ã¢ÂÂ SIGPLAN Not., vol. 45, no. 10, pp. 22Ã¢ÂÂ35, Oct. 2010. [Online]. Available: http://doi.acm.org/10.1145/1932682.1869462</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>C Mayer</author>
+<author>S Hanenberg</author>
+<author>R Robbes</author>
+<author>E Tanter</author>
+<author>A Stefik</author>
+</authors>
+<title>Ã¢An empirical study of the influence of static type systems on the usability of undocumented software,Ã¢</title>
+<date>2012</date>
+<journal>SIGPLAN Not.,</journal>
+<volume>47</volume>
+<pages>683--702</pages>
+<contexts>
+<context position="1711" citStr="[2]" startWordPosition="254" endWordPosition="254"> also present a case study on the relation between type hints and run-time types of method arguments that shows that type hints, in a great majority of cases, reflect run-time types. I. INTRODUCTION Programming languages are usually divided into two groups based on their type system: statically typed languages and dynamically typed languages. Dynamically typed languages are usually considered to be more flexible and more productive [1], but lack the explicit type declarations that typical statically typed languages provide. These explicit type annotations are helpful for program comprehension [2], but can also be used by developer tools (e.g., code completion) to improve the developer experience and productivity. To partially compensate for the lack of explicit type annotations many Smalltalk developers [3] follow a convention of naming method arguments in a way that hints at the expected type of the method argument [4]. This means that it is recommended to name method arguments by prefixing the expected type with the indefinite article Ã¢aÃ¢ or Ã¢anÃ¢. We call this convention Ã¢type hintsÃ¢. Listing 1 presents the implementation of the indexOf: method in the String class in Pha</context>
+</contexts>
+<marker>[2]</marker>
+<rawString>C. Mayer, S. Hanenberg, R. Robbes, E. Tanter, and A. Stefik, Ã¢ÂÂAn empirical study of the influence of static type systems on the usability of undocumented software,Ã¢ÂÂ SIGPLAN Not., vol. 47, no. 10, pp. 683Ã¢ÂÂ702, Oct. 2012. [Online]. Available: http://doi.acm.org/10.1145/ 2398857.2384666</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Goldberg</author>
+<author>D Robson</author>
+</authors>
+<title>Smalltalk 80: the Language and its Implementation.</title>
+<date>1983</date>
+<publisher>Addison Wesley,</publisher>
+<location>Reading, Mass.:</location>
+<note>[Online]. Available: http://stephane.ducasse.free.fr/FreeBooks/ BlueBook/Bluebook.pdf</note>
+<contexts>
+<context position="1926" citStr="[3]" startWordPosition="287" endWordPosition="287">uages are usually divided into two groups based on their type system: statically typed languages and dynamically typed languages. Dynamically typed languages are usually considered to be more flexible and more productive [1], but lack the explicit type declarations that typical statically typed languages provide. These explicit type annotations are helpful for program comprehension [2], but can also be used by developer tools (e.g., code completion) to improve the developer experience and productivity. To partially compensate for the lack of explicit type annotations many Smalltalk developers [3] follow a convention of naming method arguments in a way that hints at the expected type of the method argument [4]. This means that it is recommended to name method arguments by prefixing the expected type with the indefinite article Ã¢aÃ¢ or Ã¢anÃ¢. We call this convention Ã¢type hintsÃ¢. Listing 1 presents the implementation of the indexOf: method in the String class in Pharo Smalltalk [5]. The only argument of this method is named aCharacter clearly hinting that the method expects to be called with an object of type Character as the parameter. This convention obviously helps to provi</context>
+</contexts>
+<marker>[3]</marker>
+<rawString>A. Goldberg and D. Robson, Smalltalk 80: the Language and its Implementation. Reading, Mass.: Addison Wesley, May 1983. [Online]. Available: http://stephane.ducasse.free.fr/FreeBooks/ BlueBook/Bluebook.pdf</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>K Beck</author>
+</authors>
+<title>Smalltalk Best Practice Patterns.</title>
+<date>1997</date>
+<publisher>PrenticeHall,</publisher>
+<note>[Online]. Available: http://stephane.ducasse. free.fr/FreeBooks/BestSmalltalkPractices/Draft-Smalltalk%20Best% 20Practice%20Patterns%20Kent%20Beck.pdf</note>
+<contexts>
+<context position="2041" citStr="[4]" startWordPosition="308" endWordPosition="308">ped languages. Dynamically typed languages are usually considered to be more flexible and more productive [1], but lack the explicit type declarations that typical statically typed languages provide. These explicit type annotations are helpful for program comprehension [2], but can also be used by developer tools (e.g., code completion) to improve the developer experience and productivity. To partially compensate for the lack of explicit type annotations many Smalltalk developers [3] follow a convention of naming method arguments in a way that hints at the expected type of the method argument [4]. This means that it is recommended to name method arguments by prefixing the expected type with the indefinite article Ã¢aÃ¢ or Ã¢anÃ¢. We call this convention Ã¢type hintsÃ¢. Listing 1 presents the implementation of the indexOf: method in the String class in Pharo Smalltalk [5]. The only argument of this method is named aCharacter clearly hinting that the method expects to be called with an object of type Character as the parameter. This convention obviously helps to provide type information about method arguments in a dynamically typed language, but, as any convention not strictly enf</context>
+<context position="15954" citStr="[4]" startWordPosition="2553" endWordPosition="2553">c and html respectively B. Blocks, Strings and Collections Using block closures in Smalltalk is common practice. The class BlockClosure offers the default implementation. Unfortunately for the default type guessing algorithm, a majority of method arguments that are expected to be an instance of BlockClosure are not named aBlockClosure (only 47 occurrences of arguments named aBlockClosure in Arg) but rather aBlock (6,167 occurrences of arguments named aBlock in Arg) as Figure 6 summarizes. Using aBlock rather than aBlockClosure is even present in the book Ã¢Smalltalk Best Practice PatternsÃ¢ [4] by Kent Beck. To give more context to arguments hinting at BlockClosure, developers often add additional descriptors to the argument name. Examples of such argument names are toBlock, fromBlock, anErrorBlock, aOneArgBlock, aFormatBlock etc. Also, a substantial number of arguments are named simply block, ignoring the article. In order to group all these different ways of specifying arguments of type BlockClosure we define a set called BlockÃ¢ |{a|a Ã¢ Arg, name(a) = Ã¢aBlockClosureÃ¢} |= 47 (9) Block = {a|a Ã¢ Arg, name(a) = Ã¢aBlockÃ¢} (10) |Block |= 6, 167 (11) Fig. 6. Many more argum</context>
+</contexts>
+<marker>[4]</marker>
+<rawString>K. Beck, Smalltalk Best Practice Patterns. PrenticeHall, 1997. [Online]. Available: http://stephane.ducasse. free.fr/FreeBooks/BestSmalltalkPractices/Draft-Smalltalk%20Best% 20Practice%20Patterns%20Kent%20Beck.pdf</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Black</author>
+<author>S Ducasse</author>
+<author>O Nierstrasz</author>
+<author>D Pollet</author>
+<author>D Cassou</author>
+<author>M Denker</author>
+</authors>
+<title>Pharo by Example. Square Bracket Associates,</title>
+<date>2009</date>
+<contexts>
+<context position="2327" citStr="[5]" startWordPosition="353" endWordPosition="353">o be used by developer tools (e.g., code completion) to improve the developer experience and productivity. To partially compensate for the lack of explicit type annotations many Smalltalk developers [3] follow a convention of naming method arguments in a way that hints at the expected type of the method argument [4]. This means that it is recommended to name method arguments by prefixing the expected type with the indefinite article Ã¢aÃ¢ or Ã¢anÃ¢. We call this convention Ã¢type hintsÃ¢. Listing 1 presents the implementation of the indexOf: method in the String class in Pharo Smalltalk [5]. The only argument of this method is named aCharacter clearly hinting that the method expects to be called with an object of type Character as the parameter. This convention obviously helps to provide type information about method arguments in a dynamically typed language, but, as any convention not strictly enforced, is only as good as the discipline of developers to follow it. In this paper we present a case study of the extent of usage of this convention. We gathered all method arguments from 114 Pharo Smalltalk projects and applied PharoÃ¢s built-in system for extracting type information</context>
+<context position="31086" citStr="[5]" startWordPosition="5124" endWordPosition="5124">pe hint in this pattern comes from the hinted option of using instances of BlockClosure. The reason why Roassal can expect any object as a value is that it extends the class Object8 with the method rtValue: which is the only method invoked on arguments from this pattern. The default implementation of this method just returns the receiver object, but it is overridden in the BlockClosure class to evaluate the closure with the method arguments. 4) Block or Symbol: A common idiom in Smalltalk source code is that methods that expect an instance of BlockClosure can also accept an instance of Symbol [5]. This is illustrated well by the filtering method select: of the collections package in Smalltalk. This method expects an instance of BlockClosure that describes the criteria for selection of elements of the collection. If this criteria is to only invoke a single method with no arguments (for example, the isZero method of class Number), than we can provide just the selector (method name) as an instance of Symbol. The result is smaller code that is more readable. This idiom exploits duck-typing by implementing the value: method Ã¢ normally associated with block closures Ã¢ for the Symbol cla</context>
+</contexts>
+<marker>[5]</marker>
+<rawString>A. Black, S. Ducasse, O. Nierstrasz, D. Pollet, D. Cassou, and M. Denker, Pharo by Example. Square Bracket Associates, 2009.</rawString>
+</citation>
+<citation valid="false">
+<note>Available: http://pharobyexample.org</note>
+<marker>[Online]</marker>
+<rawString>. Available: http://pharobyexample.org</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Thomas</author>
+<author>C Fowler</author>
+<author>A Hunt</author>
+</authors>
+<date>2009</date>
+<booktitle>Programming Ruby 1.9: The Pragmatic ProgrammersÃ¢ Guide, 3rd ed. Pragmatic Bookshelf,</booktitle>
+<contexts>
+<context position="9169" citStr="[6]" startWordPosition="1448" endWordPosition="1448">e(a) = Ã¢ } (3) Fig. 2. The core sets. Arg = all arguments, Succ = type guessed, Fail = type not guessed. TABLE I THE NUMBER AND PERCENTAGE OF METHOD ARGUMENTS WHICH DO AND DO NOT PRODUCE A TYPE USING NECVarTypeGuesser. # % of |Args| |Arg |146,297 100% |Succ |52,981 36.21% |Fail |93,316 63.79% III. DUCK-TYPED METHOD ARGUMENTS After starting the manual inspection of the method arguments for which NECVarTypeGuesser failed to guess a type, we noticed that a substantial number of argument names refer to more than one type. This kind of method arguments are usually referred to as Ã¢Duck-TypedÃ¢6 [6]. The term comes from the duck test, attributed to James Whitcomb Riley: Ã¢When I see a bird that walks like a duck and swims like a duck and quacks like a duck, I call that bird a duckÃ¢. In the context of method arguments, this means that the method does not expect a parameter of a particular type, but rather of any type that follows a certain interface. For the sake of simplicity, we consider any method argument that specifies multiple possible types to be duck-typed. We find that the pattern for expressing that an argument can take on multiple potential types is to concatenate all possib</context>
+</contexts>
+<marker>[6]</marker>
+<rawString>D. Thomas, C. Fowler, and A. Hunt, Programming Ruby 1.9: The Pragmatic ProgrammersÃ¢ÂÂ Guide, 3rd ed. Pragmatic Bookshelf, 2009.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Wiese</author>
+<author>V Ho</author>
+<author>E Hill</author>
+</authors>
+<title>Ã¢A comparison of stemmers on source code identifiers for software search,Ã¢</title>
+<date>2011</date>
+<booktitle>in Software Maintenance (ICSM), 2011 27th IEEE International Conference on,</booktitle>
+<pages>496--499</pages>
+<contexts>
+<context position="10459" citStr="[7]" startWordPosition="1665" endWordPosition="1665">h this property is aStringOrByteArray appearing 99 times in our corpus. To a developer this is a clear message that this argument should be either of type String or ByteArray, but the implementation of NECVarTypeGuesser does not consider this pattern and unsuccessfully attempts to find a class called StringOrByteArray. A. Impact of Duck-Typed Arguments To calculate the impact of duck-typed arguments, we extracted all argument names that match the following regular expression. . Ã¢Or[AÃ¢ Z].Ã¢ (4) The word Ã¢OrÃ¢ should be followed by a capital letter to ensure that, due to Camel Notation [7], we only match that word and not words like Ã¢OriginalÃ¢, Ã¢OrderedÃ¢ etc. A total of 2139 method arguments matched this regular expression. Manual inspection revealed that 36 occurrences of the extracted arguments do not in fact refer to multiple types. These are all occurrences of two different argument names: aBlockWithZeroOrOneParameter and aZeroOrOneArgBlock. It is obvious that these argument names refer to a varying number of arguments of a BlockClosure i.e., Lambda expression, and not multiple possible types. So the very simple regular expression based heuristic we used thus far ca</context>
+</contexts>
+<marker>[7]</marker>
+<rawString>A. Wiese, V. Ho, and E. Hill, Ã¢ÂÂA comparison of stemmers on source code identifiers for software search,Ã¢ÂÂ in Software Maintenance (ICSM), 2011 27th IEEE International Conference on, Sep. 2011, pp. 496Ã¢ÂÂ499.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Ducasse</author>
+<author>A Lienhard</author>
+<author>L Renggli</author>
+</authors>
+<title>Ã¢Seaside: A flexible environment for building dynamic web applications,Ã¢</title>
+<date>2007</date>
+<journal>IEEE Software,</journal>
+<volume>24</volume>
+<pages>56--63</pages>
+<note>[Online]. Available: http://scg.unibe. ch/archive/papers/Duca07a-SeasideIEEE-SCG.pdf</note>
+<contexts>
+<context position="14761" citStr="[8]" startWordPosition="2356" endWordPosition="2356"> used for specifications of Metcello versions. Metacello is a package management system for Monticello, a distributed version control system for Smalltalk. The implementation details are not important, but we can claim that the arguments named spec are of type MetacelloAbstractVersionConstructor, as it is the superclass for all classes used to construct Metacello versions. So we define the Spec set in Figure 5 Equation 7. This set contains 6,132 elements or 4.19% of the Arg set. A similar situation exists with the arguments named html. A common practice when writing applications using Seaside [8], a web development framework for Smalltalk, is to pass the object representation of the HTML element as an argument to methods of objects that perform an action on it (usually the object renders itself on the HTML element). All of these arguments are instances of WAHtmlCanvas. As with the spec argument name we define the Html set in Figure 5 Equation 8, which contains 2,935 elements or 2.01% of the Arg set. Spec = {a|a Ã¢ Fnd, name(a) = Ã¢specÃ¢} (7) Html = {a|a Ã¢ Fnd, name(a) = Ã¢htmlÃ¢} (8) Fig. 5. The Spec and Html sets contain arguments from the Fnd set that are named spec and html</context>
+</contexts>
+<marker>[8]</marker>
+<rawString>S. Ducasse, A. Lienhard, and L. Renggli, Ã¢ÂÂSeaside: A flexible environment for building dynamic web applications,Ã¢ÂÂ IEEE Software, vol. 24, no. 5, pp. 56Ã¢ÂÂ63, 2007. [Online]. Available: http://scg.unibe. ch/archive/papers/Duca07a-SeasideIEEE-SCG.pdf</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>P Bunge</author>
+<author>T GÃÂ±Ãrba</author>
+<author>L Renggli</author>
+<author>J Ressia</author>
+<author>D RoÃthlisberger</author>
+</authors>
+<title>Ã¢Scripting browsers with Glamour,Ã¢ European Smalltalk User Group</title>
+<date>2009</date>
+<journal>[Online]. Available: http://scg.unibe.ch/archive/reports/ Bung09bGlamour.pdf</journal>
+<booktitle>Technology Innovation Awards,</booktitle>
+<contexts>
+<context position="24771" citStr="[9]" startWordPosition="4054" endWordPosition="4054">s are more delicate and might carry a lot more meaning for a developer with domain knowledge, but providing tool support for such cases is a more challenging task. With all this in mind, we can thus conclude that type hints are a commonly used way to name method arguments in Smalltalk projects, and that even fairly simple tool support can work about 50% of the time. VI. QUALITY OF TYPE HINTS So far we have focused on the quantity of type hints in a large number of Smalltalk projects. In this section we conduct a separate analysis on the quality of type hints in two Smalltalk projects: Glamour [9] , a framework for describing navigation flow of GUI data browsers; and Roassal [10], a visualization H = Spec Ã¢Âª Html Ã¢Âª BlockÃ¢ Ã¢Âª CollÃ¢ Ã¢Âª StringÃ¢ (20) SuccÃ¢ = Succ Ã¢ÂªH Ã¢Âª DuckS (21) F = Fnd\H (22) FailÃ¢ = F Ã¢Âª DuckF (23) Fig. 9. The H set contains all arguments all sets defined by heuristics in section IV, the SuccÃ¢set contains all arguments whose type is guessable and FailÃ¢ contains all arguments whose type is not guessable. engine for Smalltalk. The reason we chose these two projects for our analysis is their rich example library which enables us to easily run a dynam</context>
+</contexts>
+<marker>[9]</marker>
+<rawString>P. Bunge, T. GÃÂ±ÃÂrba, L. Renggli, J. Ressia, and D. RoÃÂthlisberger, Ã¢ÂÂScripting browsers with Glamour,Ã¢ÂÂ European Smalltalk User Group 2009 Technology Innovation Awards, Aug. 2009, glamour was awarded the 3rd prize. [Online]. Available: http://scg.unibe.ch/archive/reports/ Bung09bGlamour.pdf</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>V P Araya</author>
+<author>A Bergel</author>
+<author>D Cassou</author>
+<author>S Ducasse</author>
+<author>J Laval</author>
+</authors>
+<title>Ã¢Agile visualization with Roassal,Ã¢</title>
+<date>2013</date>
+<booktitle>in Deep Into Pharo. Square Bracket Associates,</booktitle>
+<pages>209--239</pages>
+<contexts>
+<context position="24855" citStr="[10]" startWordPosition="4068" endWordPosition="4068">knowledge, but providing tool support for such cases is a more challenging task. With all this in mind, we can thus conclude that type hints are a commonly used way to name method arguments in Smalltalk projects, and that even fairly simple tool support can work about 50% of the time. VI. QUALITY OF TYPE HINTS So far we have focused on the quantity of type hints in a large number of Smalltalk projects. In this section we conduct a separate analysis on the quality of type hints in two Smalltalk projects: Glamour [9] , a framework for describing navigation flow of GUI data browsers; and Roassal [10], a visualization H = Spec Ã¢Âª Html Ã¢Âª BlockÃ¢ Ã¢Âª CollÃ¢ Ã¢Âª StringÃ¢ (20) SuccÃ¢ = Succ Ã¢ÂªH Ã¢Âª DuckS (21) F = Fnd\H (22) FailÃ¢ = F Ã¢Âª DuckF (23) Fig. 9. The H set contains all arguments all sets defined by heuristics in section IV, the SuccÃ¢set contains all arguments whose type is guessable and FailÃ¢ contains all arguments whose type is not guessable. engine for Smalltalk. The reason we chose these two projects for our analysis is their rich example library which enables us to easily run a dynamic analysis similar to real-world usage of these projects. The end goal of this anal</context>
+</contexts>
+<marker>[10]</marker>
+<rawString>V. P. Araya, A. Bergel, D. Cassou, S. Ducasse, and J. Laval, Ã¢ÂÂAgile visualization with Roassal,Ã¢ÂÂ in Deep Into Pharo. Square Bracket Associates, Sep. 2013, pp. 209Ã¢ÂÂ239.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>L Cardelli</author>
+<author>P Wegner</author>
+</authors>
+<title>Ã¢On understanding types, data abstraction, and polymorphism,Ã¢</title>
+<date>1985</date>
+<journal>ACM Computing Surveys,</journal>
+<volume>17</volume>
+<pages>471--522</pages>
+<note>[Online]. Available: http://lucacardelli.namehttp: //lucacardelli.name/Papers/OnUnderstanding.A4.pdf</note>
+<contexts>
+<context position="27619" citStr="[11]" startWordPosition="4519" endWordPosition="4519">rguments that contain type hints according to the type guesser described 7http://smalltalkhub.com/#!/Ã¢rostebler/VariableTracker in subsection II-A as well as all those that match the heuristics described in section IV. The result is presented in the Ã¢Contain type hintÃ¢ entry in Table VII. A total of 141 and 160 arguments contain type hints in Glamour and Roassal. Finally, we separate the arguments whose names contain type hints that match the run-time type or one of its superclasses. We include the superclasses of the run-time type in order to include occurrences of subtype polymorphism [11]. A typical toy example would be an argument named anAbstractShape getting the type Ã¢CircleÃ¢ (a subclass of AbstractShape) at run time. The results of this separation is shown in the Ã¢Good type hintsÃ¢ entries in Table VII. We can see that in Glamour 89.36% of type hints are good, meaning the guessed type or one of its subtypes is used at run time. In Roassal this number is much lower at 64.77% and the average across both applications is 76%. C. Misleading type hints The last entry in Table VII (Ã¢Misleading type hintsÃ¢) shows the number of arguments whose type hint did not match the</context>
+</contexts>
+<marker>[11]</marker>
+<rawString>L. Cardelli and P. Wegner, Ã¢ÂÂOn understanding types, data abstraction, and polymorphism,Ã¢ÂÂ ACM Computing Surveys, vol. 17, no. 4, pp. 471Ã¢ÂÂ522, Dec. 1985. [Online]. Available: http://lucacardelli.namehttp: //lucacardelli.name/Papers/OnUnderstanding.A4.pdf</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Deursen</author>
+<author>L Moonen</author>
+</authors>
+<title>Ã¢Type inference for COBOL systems,Ã¢ in</title>
+<date>1998</date>
+<booktitle>Proceedings of WCRE Ã¢98. IEEE Computer Society,</booktitle>
+<pages>220--229</pages>
+<marker>[12]</marker>
+<rawString>A. Deursen and L. Moonen, Ã¢ÂÂType inference for COBOL systems,Ã¢ÂÂ in Proceedings of WCRE Ã¢ÂÂ98. IEEE Computer Society, 1998, pp. 220Ã¢ÂÂ229, iSBN: 0-8186-89-67-6.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Deursen</author>
+<author>L M Moonen</author>
+</authors>
+<title>Ã¢Understanding cobol systems using inferred types,Ã¢ Amsterdam, The Netherlands, The Netherlands,</title>
+<date>1999</date>
+<tech>Tech. Rep.,</tech>
+<marker>[13]</marker>
+<rawString>A. Deursen and L. M. Moonen, Ã¢ÂÂUnderstanding cobol systems using inferred types,Ã¢ÂÂ Amsterdam, The Netherlands, The Netherlands, Tech. Rep., 1999.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A van Deursen</author>
+<author>L Moonen</author>
+</authors>
+<title>Ã¢An empirical study into COBOL type inferencing,Ã¢</title>
+<date>2001</date>
+<journal>Sci. Comput. Program.,</journal>
+<volume>40</volume>
+<pages>2--3</pages>
+<marker>[14]</marker>
+<rawString>A. van Deursen and L. Moonen, Ã¢ÂÂAn empirical study into COBOL type inferencing,Ã¢ÂÂ Sci. Comput. Program., vol. 40, no. 2-3, pp. 189Ã¢ÂÂ211, 2001. [Online]. Available: http://dx.doi.org/10.1016/S0167-6423(01) 00015-6</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R Komondoor</author>
+<author>G Ramalingam</author>
+<author>S Ch</author>
+<author>J Field</author>
+</authors>
+<title>Ã¢Dependent types for program understanding,Ã¢ in</title>
+<date>2005</date>
+<booktitle>In Proc. Intl. Conf. on Tools and Algorithms for</booktitle>
+<pages>157--173</pages>
+<publisher>Springer,</publisher>
+<marker>[15]</marker>
+<rawString>R. Komondoor, G. Ramalingam, S. Ch, and J. Field, Ã¢ÂÂDependent types for program understanding,Ã¢ÂÂ in In Proc. Intl. Conf. on Tools and Algorithms for the Construction and Analysis of Systems. Springer, 2005, pp. 157Ã¢ÂÂ173.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R OÃ¢Callahan</author>
+<author>D Jackson</author>
+</authors>
+<title>Ã¢Lackwit: a program understanding tool based on type inference,Ã¢</title>
+<date>1997</date>
+<booktitle>in ICSE Ã¢97: Proceedings of the 19th international conference on Software engineering.</booktitle>
+<pages>338--348</pages>
+<publisher>ACM,</publisher>
+<location>New York, NY, USA:</location>
+<marker>[16]</marker>
+<rawString>R. OÃ¢ÂÂCallahan and D. Jackson, Ã¢ÂÂLackwit: a program understanding tool based on type inference,Ã¢ÂÂ in ICSE Ã¢ÂÂ97: Proceedings of the 19th international conference on Software engineering. New York, NY, USA: ACM, 1997, pp. 338Ã¢ÂÂ348.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>B SpasojevicÃ</author>
+<author>M Lungu</author>
+<author>O Nierstrasz</author>
+</authors>
+<title>Ã¢Mining the ecosystem to improve type inference for dynamically typed languages,Ã¢</title>
+<date>2014</date>
+<booktitle>in Proceedings of the 2014 ACM International Symposium on New Ideas, New Paradigms, and Reflections on Programming and Software, ser. Onward! Ã¢14.</booktitle>
+<pages>133--142</pages>
+<publisher>ACM,</publisher>
+<location>New York, NY, USA:</location>
+<marker>[17]</marker>
+<rawString>B. SpasojevicÃÂ, M. Lungu, and O. Nierstrasz, Ã¢ÂÂMining the ecosystem to improve type inference for dynamically typed languages,Ã¢ÂÂ in Proceedings of the 2014 ACM International Symposium on New Ideas, New Paradigms, and Reflections on Programming and Software, ser. Onward! Ã¢ÂÂ14. New York, NY, USA: ACM, 2014, pp. 133Ã¢ÂÂ142.</rawString>
+</citation>
+<citation valid="false">
+<note>Available: http://scg.unibe.ch/archive/papers/Spas14c.pdf</note>
+<marker>[Online]</marker>
+<rawString>. Available: http://scg.unibe.ch/archive/papers/Spas14c.pdf</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Odersky</author>
+<author>P Altherr</author>
+<author>V Cremet</author>
+<author>I Dragos</author>
+<author>G Dubochet</author>
+<author>B Emir</author>
+<author>S McDirmid</author>
+<author>S Micheloud</author>
+<author>N Mihaylov</author>
+<author>M Schinz</author>
+<author>L Spoon</author>
+<author>E Stenman</author>
+<author>M Zenger</author>
+</authors>
+<title>Ã¢An Overview of the Scala Programming Language (2. edition),Ã¢ EÃcole Polytechnique FeÃdeÃrale de Lausanne,</title>
+<date>2006</date>
+<tech>Tech. Rep.,</tech>
+<marker>[18]</marker>
+<rawString>M. Odersky, P. Altherr, V. Cremet, I. Dragos, G. Dubochet, B. Emir, S. McDirmid, S. Micheloud, N. Mihaylov, M. Schinz, L. Spoon, E. Stenman, and M. Zenger, Ã¢ÂÂAn Overview of the Scala Programming Language (2. edition),Ã¢ÂÂ EÃÂcole Polytechnique FeÃÂdeÃÂrale de Lausanne, Tech. Rep., 2006.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>B C Pierce</author>
+<author>D N Turner</author>
+</authors>
+<title>Ã¢Local type inference,Ã¢</title>
+<date>2000</date>
+<journal>ACM Trans. Program. Lang. Syst.,</journal>
+<volume>22</volume>
+<pages>1--44</pages>
+<note>[Online]. Available: http://doi.acm.org/10.1145/345099.345100</note>
+<marker>[19]</marker>
+<rawString>B. C. Pierce and D. N. Turner, Ã¢ÂÂLocal type inference,Ã¢ÂÂ ACM Trans. Program. Lang. Syst., vol. 22, no. 1, pp. 1Ã¢ÂÂ44, Jan. 2000. [Online]. Available: http://doi.acm.org/10.1145/345099.345100</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D V H Matthew Might</author>
+</authors>
+<title>Yannis Smaragdakis, Ã¢Resolving and exploiting the k-CFA paradox,Ã¢ in PLDI,</title>
+<date>2010</date>
+<pages>305--315</pages>
+<note>[Online]. Available: http://matt.might.net/papers/might2010mcfa.pdf</note>
+<marker>[20]</marker>
+<rawString>D. V. H. Matthew Might, Yannis Smaragdakis, Ã¢ÂÂResolving and exploiting the k-CFA paradox,Ã¢ÂÂ in PLDI, 2010, pp. 305Ã¢ÂÂ315. [Online]. Available: http://matt.might.net/papers/might2010mcfa.pdf</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A H Borning</author>
+<author>D H H Ingalls</author>
+</authors>
+<title>Ã¢A type declaration and inference system for Smalltalk,Ã¢</title>
+<date>1982</date>
+<booktitle>in Proceedings of the 9th ACM SIGPLANSIGACT Symposium on Principles of Programming Languages, ser. POPL Ã¢82.</booktitle>
+<pages>133--141</pages>
+<publisher>ACM,</publisher>
+<location>New York, NY, USA:</location>
+<note>[Online]. Available: http://doi.acm.org/10.1145/582153.582168</note>
+<marker>[21]</marker>
+<rawString>A. H. Borning and D. H. H. Ingalls, Ã¢ÂÂA type declaration and inference system for Smalltalk,Ã¢ÂÂ in Proceedings of the 9th ACM SIGPLANSIGACT Symposium on Principles of Programming Languages, ser. POPL Ã¢ÂÂ82. New York, NY, USA: ACM, 1982, pp. 133Ã¢ÂÂ141. [Online]. Available: http://doi.acm.org/10.1145/582153.582168</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>N Suzuki</author>
+</authors>
+<title>Ã¢Inferring types in Smalltalk,Ã¢</title>
+<date>1981</date>
+<booktitle>in POPL Ã¢81: Proceedings of the 8th ACM SIGPLAN-SIGACT symposium on Principles of programming languages.</booktitle>
+<pages>187--199</pages>
+<publisher>ACM Press,</publisher>
+<location>New York, NY, USA:</location>
+<marker>[22]</marker>
+<rawString>N. Suzuki, Ã¢ÂÂInferring types in Smalltalk,Ã¢ÂÂ in POPL Ã¢ÂÂ81: Proceedings of the 8th ACM SIGPLAN-SIGACT symposium on Principles of programming languages. New York, NY, USA: ACM Press, 1981, pp. 187Ã¢ÂÂ199.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R E Johnson</author>
+</authors>
+<title>Ã¢Type-checking Smalltalk,Ã¢</title>
+<date>1986</date>
+<journal>SIGPLAN Not.,</journal>
+<volume>21</volume>
+<pages>315--321</pages>
+<note>[Online]. Available: http://doi.acm.org/</note>
+<marker>[23]</marker>
+<rawString>R. E. Johnson, Ã¢ÂÂType-checking Smalltalk,Ã¢ÂÂ SIGPLAN Not., vol. 21, no. 11, pp. 315Ã¢ÂÂ321, Jun. 1986. [Online]. Available: http://doi.acm.org/ 10.1145/960112.28728</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Salib</author>
+</authors>
+<title>Ã¢Faster than C: Static type inference with Starkiller,Ã¢</title>
+<date>2004</date>
+<booktitle>in in PyCon Proceedings, Washington DC.</booktitle>
+<pages>2--26</pages>
+<publisher>SpringerVerlag,</publisher>
+<marker>[24]</marker>
+<rawString>M. Salib, Ã¢ÂÂFaster than C: Static type inference with Starkiller,Ã¢ÂÂ in in PyCon Proceedings, Washington DC. SpringerVerlag, 2004, pp. 2Ã¢ÂÂ26.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Furr</author>
+<author>J-h D An</author>
+<author>J S Foster</author>
+<author>M Hicks</author>
+</authors>
+<title>Ã¢Static type inference for Ruby,Ã¢</title>
+<date>2009</date>
+<booktitle>in Proceedings of the 2009 ACM Symposium on Applied Computing, ser. SAC Ã¢09.</booktitle>
+<pages>1859--1866</pages>
+<publisher>ACM,</publisher>
+<location>New York, NY, USA:</location>
+<note>[Online]. Available: http://doi.acm.org/10.1145/1529282.1529700</note>
+<marker>[25]</marker>
+<rawString>M. Furr, J.-h. D. An, J. S. Foster, and M. Hicks, Ã¢ÂÂStatic type inference for Ruby,Ã¢ÂÂ in Proceedings of the 2009 ACM Symposium on Applied Computing, ser. SAC Ã¢ÂÂ09. New York, NY, USA: ACM, 2009, pp. 1859Ã¢ÂÂ 1866. [Online]. Available: http://doi.acm.org/10.1145/1529282.1529700</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R Milner</author>
+</authors>
+<title>Ã¢A theory of type polymorphism in programming,Ã¢</title>
+<date>1978</date>
+<journal>Journal of Computer and System Sciences,</journal>
+<volume>17</volume>
+<pages>348--375</pages>
+<marker>[26]</marker>
+<rawString>R. Milner, Ã¢ÂÂA theory of type polymorphism in programming,Ã¢ÂÂ Journal of Computer and System Sciences, vol. 17, pp. 348Ã¢ÂÂ375, 1978.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R Cartwright</author>
+<author>M Fagan</author>
+</authors>
+<title>Ã¢Soft typing,Ã¢ in PLDI</title>
+<date>1991</date>
+<booktitle>Ã¢91: Proceedings of the ACM SIGPLAN 1991 conference on Programming language design and implementation.</booktitle>
+<pages>278--292</pages>
+<publisher>ACM,</publisher>
+<location>New York, NY, USA:</location>
+<marker>[27]</marker>
+<rawString>R. Cartwright and M. Fagan, Ã¢ÂÂSoft typing,Ã¢ÂÂ in PLDI Ã¢ÂÂ91: Proceedings of the ACM SIGPLAN 1991 conference on Programming language design and implementation. New York, NY, USA: ACM, 1991, pp. 278Ã¢ÂÂ292.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>F Pluquet</author>
+<author>A Marot</author>
+<author>R Wuyts</author>
+</authors>
+<title>Ã¢Fast type reconstruction for dynamically typed programming languages,Ã¢</title>
+<date>2009</date>
+<booktitle>in DLS Ã¢09: Proceedings of the 5th symposium on Dynamic languages.</booktitle>
+<pages>69--78</pages>
+<publisher>ACM,</publisher>
+<location>New York, NY, USA:</location>
+<marker>[28]</marker>
+<rawString>F. Pluquet, A. Marot, and R. Wuyts, Ã¢ÂÂFast type reconstruction for dynamically typed programming languages,Ã¢ÂÂ in DLS Ã¢ÂÂ09: Proceedings of the 5th symposium on Dynamic languages. New York, NY, USA: ACM, 2009, pp. 69Ã¢ÂÂ78.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>
