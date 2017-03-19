@@ -1,0 +1,1633 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.000000">
+<figure confidence="0.7670835">
+1
+A data-centric approach to composing embedded, real-time software
+components∗
+Roel Wuytsa,Stéphane Ducassea, Oscar Nierstrasza,
+a{wuyts} {ducasse} {nierstrasz}@iam.unibe.ch
+Software Composition Group
+Institut für Informatik
+Universität Bern, Switzerland
+</figure>
+<sectionHeader confidence="0.903107" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.988783625">
+Software for embedded systems must cope with a variety of stringent constraints, such as real-time requirements,
+small memory footprints, and low power consumption. It is usually implemented using low-level programming
+languages, and as a result has not benefitted from component-based software development techniques. This paper
+describes a data-centric component model for embedded devices that (i) minimizes the number of concurrent tasks
+needed to implement the system, (ii) allows one to verify whether components meet their deadlines by applying
+Rate Monotonic Analysis (RMA), and (iii) can generate and verify schedules using Constraint Logic Programming
+(CLP). This model forms the foundation for a suite of tools for specifying, composing, verifying and deploying
+embedded software components developed in the context of the PECOS project.
+</bodyText>
+<sectionHeader confidence="0.991277" genericHeader="introduction">
+1. Introduction
+</sectionHeader>
+<bodyText confidence="0.97181345">
+Component-based software development
+(CBSD) is quickly becoming a standard ap-
+proach to develop mainstream software systems.
+Most component models and systems, such as
+(D)COM, .Net, JavaBeans [ 17] and CCM [ 24],
+however, target the development of mainstream
+desktop applications with abundant hardware
+resources. None of these existing models explic-
+itly addresses the constraints imposed by small
+embedded devices. Although CBSD would bring
+numerous advantages to the embedded systems
+world, such as shorter development times, and
+the ability to secure investments through reuse of
+existing components, in practice, standard com-
+ponent models are too heavyweight to be applied
+to embedded systems development.
+In this paper we outline an approach to CBSD
+for embedded systems developed in the context
+of the European IST project PECOS2. PECOS en-
+∗In Journal of Systems and Software — Special Issue on
+</bodyText>
+<subsubsectionHeader confidence="0.227693">
+Automated Component-Based Software Engineering, vol.
+</subsubsectionHeader>
+<bodyText confidence="0.543832">
+74, no. 1, 2005, pp. 25-34.
+</bodyText>
+<sectionHeader confidence="0.702173" genericHeader="method">
+2 Pervasive Component Systems, IST-1999-20398. ABB
+ables CBSD for small embedded systems by pro-
+</sectionHeader>
+<bodyText confidence="0.966324291666667">
+viding an environment that supports the specifi-
+cation, composition, configuration checking, and
+deployment of embedded systems built from soft-
+ware components. The PECOS approach was ap-
+plied in the context of field devices, small embed-
+ded devices developed by the prime contractor
+of the project, ABB. The central element of the
+approach is a data-centric component model that
+makes it possible to check non-functional require-
+ments of component compositions.
+The PECOS component model is unusual in
+that PECOS components have very simple inter-
+faces consisting solely of data ports. Components
+are either active, event or passive, and interaction
+occurs only where data ports are connected. This
+design choice makes it particularly easy to reason
+about synchronization and timing aspects of com-
+ponents. First of all, it enables timing analysis
+of component compositions using rate monotonic
+Corporate Research Centre, Ladenburg (DE), Research
+Centre for Information Technologies (FZI), Karlsruhe
+(DE), the Software Composition Group (SCG) at the Uni-
+versity of Bern (CH), and Object Technology International
+(OTI), Amstelveen (NL).
+</bodyText>
+<page confidence="0.958705">
+2
+</page>
+<figureCaption confidence="0.835889">
+Figure 1. Pneumatic positioner (TZID) field de-
+vice.
+</figureCaption>
+<bodyText confidence="0.970285952380953">
+analysis, a technique for verifying that a set of
+tasks can meet their deadlines. Second, it enables
+schedule verification of component compositions
+using a constraint logic programming approach.
+The next section describes the context of field
+devices, their specific constraints and the solu-
+tions proposed by the PECOS project. Then Sec-
+tion 3 presents the PECOS component model.
+Sections 4 and 5 then address the issues of the
+timing verification and schedule verification of
+compositions. Section 6 discusses the model and
+some related work. We conclude with a few re-
+marks on the current status of this work.
+2. Field Devices: Context and Challenges
+Rather than attempt to develop a CBSD ap-
+proach for the embedded systems domain in gen-
+eral, the PECOS project focussed on the specific
+challenges and demands of field devices. In this
+section we introduce field devices, consider the
+problems they pose for CBSD, and outline how
+PECOS tackled these problems.
+</bodyText>
+<subsectionHeader confidence="0.337277">
+2.1. Field Devices
+</subsectionHeader>
+<bodyText confidence="0.998439571428571">
+Field devices are small reactive, embedded sys-
+tems that make use of sensors to continuously
+gather data, such as temperature, pressure or rate
+of flow. An example of a typical field device is the
+TZID pneumatic positioner (Figure 1), used to
+control pneumatic actuators attached to valves.
+Such devices have the following characteristics:
+</bodyText>
+<listItem confidence="0.889434">
+• The available power is only 100 mW for the
+whole device. This limits the choice of suit-
+</listItem>
+<figure confidence="0.9786875">
+Device
+FQD
+PA
+ModBus
+actualPosition
+velocity
+theActualPosition
+theVelocity
+frequencyToSet
+frequencyToSet
+</figure>
+<figureCaption confidence="0.74265">
+Figure 2. A canonical field device containing
+three subcomponents: Device and ModBus (ac-
+tive), PA (passive), and FQD (event).
+</figureCaption>
+<listItem confidence="0.795421826086957">
+able CPUs. The software architecture is
+driven by the fieldbus architecture, a com-
+mon standard for linking devices from dif-
+ferent manufacturers. Fieldbus stack imple-
+mentations from third party suppliers are
+used and need to be integrated.
+• Field devices use one dedicated processor,
+optimized for overall power consumption
+with a speed ranging from just a few MHz
+to several tens of MHz. The processor typi-
+cally has some RAM (around 20 kilobytes),
+non-volatile memory and a great deal of I/O
+on-chip, but often lacks extra functionality
+like a floating point unit.
+• Parts of the software impose real-time con-
+straints, such as the control loop, and the
+execution of fieldbus function blocks.
+• The device has a static software configura-
+tion, i.e., the firmware is updated or re-
+placed as a whole, without dynamic load-
+able functionality. There is also no require-
+ment for dynamic memory allocation.
+• Many field devices are used in safety critical
+</listItem>
+<bodyText confidence="0.98593125">
+areas, such as chemical plants and therefore
+require costly certification procedures. In
+order to minimize the chance of certification
+failures, thorough testing is needed.
+</bodyText>
+<page confidence="0.986344">
+3
+</page>
+<subsectionHeader confidence="0.845951">
+2.2. A Canonical Field Device
+</subsectionHeader>
+<bodyText confidence="0.955555395348837">
+In order to validate CBSD for embedded sys-
+tems, the PECOS project developed both hard-
+ware and software for a demonstrator device with
+characteristics very similar to the TZID field de-
+vice. This device is concerned with setting a valve
+at a specific position between open and closed.
+Figure 2 shows a component Device containing
+three connected subcomponents that collaborate
+to set the valve position. A control loop is used
+to continuously monitor and adjust the valve.
+ModBus is an active component i.e., with its
+own thread of control. It is responsible for inter-
+facing to a piece of hardware called the frequency
+converter, which determines the speed of the mo-
+tor. The frequency to which the motor should be
+set is obtained from the PA component. ModBus
+outputs this value to the frequency converter us-
+ing the ModBus protocol (hence its name). The
+ModBus component requires its own thread, be-
+cause it blocks waiting for a (slow) response from
+the frequency converter.
+FQD (Fast Quadrature Decoder [ 18]) is an
+event component that is triggered when an event
+is raised from the motor. This component ab-
+stracts from a micro-controller module that does
+FQD in hardware. It provides the PA with the
+velocity and the position of the valve.
+PA is a passive component that implements the
+control loop to set the valve to a certain position.
+It holds the desired position of the valve, reads the
+current state of the valve from the FQD compo-
+nent, computes the new frequency for the motor
+controlling the valve and passes this to the Mod-
+Bus component. This repeated adjustment and
+monitoring constitutes the control loop.
+This example is used throughout the paper to
+illustrate the different concepts that are intro-
+duced.
+2.3. The PECOS Approach
+PECOS develops a CBSD approach that ab-
+stracts from best practice in field device software
+development. It is non-intrusive, and evolution-
+ary, rather than radical, and consists in the fol-
+</bodyText>
+<listItem confidence="0.966252117647059">
+lowing elements:
+• Component Model : the component model
+is the foundation for the tools. It abstracts
+from best practice in software design for
+field devices, and supports reasoning about
+non-functional constraints (timing, schedul-
+ing and memory consumption).
+• Component Description Language (Coco):
+Coco implements the PECOS component
+model and is used to specify components
+and field devices.
+• Code Generation: Coco specifications are
+used to generate code skeletons.
+• Runtime Environment (RTE): Generated
+code targets the RTE, which abstracts from
+the real-time operating system used.
+• Verification: When components are com-
+</listItem>
+<bodyText confidence="0.938154666666667">
+posed, functional and non-functional as-
+pects of the composition can be verified.
+Composition rules express constraints over
+compositions, such as dependencies be-
+tween components. Non-functional checks
+include timing analysis, schedule genera-
+tion and verification, and checks on memory
+consumption.
+This paper only presents the component model
+and the timing verification. Detailed information
+on the other items can be found in [ 7] or on the
+PECOS website mentioned before.
+</bodyText>
+<sectionHeader confidence="0.904138" genericHeader="method">
+3. The PECOS Component Model
+</sectionHeader>
+<bodyText confidence="0.9988895">
+The PECOS component model has been de-
+signed with the particular requirements of field
+devices in mind, and reflects best practice in this
+domain. For this reason the model differs sub-
+stantially from typical component models, and is
+much simpler in many respects.
+</bodyText>
+<subsectionHeader confidence="0.766713">
+3.1. Design choices
+</subsectionHeader>
+<bodyText confidence="0.984324">
+The following design choices for the PECOS
+component model directly reflect best practice in
+the field device domain:
+</bodyText>
+<listItem confidence="0.970199">
+• Cyclic behavior : Each component is respon-
+</listItem>
+<bodyText confidence="0.955707">
+sible for a single task which is repeatedly ex-
+ecuted. However, the model also supports
+aperiodic event or active components.
+</bodyText>
+<page confidence="0.71249">
+4
+</page>
+<figure confidence="0.96848425">
+Property
+key
+value
+PropertyBundle
+name
+Component
+name
+execute()
+Port
+type
+direction
+range
+Connector
+type
+Passive Active
+synchronize()
+Event
+synchronize()
+1
+*1
+1
+1
+1
+*
+*
+subComponents
+timing
+memory
+</figure>
+<figureCaption confidence="0.7932855">
+Figure 3. Overview of the PECOS Component
+Model.
+</figureCaption>
+<listItem confidence="0.786359785714286">
+• Fine-grained components: Components en-
+capsulate a single task and export a data
+interface. They communicate by means of
+shared data. The result is a fine-grained
+model that makes it possible to minimize
+concurrency and check timing constraints.
+• Threading : Components may be active, i.e.,
+have their own thread of control, event (to
+model the capture of an event), or passive.
+• Minimize critical sections: Contention for
+shared resources must be minimized due to
+the high cost of locking data on the plat-
+forms used.
+• Separate scheduler : Control flow is sepa-
+</listItem>
+<bodyText confidence="0.4068245">
+rately specified by a scheduler for composite
+components.
+</bodyText>
+<subsectionHeader confidence="0.687607">
+3.2. Static Structure
+</subsectionHeader>
+<bodyText confidence="0.98606762">
+The PECOS field device component model [ 3]
+defines a vocabulary of components, ports, con-
+nectors, and the rules governing their composi-
+tion. The model is illustrated in Figure 3.
+A component is a computational element with
+a name, a number of property bundles and ports,
+and a behavior. There are active components
+with their own thread of control, passive com-
+ponents without their own thread of control, and
+event components, whose behavior is triggered by
+a hardware or software event. The behavior of a
+component consists of a procedure that reads and
+writes data available at its ports, and may pro-
+duce effects in the physical world. This behav-
+ior is modeled as the entry point labelled exec.
+A port represents data which is read or written
+by a component, and which may be shared with
+other components. Each port is characterized by
+its name, its type, a range of possible values, and
+a direction (in, out or inout) indicating whether
+the component reads, writes, or reads and writes
+the data.
+A composite component is specified by connect-
+ing selected ports of its internal subcomponents
+(that can be composites themselves). A connec-
+tor describes a data-sharing relationship between
+ports. It has a name, a type, and a list of ports
+it connects. Only compatible ports may be con-
+nected [ 3]. Composite components need to spec-
+ify a schedule for executing their subcomponents.
+A property is a tagged value. The tag is an
+identifier, and the value is typed. A property
+bundle is a named group of properties. Property
+bundles are used to characterize aspects of com-
+ponents, and are used to add meta-information to
+the model, such as information regarding timing
+or memory usage.
+In the example of Figure 2, FQD is an event
+component, PA is a passive component and Mod-
+Bus is an active component. The composition it-
+self (the Device component) is an active compos-
+ite component. FQD has out ports actualPosition
+and velocity, connected to in ports of PA (the-
+ActualPosition and theVelocity). The out port
+frequencyToSet of PA is connected to the in port
+of the same name on ModBus.
+3.3. Execution Model
+We now consider the dynamic aspects of the
+model, in particular synchronization and schedul-
+ing.
+</bodyText>
+<figure confidence="0.962228529411765">
+5
+Device Component
+(active composite)
+ModBus
+(active leaf)
+dataspace
+PA
+(passive leaf)
+execute
+FQD
+(event leaf)
+execute
+synchronise
+dataspace
+execute
+synchronise
+dataspace
+</figure>
+<figureCaption confidence="0.7878375">
+Figure 4. Tree view of the example.
+3.3.1. Synchronization
+</figureCaption>
+<bodyText confidence="0.99894634">
+The model imposes a hierarchical structure on
+compositions with a single composite component
+at the top level. Since this component controls
+the whole application, it is always active. The
+top-level component can be interpreted as a tree
+of simple and composite components, some of
+which are active, and others which are not.
+The total number of threads in an applica-
+tion is the sum of the number of active compo-
+nents and the number of event components. Each
+passive component is fully under the control of
+the (unique) active component that contains it.
+The behavior of a component is given by its pre-
+defined exec procedure, which can be empty. The
+complete behavior of a composite component con-
+sists of the generated schedule which executes the
+passive components it contains and its own exec
+procedure in some given sequence.
+The only difficulty is posed by the critical sec-
+tions where separate threads read or write shared
+data. Contention occurs precisely wherever the
+external ports of an active component (whether
+simple or composite) are connected to the ports
+of any other component. In order to strictly
+limit the possible interference between concur-
+rent threads, all of the ports belonging to a single
+thread, i.e., an active component and all the pas-
+sive components it contains, are grouped together
+as a single dataspace for that thread. Ports that
+are shared between threads are replicated, and ex-
+plicitly synchronized by a sync procedure which
+locks the shared ports and updates the out-of-
+date copies. These sync procedures constitute the
+only critical sections in an application.
+A composite component therefore not only
+schedules the exec procedures of its passive sub-
+components and its own exec procedure, but also
+the sync procedures of its active and event sub-
+components.
+This is illustrated in Figure 4. PA is passive
+and thus uses the dataspace provided by Device.
+The FQD and ModBus components have their own
+dataspace, used by their exec procedure. Their
+sync procedure has access to both dataspaces so
+that they can be synchronized. Note that any
+passive subcomponents of FQD would use the
+dataspace of FQD. Any passive subcomponents
+of PA would use the dataspace provided by De-
+vice.
+The synchronization semantics of the PECOS
+</bodyText>
+<listItem confidence="0.892085">
+component model has been formalized [ 19] using
+Petri nets [ 20].
+3.3.2. Scheduling
+We can now summarize scheduling as follows:
+• A composite component must provide a
+schedule for its direct subcomponents, i.e.,
+which specifies when to run its own exec
+procedure, the exec procedures of its passive
+subcomponents and the sync procedures of
+its active and event subcomponents.
+• Each active and event component executes
+its own exec procedure and that of any sub-
+components in a single thread of control.
+• Passive components are scheduled by their
+parents.
+• Synchronization procedures for active and
+</listItem>
+<bodyText confidence="0.916746857142857">
+event components are scheduled by their
+parents.
+Figure 5 illustrates a sample run of a field de-
+vice over a period of 120 milliseconds. Since the
+period of the device is 60 ms the figure shows two
+periods in the runtime of the device. Because
+there are two active components and one event
+</bodyText>
+<figure confidence="0.9581769375">
+6
+120600 12 30 44 52 72 90 100 108
+FQD.exec
+FQD.sync
+PA.exec
+ModBus.exec
+ModBus.sync
+1
+2
+3
+ModBus.
+sync
+PA.exec
+FQD.sync
+ModBus.exec
+76
+</figure>
+<figureCaption confidence="0.75678">
+Figure 5. Possible Execution trace for the exam-
+ple.
+</figureCaption>
+<bodyText confidence="0.997605619047619">
+component in the example, there are three con-
+current threads: one for the Device component
+(Task 1), one for the ModBus component (Task
+2), and one for the FQD component (Task 3). As-
+sume that the priority of task 1 is higher than the
+priority for task 2, which is higher than the pri-
+ority of task 3.
+In the first period of task 2, the sync procedure
+of the ModBus is executed, followed by the exec
+procedure for the passive PA component and the
+sync procedure for the FQD component. When
+they are finished executing, the lower priority
+task 3 executes the exec procedure of the ModBus
+component. Since there is no event that triggers
+the exec procedure for the FQD component, noth-
+ing happens in task 3. In the second period of the
+device more or less the same happens except that
+an event triggers the exec procedure of the FQD
+component. That interrupts the behavior in task
+2, since it has a higher priority. When it is fin-
+ished, task 2 resumes, followed by task 3.
+</bodyText>
+<subsectionHeader confidence="0.850012">
+3.4. Checking Non-Functional Require-
+</subsectionHeader>
+<bodyText confidence="0.988129243243243">
+ments
+One of the key challenges for the PECOS com-
+ponent model was to support timing analysis
+to verify whether a component composition is
+schedulable and can meet its deadlines. Two pos-
+sibilities exist to do this. Either the internal be-
+havior of components can be modeled (for exam-
+ple using CSP [ 12] or Petri nets [ 20]) or the
+components can be instrumented at runtime to
+obtain execution times. The latter approach was
+chosen, since it was well-understood and corre-
+sponded to best practice.
+The input for tools checking non-functional re-
+quirements is always a concrete component com-
+position where the property bundles of compo-
+nents contain runtime information. This runtime
+information consists of the worst-case execution
+times of components, and optionally the maxi-
+mum blocking times for active or event compo-
+nents.
+Two complementary checks are performed us-
+ing this information: rate monotonic analysis
+(RMA) and schedule verification. The RMA ver-
+ification ensures that the overal component com-
+position has time enough to run. Schedule verifi-
+cation ensures that within a task, activities can be
+scheduled sequentially. Both checks are comple-
+mentary, since the RMA verification works on the
+level of the complete device, but can by itself not
+ensure that the schedule for a task is feasible. The
+schedule verification can ensure that the schedule
+for a task is feasible, but not that there is enough
+time to run all the activities (taking other tasks
+and task-switching overhead into account).
+The next two sections explain the two comple-
+mentary checks in detail and applies them to the
+example field device.
+</bodyText>
+<sectionHeader confidence="0.931664" genericHeader="method">
+4. Timing Verification
+</sectionHeader>
+<bodyText confidence="0.962937944444445">
+Given a component composition, rate mono-
+tonic analysis (RMA) is used to check whether
+all the components involved in the composition
+meet their deadlines. This section briefly intro-
+duces RMA, and then shows the mapping from
+the component model to RMA and how this is
+used in practice.
+4.1. Rate Monotonic Analysis
+Rate monotonic analysis (RMA) [ 23] consists
+of a number of simple, practical techniques to
+generate or verify schedules for a set of real-time
+tasks. RMA algorithms assign a fixed priority
+to each task and assign higher priorities to tasks
+with shorter periods. It then provides different
+Theorems to check whether tasks can meet their
+deadlines depending on whether the tasks are (i)
+periodic and independent, (ii) mixed periodic and
+aperiodic, or (iii) interacting [ 23]. For PECOS in-
+</bodyText>
+<page confidence="0.991122">
+7
+</page>
+<listItem confidence="0.741444">
+(1) each resource has a ceiling priority defined
+as the highest priority of all the potential tasks
+that use the resource. (2) A task gets the lock
+on a resource if this resource is not locked. The
+</listItem>
+<bodyText confidence="0.95919317948718">
+task then inherits the resource’s ceiling priority
+plus one. It can then proceed with the execu-
+tion of the critical section. If the lock could not
+be acquired, the task is blocked up to the point
+where the blocking task unlocks the resource and
+retrieves its assigned priority.
+Figure 6. Rules employed by the highest-locker
+protocol.
+teracting tasks are needed, because of the sync
+procedures of active and event components.
+The difficulty with interaction is that high pri-
+ority tasks should be minimally delayed by lower
+priority tasks when both are contending for the
+same resources. But when there are different
+tasks with different priorities that can freely lock
+resources, the periods where tasks of a higher pri-
+ority are blocked by tasks of a lower priority be-
+come unpredictable. This situation is called un-
+bounded priority inversion. Since the blocking
+times become unpredictable, no timing verifica-
+tions can be done.
+Therefore RMA assumes that the implementa-
+tion uses real-time synchronization protocols that
+have two important properties: freedom from mu-
+tual deadlock, and bounded priority inversion,
+where at most one lower priority task can block a
+higher priority task. Examples of such protocols
+are the priority ceiling protocol or the highest-
+locker protocol (shown in Figure 6).
+When such real-time synchronization protocols
+are used, a theorem known as RMA theorem 4
+(see Figure 1) can be used to check whether a set
+of interacting tasks meets its deadlines. Note that
+the other RMA theorems (one to three) either as-
+sume non-interacting tasks or only provide crude
+approximations.
+A set of n periodic tasks using an appropri-
+ate real-time synchronization protocol will always
+meet its deadlines, for all task phasings, iff
+</bodyText>
+<equation confidence="0.9686485">
+∀i, 1 ≤ i ≤ n,
+min(k,l)inRi
+i−1∑
+j=1
+Cj
+⌈
+lTk
+Tj
+⌉
++ Ci + Bi ≤ lTk
+</equation>
+<bodyText confidence="0.96695">
+where Ci, Ti, and Bi are the worst-case execution
+time, period and blocking time for a task i, and
+</bodyText>
+<figure confidence="0.4286276">
+Ri =
+{
+(k, l)|1 ≤ k ≤ i, l = 1, ...,
+⌊
+Ti
+Tk
+⌋}
+Table 1
+RMA Theorem 4
+4.2. RMA based Timing Analysis
+</figure>
+<bodyText confidence="0.994113518518518">
+To use RMA to verify a component composi-
+tion a mapping is needed from components to
+RMA tasks. The example used is the same as de-
+scribed in Section 2.1 and used in the rest of the
+paper, but extended with runtime figures. This
+is shown in Figure 7. It is the input used for
+both the RMA analysis and the schedule analysis
+discussed in Section 5.
+Mapping component behavior to tasks.
+With a passive component P, a (periodic) task
+is associated that has a worst-case execution time,
+period and deadline as defined by Ps timing prop-
+erty bundle. With an active or event component
+A, two tasks are associated: a task Tsync for the
+sync procedure and a task Texec for the exec pro-
+cedure. The worst-case execution time, period
+and deadline of Tsync and Texec are given by the
+sync and exec part of the timing bundle of A.
+Note that RMA only allows tasks that are pe-
+riodic, an inherent difficulty when applying RMA
+in a context where aperiodic tasks exist. To solve
+this problem lots of research is done in mapping
+aperiodic behavior to periodic tasks [ 23, 15].
+Proposed solutions differ in desired response time,
+overal optimality of the scheduling, the ability to
+recuperate slack time left by non-utilized aperi-
+odic tasks, and run-time overhead of the decision
+</bodyText>
+<page confidence="0.746498">
+8
+</page>
+<figure confidence="0.996424551724138">
+Device
+Synchronisation:
+wcet: 0
+Execution:
+wcet: 0, period:60, priority:2
+order: FQD,
+ProcessApplication,
+ModBus
+FQD
+Synchronisation:
+wcet: 10
+Execution:
+wcet:15, period:30,
+priority:3
+actualPosition
+velocity
+PA
+Execution:
+wcet: 5
+theActualPosition
+theVelocity
+frequencyToSet
+ModBus
+Synchronisation:
+wcet: 5, blocking:5
+Execution:
+wcet:20, period:500,
+priority:1
+frequencyToSet
+</figure>
+<figureCaption confidence="0.999808">
+Figure 7. The example from Figure 2 extended
+</figureCaption>
+<bodyText confidence="0.885802431372549">
+with the runtime information for the components.
+All numbers indicate milliseconds, wcet stands for
+worst-case execution time.
+algorithm. One class of solutions are sporadic
+servers, that have as advantage that they have a
+straight-forward implementation with very little
+runtime overhead. A sporadic server is equivalent
+to a regular periodic task from a theoretical point
+of view and thus fully compatible with RMA al-
+gorithm. In the example there is one aperiodic
+component, ModBus, of low priority that we map
+to a sporadic server task with a long deadline of
+500 (taskT5).
+Assigning Priorities to tasks.
+Then priorities need to be assigned. RMA spec-
+ifies that the shorter the period (worst-case ex-
+ecution time) of a task, the higher its priority.
+For tasks with the same period, arbitrary priori-
+ties are chosen so that the tasks can be ordered
+according their priority. So when mapping the
+model to RMA the timing bundles are processed
+to make sure that these conditions hold. In the
+example all the priorities are given, so no priori-
+ties have to be chosen.
+Deriving blocking times.
+All tasks need blocking times. Tasks associated
+with passive components always have a blocking
+time of 0. But tasks for active or event compo-
+nents can indicate the time they need to lock the
+data space during synchronization or execution.
+When those blocking times are not given, worst-
+case blocking times are derived using the priori-
+ties and worst-case execution times. To explain
+how blocking times are extracted, assume the fol-
+lowing setup: A is a composite active or event
+component that has n subcomponents. The sync
+procedure of A is called Async. The exec proce-
+dure is called Aexec. Every subcomponent has
+procedures that are scheduled by A. Call these
+procedures S1 to Sm, where m ≥ n (since some
+of the subcomponents can be composite compo-
+nents). Now call S the set consisting of Async and
+S1 to Sm. The datastore can thus be accessed si-
+multaneously by Aexec and at most one element
+of S. To see which blocking can occur, S is split
+in two subsets: L is the subset of S where the
+elements have a priority that is lower than the
+priority of Aexec; H is the subset of elements that
+have a higher priority. With this division made,
+worst-case blocking times can be given for those
+elements that do not explicity provide values:
+</bodyText>
+<listItem confidence="0.945537875">
+• Elements in L are the ones that can block
+Aexec. The worst-case blocking time of each
+element in L that does not specify an ex-
+plicit value is either the blocking time of
+exec (when it is given) or the execution time
+of exec.
+• Elements in H are the ones that can be
+blocked by Aexec. The worst-case blocking
+</listItem>
+<bodyText confidence="0.9199563">
+time of Aexec is the maximum of the worst-
+case execution times and explicit blocking
+times of the elements in H.
+In the example, the blocking time for PA.exec
+is 0 since it is a passive component. ModBus.exec
+has the lowest priority in the example, so its
+blocking time is also 0. For the FQD component,
+no blocking times are specified. The worst-case
+blocking time for the FQD.exec is 10 (the worst-
+case execution time of the FQD.sync), and is 0 for
+</bodyText>
+<page confidence="0.861126">
+9
+</page>
+<construct confidence="0.642622666666667">
+Behavior wcet period blocking
+FQD.exec C1 = 15 T1 = 30 B1 = 10
+FQD.sync C2 = 10 T2 = 60 B2 = 0
+PA.exec C3 = 10 T3 = 60 B3 = 0
+ModBus.sync C4 = 5 T4 = 60 B4 = 5
+ModBus.exec C5 = 20 T5 = 500 B5 = 0
+</construct>
+<tableCaption confidence="0.397718">
+Table 2
+</tableCaption>
+<bodyText confidence="0.994203666666667">
+The result of mapping the component example to
+input for doing a RMA analysis
+FQD.sync. Then the tasks are ordered from high-
+est to lowest priority, resulting in Table 2. This
+table is the actual input for the RMA analysis.
+Applying the theorem.
+Theorem 4 can now be applied on the tasks
+obtained from the component model, since every
+tasks has a worst-case execution time, period and
+blocking time. The result of the analysis indi-
+cates whether the component composition given
+can meet its overall deadlines.
+In the example the input for theorem is given
+by Table 2. The results of fitting the numbers
+from the table in the theorem are not shown here,
+but the result is that the equation holds. This
+assures us that globally there is enough time to
+run this component composition.
+</bodyText>
+<sectionHeader confidence="0.750737" genericHeader="method">
+5. Schedule Generation and Verification
+</sectionHeader>
+<bodyText confidence="0.9942345">
+RMA assumes a set of tasks that run concur-
+rently. However, as explained in Section 3.3.2,
+not all tasks run concurrently and hence check-
+ing the global timing properties is not enough.
+The model associates a thread with each ac-
+tive and event component, in which each exec
+and sync procedure has to be run (depending on
+the nesting of the components), and in what or-
+der (through the schedules specified in compos-
+ite components). But whether it is possible to
+fit these behaviors sequentially in each thread
+needs to be checked by a schedule verification
+tool. Since this is essentially a resource alloca-
+tion problem, constraint solving is an appropriate
+solution.
+This section first explains constraint solving,
+</bodyText>
+<figure confidence="0.66871775">
+FQD
+exec
+FQD
+sync
+PA
+exec
+ModBus
+exec
+ModBus
+sync
+ModBus
+sync
+ModBus
+sync
+task
+2
+task
+1
+task
+3
+peri
+od
+start&amp;gt;0 task = nr
+task = nr
+task = nr task = nr
+task = nr
+task = nr task = nrend &lt; period
+end &lt; period
+end &lt; period
+start &amp;gt;
+end
+start &amp;gt; end start =
+end + 20
+start =
+end + 20
+start&amp;gt;0 start&amp;gt;0
+</figure>
+<figureCaption confidence="0.989486">
+Figure 8. Constraint network for the example.
+</figureCaption>
+<bodyText confidence="0.9974896">
+The circles are variables for the activities (white)
+and for device information (grey). The connec-
+tions are constraints on those variables.
+and then shows how to map the component model
+to a constraint network.
+</bodyText>
+<subsectionHeader confidence="0.979227">
+5.1. Constraint Solving
+</subsectionHeader>
+<bodyText confidence="0.986868944444445">
+The classical definition of a constraint is simply
+a relation between variables that should be main-
+tained at all times [ 13, 4]. There are different
+mechanisms to express and solve constraints, a
+discussion of which falls outside the scope of this
+paper. Generally speaking constraint solving can
+be divided in two categories. First of all there are
+approaches based on logic programming, in par-
+ticular Constraint Logic Programming (CLP) [
+13]. Second there is a number of (numerical) in-
+cremental constraint solvers that have primarily
+been applied in the context of graphical user in-
+terfaces [ 8, 4]. After experimenting with both we
+decided to go with a CLP approach because it al-
+lows us to generate all possible schedules, whereas
+incremental constraint solving techniques only
+give a single possible schedule.
+5.2. Using CLP to Generate and Verify
+</bodyText>
+<subsectionHeader confidence="0.867026">
+Schedules
+</subsectionHeader>
+<bodyText confidence="0.999494333333333">
+To use CLP to verify or generate a schedule, a
+component model needs to be translated to a con-
+straint network that can be solved. This section
+</bodyText>
+<page confidence="0.995447">
+10
+</page>
+<bodyText confidence="0.999760916666667">
+explains the mapping from the component model
+to a constraint network. Applying the mapping
+to the example yields a network as shown in Fig-
+ure 8.
+With every sync or exec procedure one or more
+activities are associated. How many activities are
+needed depends on the period given for the behav-
+ior and the overall time for the schedule since the
+period specifies the interval at which the compo-
+nent expects to be executed. For example, when
+a component specifies that its execution behavior
+has a period of 20 milliseconds, and the schedule
+is 60 milliseconds long, the execution behavior has
+to be executed three times, separated by 20 mil-
+liseconds. So this execution behavior is mapped
+to three activities, with constraints that express
+the distance between them.
+Then the activities need to be assigned to
+the appropriate tasks. Each activity therefore
+has a task number, and those task numbers are
+constrained by traversing the component tree.
+Whenever an active or event component is en-
+countered, the activity for the exec procedure is
+assigned to a new task, together with the activ-
+ities for the subcomponents (until one of those
+subcomponents is an active or event component
+again). The sync procedure inherits the task of
+the parent of the component.
+Finally the order of components is codified as
+constraints on the appropriate activities. Any
+other information on starting times of compo-
+nents is also taken into account. For example,
+specifiying that a certain execution behavior com-
+ponent should start at 20 milliseconds is mapped
+to a constraint that specifies that the start of the
+activity corresponding to that execution behavior
+should be 20.
+We used ECLiPSe, a constraint logic program-
+ming language, to implement the mapping, re-
+sulting in a constraint network as shown in Fig-
+ure 8. Note that each of the variables in this
+network has a finite domain. The domain for the
+task variables is between 1 and the number of
+tasks needed. The domain for the start, end and
+worst-case execution times in each of the activ-
+ity variables is between 0 and the period of the
+device. To solve this network we employ a tech-
+nique known as edge finding [ 6], a general con-
+</bodyText>
+<figure confidence="0.939336">
+60300 5 10 15 20 25 35 40 45 50 55
+FQD.exec FQD.sync
+PA.execModBus.exec
+ModBus.syn
+1
+2
+3
+</figure>
+<figureCaption confidence="0.990281">
+Figure 9. Graphical depiction of a result from
+</figureCaption>
+<bodyText confidence="0.995189757575758">
+running the schedule verification tool. It shows
+the sequential ordering of behaviors for the three
+tasks in the model.
+straint satisfaction technique directly available in
+ECLiPSe as a library. This technique derives
+stronger bounds on the starting times of the activ-
+ities, while making sure that they do not overlap.
+The result of solving the network is either a sched-
+ule for each task in the component model or a fail-
+ure. A failure indicates that there is at least one
+task for which no schedule could be found. When
+at least one solution can be found, a sequential
+schedule for each thread separately is found. One
+of these solutions for our example device is shown
+in Figure 9. Finding one static schedule for the
+whole device is not possible because field devices
+need active and event components. For simple
+devices, only passive components can be used in-
+side the field device, and then the solutions of the
+schedule verification yield the static schedule for
+the overall device.
+Note that since a CLP language is used, any in-
+complete information is regarded as a logic vari-
+able that needs to be solved. For example, the
+constraint network can be used to find the maxi-
+mum worst-case execution times that are possible
+for one or more components in a composition. Or
+schedules can be seen for different orders for sub-
+components, so that the developer can select the
+most appropriate one. Hence the schedule verifi-
+cation tool can also be used to generate schedules
+or to have an interactive way of building sched-
+ules.
+</bodyText>
+<page confidence="0.997336">
+11
+</page>
+<sectionHeader confidence="0.822658" genericHeader="evaluation">
+6. Discussion and Related Work
+</sectionHeader>
+<bodyText confidence="0.991356788461538">
+According to Szyperski [ 25], component-based
+software development now promises to “deliver
+reusable, off-the shelf software components for
+incorporation into large applications”. Compo-
+nents are typically defined as entities that encap-
+sulate some internal representation with one or
+more interfaces. This enables binary composition
+of components, usage of multiple implementation
+languages, easier distribution of components and
+even dynamic reconfiguration of applications at
+runtime [ 24, 17].
+All these approaches, however, need some run-
+time infrastructure to work. For example, to sup-
+port distribution, centralized or distributed nam-
+ing services have to be used. Unfortunately, the
+context of field devices at this time does not al-
+low for such runtime infrastructure. The PECOS
+component model therefore focuses on static com-
+position, and assumes only a runtime environ-
+ment that supports synchronous passing of data
+according to a blackboard-like architecture.
+There are also similarities between the PECOS
+approach and architectural description languages
+(ADLs). An ADL is a language for modelling
+a software system’s conceptual architecture in
+terms of components, connectors, and configura-
+tions [ 9]. An ADL typically embodies a formal
+semantic theory that allows certain analyses to
+be performed. Some ADLs focuss on supporting
+distributed applications (such as Darwin/Regis [
+16], Rapide [ 14]). Others focuss on describing the
+semantics of the internals of components in some
+formalism to do certain verifications (for example
+Wright [ 2]).
+In the context of PECOS formal approaches
+(like Timed Petri nets [ 26], real-time object-
+oriented modeling [ 21], real-time UML [ 22] syn-
+chronous languages like Esterel [ 5] and Lustre [
+10], StateCharts [ 11], or Piccola [ 1]) that de-
+scribe the behaviour of components in order to
+verify runtime and synchronization aspects were
+not applicable. This was motivated by the fact
+that the approach had to be usable by the cur-
+rent developers that had no experience with for-
+mal techniques. Instead the runtime aspects of
+the components are measured, a technique with
+which the developers have a lot of experience and
+have already well-proven hard- and software so-
+lutions.
+The main similarities between the PECOS com-
+ponent model and general-purpose component
+models and ADLs reduce to:
+</bodyText>
+<listItem confidence="0.951444428571429">
+• the behavior of components is black-box,
+and completely encapsulated in the compo-
+nents,
+• the interface of a component, is completely
+separate from its implementation, and from
+its interconnection with other components,
+• the model is language-independent, though
+</listItem>
+<bodyText confidence="0.845264375">
+composition of heterogeneous components
+is not supported.
+The main differences can be summed up as:
+• components have a single interface that con-
+sists of the data that it requires/provides.
+There is no interface for behavior, since the
+model is fine grained and a component en-
+capsulates a single piece of behavior.
+</bodyText>
+<listItem confidence="0.941354">
+• model elements have property bundles that
+are used to attach meta-information to
+components.
+• the model enables timing verification with
+</listItem>
+<bodyText confidence="0.487324">
+rate monotonic analysis and schedule veri-
+fication and generation.
+</bodyText>
+<sectionHeader confidence="0.601396" genericHeader="conclusions">
+7. Conclusion
+</sectionHeader>
+<bodyText confidence="0.998498571428571">
+Modern development techniques have been dif-
+ficult to apply to embedded software due to the
+mismatch between the severe constraints posed
+by the target devices, and the generous assump-
+tions required by the techniques. The PECOS
+project has developed a viable approach to en-
+able CBSD for a class of embedded systems
+known as field devices. Rather than attempt-
+ing to adapt existing component models to the
+domain of field devices, a new, pragmatic compo-
+nent model was developed that reflects best prac-
+tice in terms of component concepts. With mem-
+ory being a scarce resource and computing power
+being severely limited, the model is data-centric
+</bodyText>
+<page confidence="0.99222">
+12
+</page>
+<bodyText confidence="0.956972769230769">
+and eliminates concurrency and synchronization
+wherever possible. However, it supports passive,
+active and event components and enables timing
+analysis and schedule verification to ensure that
+component compositions can be deployed success-
+fully.
+Although a full validation of the PECOS ap-
+proach was not possible within the scope of the
+project, the ideas have been convincingly tested
+in the context of the field device demonstrator,
+and plans are underway to apply the model to
+further case studies.
+Results of the project are available from
+</bodyText>
+<reference confidence="0.90276025">
+www.pecos-project.org.
+Acknowledgment. Thanks to Andrew Black
+for many useful discussions during his visit at the
+Software Composition Group lab.
+</reference>
+<sectionHeader confidence="0.683367" genericHeader="references">
+REFERENCES
+</sectionHeader>
+<reference confidence="0.999807789473685">
+1. F. Achermann and O. Nierstrasz. Applica-
+tions = Components + Scripts – A Tour of
+Piccola. In Software Architectures and Com-
+ponent Technology. Kluwer, 2001.
+2. R. J. Allen. A Formal Approach to Soft-
+ware Architecture. Ph.D. thesis, School of
+Computer Science, Carnegie Mellon Univer-
+sity, Pittsburgh, 1997.
+3. G. Arévalo, S. Ducasse, O. Nierstrasz,
+P. Liang, and R. Wuyts. Verifying timing,
+memory consumption and scheduling of com-
+ponents. PECOS deliverable D2.2.6-3, Uni-
+versity of Bern, 2002.
+4. G. J. Badros and A. Borning. The cas-
+sowary linear arithmetic constraint solving al-
+gorithm: Interface and implementation, 1998.
+University of Washington, TR 98-06-04.
+5. G. Berry. The foundations of Esterel. MIT
+Press, 2000.
+6. J. Carlier and E. Pinson. A practical use of
+jackson’s preemptive schedule for solving the
+job-shop problem. Annals of Operations Re-
+search, (26), 1990.
+7. Pecos Consortium. PECOS in a Nutshell.
+http://www.pecos-project.org/public docu-
+ments/pecosHandbook.pdf. 2002.
+8. B. Freeman-Benson, J. Maloney, and
+A. Borning. An incremental constraint
+solver. Comminications of the ACM,
+33(1):55–63, 1990.
+9. D. Garlan, R. T. Monroe, and D.Wile. Acme:
+Architectural description of component-based
+systems. In Foundations of Component-
+Based Systems. Cambridge Press, 2000.
+10. N. Halbwachs, P. Caspi, P. Raymond, and
+D. Pilaud. The synchronous data flow pro-
+gramming language lustre. In Proceedings of
+the IEEE, volume 79, September 1991.
+11. D. Harel. On visual formalisms. CACM,
+31(5):514–530, May 1988.
+12. C.A.R. Hoare. Communicating Sequential
+Processes. Prentice-Hall, 1985.
+13. J. Jaffar and M. Maher. Constraint logic pro-
+gramming : a survey. The Journal of Logic
+Programming, (19,20):503–581, 1994.
+14. J. J. Kenney. Executable Formal Models
+of Distributed Transaction Systems based on
+Event Processing. PhD thesis, Stanford Uni-
+versity, 1995.
+15. M. H. Klein, T. Ralya, B. Pollak, R. Obenza,
+and M. G. Harbour. A Practitioner’s Hand-
+book for Real-Time Analysis: Guide to Rate
+Monotonic Analysis for Real-Time Systems.
+Kluwer Academic Publishers, 1993.
+16. J. Magee, N. Dulay, and J. Kramer. Regis:
+A constructive development environment for
+distributed programs. IEE/IOP/BCS Dis-
+tributed Systems Engineering, 1(5), 1994.
+17. R. Monson-Haefel. Enterprise JavaBeans.
+O’Reilly, 1999.
+18. Motorola. Fast quadrature decode tpu func-
+tion (FQD). TPUPN02/D, 2002.
+19. O. Nierstrasz, G. Arevalo, S. Ducasse,
+R. Wuyts, A. Black, P. Müller, C. Zeidler,
+T. Genssler, and R. Born. A component
+model for field devices. In Proceedings of
+Working Conference on Component Deploy-
+ment. ACM, 2002.
+20. J. L. Peterson. Petri nets. ACM Computing
+Surveys, 9(3), 1977.
+21. B. Selic, G. Gullekson, and P. T. Ward. Real-
+Time Object-Oriented Modeling. John Wiley
+&amp; Sons, 1994.
+22. B. Selic and J. Rumbaugh. Using UML for
+modeling complex real-time systems, 1998.
+23. Sha, Klein, and Goodenough. Rate Mono-
+</reference>
+<page confidence="0.988075">
+13
+</page>
+<reference confidence="0.9991946">
+tonic Analysis for Real-Time Systems. Foun-
+dations of Real-Time Computing: Schedul-
+ing and Resource Management. Kluwer Aca-
+demic Publishers, 1991.
+24. J. Siegel. CORBA Fundamentals and Pro-
+gramming. John Wiley &amp; Sons, 1996.
+25. Clemens A. Szyperski. Component Software.
+Addison Wesley, 1998.
+26. J. Wang. Timed Petri Nets. Kluwer Aca-
+demic Publishers, 1998.
+</reference>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.115456">
+<title confidence="0.681763666666667">1 A data-centric approach to composing embedded, real-time software components∗</title>
+<author confidence="0.899003">Roel Wuytsa</author>
+<author confidence="0.899003">Stéphane Ducassea</author>
+<author confidence="0.899003">Oscar Nierstrasza</author>
+<email confidence="0.464922">a{wuyts}{ducasse}{nierstrasz}@iam.unibe.ch</email>
+<affiliation confidence="0.9958795">Software Composition Group Institut für Informatik</affiliation>
+<address confidence="0.959215">Universität Bern, Switzerland</address>
+<abstract confidence="0.939113555555556">Software for embedded systems must cope with a variety of stringent constraints, such as real-time requirements, small memory footprints, and low power consumption. It is usually implemented using low-level programming languages, and as a result has not benefitted from component-based software development techniques. This paper describes a data-centric component model for embedded devices that (i) minimizes the number of concurrent tasks needed to implement the system, (ii) allows one to verify whether components meet their deadlines by applying Rate Monotonic Analysis (RMA), and (iii) can generate and verify schedules using Constraint Logic Programming (CLP). This model forms the foundation for a suite of tools for specifying, composing, verifying and deploying embedded software components developed in the context of the PECOS project.</abstract>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="false">
+<authors>
+<author>Acknowledgment</author>
+</authors>
+<title>Thanks to Andrew Black for many useful discussions during his visit at the Software Composition Group lab.</title>
+<marker>Acknowledgment, </marker>
+<rawString> www.pecos-project.org. Acknowledgment. Thanks to Andrew Black for many useful discussions during his visit at the Software Composition Group lab.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>F Achermann</author>
+<author>O Nierstrasz</author>
+</authors>
+<date>2001</date>
+<booktitle>Applications = Components + Scripts – A Tour of Piccola. In Software Architectures and Component Technology.</booktitle>
+<publisher>Kluwer,</publisher>
+<contexts>
+<context position="19904" citStr="(1)" startWordPosition="3201" endWordPosition="3201">ows the mapping from the component model to RMA and how this is used in practice. 4.1. Rate Monotonic Analysis Rate monotonic analysis (RMA) [ 23] consists of a number of simple, practical techniques to generate or verify schedules for a set of real-time tasks. RMA algorithms assign a fixed priority to each task and assign higher priorities to tasks with shorter periods. It then provides different Theorems to check whether tasks can meet their deadlines depending on whether the tasks are (i) periodic and independent, (ii) mixed periodic and aperiodic, or (iii) interacting [ 23]. For PECOS in7 (1) each resource has a ceiling priority defined as the highest priority of all the potential tasks that use the resource. (2) A task gets the lock on a resource if this resource is not locked. The task then inherits the resource’s ceiling priority plus one. It can then proceed with the execution of the critical section. If the lock could not be acquired, the task is blocked up to the point where the blocking task unlocks the resource and retrieves its assigned priority. Figure 6. Rules employed by the highest-locker protocol. teracting tasks are needed, because of the sync procedures of active a</context>
+</contexts>
+<marker>1.</marker>
+<rawString>F. Achermann and O. Nierstrasz. Applications = Components + Scripts – A Tour of Piccola. In Software Architectures and Component Technology. Kluwer, 2001.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R J Allen</author>
+</authors>
+<title>A Formal Approach to Software Architecture.</title>
+<date>1997</date>
+<tech>Ph.D. thesis,</tech>
+<institution>School of Computer Science, Carnegie Mellon University,</institution>
+<location>Pittsburgh,</location>
+<contexts>
+<context position="20027" citStr="(2)" startWordPosition="3222" endWordPosition="3222">ic analysis (RMA) [ 23] consists of a number of simple, practical techniques to generate or verify schedules for a set of real-time tasks. RMA algorithms assign a fixed priority to each task and assign higher priorities to tasks with shorter periods. It then provides different Theorems to check whether tasks can meet their deadlines depending on whether the tasks are (i) periodic and independent, (ii) mixed periodic and aperiodic, or (iii) interacting [ 23]. For PECOS in7 (1) each resource has a ceiling priority defined as the highest priority of all the potential tasks that use the resource. (2) A task gets the lock on a resource if this resource is not locked. The task then inherits the resource’s ceiling priority plus one. It can then proceed with the execution of the critical section. If the lock could not be acquired, the task is blocked up to the point where the blocking task unlocks the resource and retrieves its assigned priority. Figure 6. Rules employed by the highest-locker protocol. teracting tasks are needed, because of the sync procedures of active and event components. The difficulty with interaction is that high priority tasks should be minimally delayed by lower prior</context>
+</contexts>
+<marker>2.</marker>
+<rawString>R. J. Allen. A Formal Approach to Software Architecture. Ph.D. thesis, School of Computer Science, Carnegie Mellon University, Pittsburgh, 1997.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>G Arevalo</author>
+<author>S Ducasse</author>
+<author>O Nierstrasz</author>
+<author>P Liang</author>
+<author>R Wuyts</author>
+</authors>
+<title>Verifying timing, memory consumption and scheduling of components. PECOS deliverable D2.2.6-3,</title>
+<date>2002</date>
+<institution>University of Bern,</institution>
+<marker>3.</marker>
+<rawString>G. Arévalo, S. Ducasse, O. Nierstrasz, P. Liang, and R. Wuyts. Verifying timing, memory consumption and scheduling of components. PECOS deliverable D2.2.6-3, University of Bern, 2002.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>G J Badros</author>
+<author>A Borning</author>
+</authors>
+<title>The cassowary linear arithmetic constraint solving algorithm: Interface and implementation,</title>
+<date>1998</date>
+<journal>University of Washington, TR</journal>
+<pages>98--06</pages>
+<marker>4.</marker>
+<rawString>G. J. Badros and A. Borning. The cassowary linear arithmetic constraint solving algorithm: Interface and implementation, 1998. University of Washington, TR 98-06-04.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>G Berry</author>
+</authors>
+<title>The foundations of Esterel.</title>
+<date>2000</date>
+<publisher>MIT Press,</publisher>
+<marker>5.</marker>
+<rawString>G. Berry. The foundations of Esterel. MIT Press, 2000.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Carlier</author>
+<author>E Pinson</author>
+</authors>
+<title>A practical use of jackson’s preemptive schedule for solving the job-shop problem.</title>
+<date>1990</date>
+<journal>Annals of Operations Research,</journal>
+<volume>26</volume>
+<marker>6.</marker>
+<rawString>J. Carlier and E. Pinson. A practical use of jackson’s preemptive schedule for solving the job-shop problem. Annals of Operations Research, (26), 1990.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Pecos Consortium</author>
+</authors>
+<title>PECOS in a Nutshell. http://www.pecos-project.org/public documents/pecosHandbook.pdf.</title>
+<date>2002</date>
+<marker>7.</marker>
+<rawString>Pecos Consortium. PECOS in a Nutshell. http://www.pecos-project.org/public documents/pecosHandbook.pdf. 2002.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>B Freeman-Benson</author>
+<author>J Maloney</author>
+<author>A Borning</author>
+</authors>
+<title>An incremental constraint solver.</title>
+<date>1990</date>
+<journal>Comminications of the ACM,</journal>
+<volume>33</volume>
+<issue>1</issue>
+<marker>8.</marker>
+<rawString>B. Freeman-Benson, J. Maloney, and A. Borning. An incremental constraint solver. Comminications of the ACM, 33(1):55–63, 1990.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Acme</author>
+</authors>
+<title>Architectural description of component-based systems. In Foundations of ComponentBased Systems.</title>
+<date>2000</date>
+<publisher>Cambridge Press,</publisher>
+<marker>9.</marker>
+<rawString>D. Garlan, R. T. Monroe, and D.Wile. Acme: Architectural description of component-based systems. In Foundations of ComponentBased Systems. Cambridge Press, 2000.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>N Halbwachs</author>
+<author>P Caspi</author>
+<author>P Raymond</author>
+<author>D Pilaud</author>
+</authors>
+<title>The synchronous data flow programming language lustre.</title>
+<date>1991</date>
+<booktitle>In Proceedings of the IEEE,</booktitle>
+<volume>79</volume>
+<marker>10.</marker>
+<rawString>N. Halbwachs, P. Caspi, P. Raymond, and D. Pilaud. The synchronous data flow programming language lustre. In Proceedings of the IEEE, volume 79, September 1991.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Harel</author>
+</authors>
+<title>On visual formalisms.</title>
+<date>1988</date>
+<journal>CACM,</journal>
+<volume>31</volume>
+<issue>5</issue>
+<marker>11.</marker>
+<rawString>D. Harel. On visual formalisms. CACM, 31(5):514–530, May 1988.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>C A R Hoare</author>
+</authors>
+<title>Communicating Sequential Processes.</title>
+<date>1985</date>
+<publisher>Prentice-Hall,</publisher>
+<marker>12.</marker>
+<rawString>C.A.R. Hoare. Communicating Sequential Processes. Prentice-Hall, 1985.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Jaffar</author>
+<author>M Maher</author>
+</authors>
+<title>Constraint logic programming : a survey.</title>
+<date>1994</date>
+<booktitle>The Journal of Logic Programming,</booktitle>
+<marker>13.</marker>
+<rawString>J. Jaffar and M. Maher. Constraint logic programming : a survey. The Journal of Logic Programming, (19,20):503–581, 1994.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J J Kenney</author>
+</authors>
+<title>Executable Formal Models of Distributed Transaction Systems based on Event Processing. PhD thesis,</title>
+<date>1995</date>
+<institution>Stanford University,</institution>
+<marker>14.</marker>
+<rawString>J. J. Kenney. Executable Formal Models of Distributed Transaction Systems based on Event Processing. PhD thesis, Stanford University, 1995.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M H Klein</author>
+<author>T Ralya</author>
+<author>B Pollak</author>
+<author>R Obenza</author>
+<author>M G Harbour</author>
+</authors>
+<title>A Practitioner’s Handbook for Real-Time Analysis: Guide to Rate Monotonic Analysis for Real-Time Systems.</title>
+<date>1993</date>
+<publisher>Kluwer Academic Publishers,</publisher>
+<marker>15.</marker>
+<rawString>M. H. Klein, T. Ralya, B. Pollak, R. Obenza, and M. G. Harbour. A Practitioner’s Handbook for Real-Time Analysis: Guide to Rate Monotonic Analysis for Real-Time Systems. Kluwer Academic Publishers, 1993.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Magee</author>
+<author>N Dulay</author>
+<author>J Kramer</author>
+</authors>
+<title>Regis: A constructive development environment for distributed programs.</title>
+<date>1994</date>
+<journal>IEE/IOP/BCS Distributed Systems Engineering,</journal>
+<volume>1</volume>
+<issue>5</issue>
+<marker>16.</marker>
+<rawString>J. Magee, N. Dulay, and J. Kramer. Regis: A constructive development environment for distributed programs. IEE/IOP/BCS Distributed Systems Engineering, 1(5), 1994.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R Monson-Haefel</author>
+</authors>
+<title>Enterprise JavaBeans.</title>
+<date>1999</date>
+<location>O’Reilly,</location>
+<marker>17.</marker>
+<rawString>R. Monson-Haefel. Enterprise JavaBeans. O’Reilly, 1999.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Motorola</author>
+</authors>
+<title>Fast quadrature decode tpu function (FQD).</title>
+<date>2002</date>
+<tech>TPUPN02/D,</tech>
+<marker>18.</marker>
+<rawString>Motorola. Fast quadrature decode tpu function (FQD). TPUPN02/D, 2002.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>O Nierstrasz</author>
+<author>G Arevalo</author>
+<author>S Ducasse</author>
+<author>R Wuyts</author>
+<author>A Black</author>
+<author>P Muller</author>
+<author>C Zeidler</author>
+<author>T Genssler</author>
+<author>R Born</author>
+</authors>
+<title>A component model for field devices.</title>
+<date>2002</date>
+<booktitle>In Proceedings of Working Conference on Component Deployment. ACM,</booktitle>
+<marker>19.</marker>
+<rawString>O. Nierstrasz, G. Arevalo, S. Ducasse, R. Wuyts, A. Black, P. Müller, C. Zeidler, T. Genssler, and R. Born. A component model for field devices. In Proceedings of Working Conference on Component Deployment. ACM, 2002.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J L Peterson</author>
+</authors>
+<title>Petri nets.</title>
+<date>1977</date>
+<journal>ACM Computing Surveys,</journal>
+<volume>9</volume>
+<issue>3</issue>
+<marker>20.</marker>
+<rawString>J. L. Peterson. Petri nets. ACM Computing Surveys, 9(3), 1977.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>B Selic</author>
+<author>G Gullekson</author>
+<author>P T Ward</author>
+</authors>
+<title>RealTime Object-Oriented Modeling.</title>
+<date>1994</date>
+<publisher>John Wiley &amp; Sons,</publisher>
+<marker>21.</marker>
+<rawString>B. Selic, G. Gullekson, and P. T. Ward. RealTime Object-Oriented Modeling. John Wiley &amp; Sons, 1994.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>B Selic</author>
+<author>J Rumbaugh</author>
+</authors>
+<title>Using UML for modeling complex real-time systems,</title>
+<date>1998</date>
+<marker>22.</marker>
+<rawString>B. Selic and J. Rumbaugh. Using UML for modeling complex real-time systems, 1998.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Klein Sha</author>
+<author>Goodenough</author>
+</authors>
+<title>Rate Monotonic Analysis for Real-Time Systems. Foundations of Real-Time Computing: Scheduling and Resource Management.</title>
+<date>1991</date>
+<publisher>Kluwer Academic Publishers,</publisher>
+<marker>23.</marker>
+<rawString>Sha, Klein, and Goodenough. Rate Monotonic Analysis for Real-Time Systems. Foundations of Real-Time Computing: Scheduling and Resource Management. Kluwer Academic Publishers, 1991.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Siegel</author>
+</authors>
+<title>CORBA Fundamentals and Programming.</title>
+<date>1996</date>
+<publisher>John Wiley &amp; Sons,</publisher>
+<marker>24.</marker>
+<rawString>J. Siegel. CORBA Fundamentals and Programming. John Wiley &amp; Sons, 1996.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Clemens A Szyperski</author>
+</authors>
+<title>Component Software.</title>
+<date>1998</date>
+<publisher>Addison Wesley,</publisher>
+<marker>25.</marker>
+<rawString>Clemens A. Szyperski. Component Software. Addison Wesley, 1998.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Wang</author>
+</authors>
+<title>Timed Petri Nets.</title>
+<date>1998</date>
+<publisher>Kluwer Academic Publishers,</publisher>
+<marker>26.</marker>
+<rawString>J. Wang. Timed Petri Nets. Kluwer Academic Publishers, 1998.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

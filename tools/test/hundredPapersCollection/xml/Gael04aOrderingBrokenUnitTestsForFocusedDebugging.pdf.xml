@@ -1,0 +1,1226 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.000000">
+<title confidence="0.957636">
+Ordering Broken Unit Tests for Focused Debugging
+</title>
+<author confidence="0.993741">
+Markus Gälli, Michele Lanza, Oscar Nierstrasz
+</author>
+<affiliation confidence="0.936342">
+Software Composition Group
+University of Bern, Switzerland
+</affiliation>
+<email confidence="0.965324">
+{gaelli,lanza,oscar}@iam.unibe.ch
+</email>
+<author confidence="0.509482">
+Roel Wuyts
+</author>
+<affiliation confidence="0.524489">
+Lab for Software Composition and Decomposition
+</affiliation>
+<address confidence="0.312636">
+Université Libre de Bruxelles
+</address>
+<email confidence="0.817924">
+roel.wuyts@ulb.ac.be
+</email>
+<sectionHeader confidence="0.72393" genericHeader="abstract">
+Abstract
+1 Current unit test frameworks present broken unit tests
+</sectionHeader>
+<bodyText confidence="0.9713886">
+in an arbitrary order, but developers want to focus on the
+most specific ones first. We have therefore inferred a partial
+order of unit tests corresponding to a coverage hierarchy of
+their sets of covered method signatures: When several unit
+tests in this coverage hierarchy break, we can guide the de-
+veloper to the test calling the smallest number of methods.
+Our experiments with four case studies indicate that this
+partial order is semantically meaningful, since faults that
+cause a unit test to break generally cause less specific unit
+tests to break as well.
+</bodyText>
+<sectionHeader confidence="0.9361355" genericHeader="method">
+Keywords: Unit testing, debugging
+1. Introduction
+</sectionHeader>
+<bodyText confidence="0.98112">
+Unit testing has become increasingly popular in recent
+years, partly due to the interest in agile development meth-
+ods. [1]
+Since one fault can cause several unit tests to break, the
+developers do not know which of the broken unit tests gives
+them the most specific debugging context and should be ex-
+amined first.
+We propose a partial order of unit tests by means of cov-
+erage sets — a unit test A covers a unit test B, if the set of
+method signatures invoked by A is a superset of the set of
+method signatures invoked by B.
+We explore the hypothesis that this order can provide de-
+velopers with the focus needed during debugging phases.
+By exposing this order, we gain insight into the correspon-
+dence between unit tests and defects: if a number of related
+unit tests break, there is a good chance that they are break-
+ing because of a common defect; on the other hand, if un-
+related unit tests break, we may suspect multiple defects.
+The key to make the unit test suite run again is to identify
+120th International Conference on Software Maintenance (ICSM 2004)
+pages 114–123
+the central unit tests that failed and thus caused a “failure
+avalanche” effect on many other tests in the suite.
+The results of four case studies are promising: 85% to
+95% of the unit tests were comparable to other test cases
+by means of their coverage sets – they either covered other
+unit tests or were covered by them. Moreover, using method
+mutations to artificially introduce errors in a test case, we
+found that in the majority of cases the error propagated to
+all test cases covering it.
+Structure of the article. In Section 2 we describe the
+problem of implicit dependencies between unit tests. In
+Section 3 we then describe our solution to this problem. In
+Section 4 we present the experiments we carried out with
+four case studies. In Section 5 we discuss our findings. In
+Section 6 we give a brief overview of related work. In Sec-
+tion 7 we conclude and present a few remarks concerning
+future work.
+</bodyText>
+<listItem confidence="0.978939909090909">
+2. Implicit dependencies between unit tests
+Example. Assume we have the following four unit tests
+for a simplified university administration system:
+• PersonTesttestBecomeProfessorIn tests if some per-
+son, after having been added as a professor also has
+this role.
+• UniversityTesttestAddPerson tests if the university
+knows a person after the person has been added to it.
+• PersonTesttestNew tests if the roles of a person are
+defined.
+• PersonTesttestName tests if the name of a person
+</listItem>
+<bodyText confidence="0.972629714285714">
+was assigned correctly.
+For a detailed look at the run-time behavior of the test
+cases see Figure 1 and Figure 2.
+Furthermore assume that the implementation of Person
+classnew is broken, so that no roles are initialized and the
+role variable in Person is undefined. When we run the four
+tests, two of them will fail:
+</bodyText>
+<figure confidence="0.980972846153846">
+PersonTest
+University class
+Professor class
+name(...)
+Person class
+becomeProfessorIn(...) new
+Person University
+testBecomeProfessorIn
+addPerson(...)
+name(...)
+new
+professors
+persons
+addRole()
+UniversityTest
+University class
+name(...)
+Person class
+University
+testAddPerson
+addPerson(...)
+name(...)
+new
+persons
+assert(aUni professors includes(aPerson))
+assert(aUni persons includes(aPerson))
+</figure>
+<figureCaption confidence="0.881254333333333">
+Figure 1. The test for #becomeProfessorIn:
+covers the test for #addPerson:. Intersecting
+signatures are displayed gray.
+</figureCaption>
+<footnote confidence="0.6086346">
+1. The test PersonTesttestBecomeProfessorIn (see Fig-
+ure 1) yields a null pointer exception: Undefined
+object does not understand: add: occurring in
+PersonaddRole:.
+2. In test PersonTesttestNew (see Figure 2) the asser-
+</footnote>
+<bodyText confidence="0.972849277777778">
+tion person roles notNil fails, pointing directly to the
+problem at hand.
+As the latter failing test case provides the de-
+veloper directly with the information needed to fix
+the error, the latter one should be presented first.
+We therefore order the unit tests according to their
+sets of covered methods. All the methods which
+are called in PersonTesttestNew are also called in
+UniversityTesttestAddPerson (see Figure 1 and Figure 2).
+Again all methods sent by UniversityTesttestAddPerson
+are themselves included in the set of methods sent by
+PersonTesttestBecomeProfessorIn (see Figure 1). Note
+that PersonTesttestName is neither covered by any other
+test nor covering one.
+Consider the unit tests in Figure 3. We draw an ar-
+row from one unit test to another if the first covers the
+second, as defined in Section 1. The test method Person-
+TesttestNew (i.e., the method testNew of the class Per-
+</bodyText>
+<figure confidence="0.538517">
+PersonTest Person class
+testName name(...) new
+assert(person name = aName) name
+PersonTest Person class
+testNew new
+assert(person roles notNil) roles
+</figure>
+<figureCaption confidence="0.9804">
+Figure 2. Two small unit tests, which do not
+</figureCaption>
+<bodyText confidence="0.892766333333333">
+cover each other.
+sonTest) will invoke at run-time a set of methods of var-
+ious classes. PersonTesttestBecomeProfessorIn will in-
+voke at least those same methods, so its coverage set in-
+cludes that of PersonTesttestNew. Note that we do
+not require that PersonTesttestBecomeProfessorIn in-
+voke PersonTesttestNew, or even that it test remotely the
+same logical conditions; merely that at least the same meth-
+ods be executed during the test run.
+</bodyText>
+<figureCaption confidence="0.870018">
+Figure 3. A sample test hierarchy based on
+</figureCaption>
+<bodyText confidence="0.939973142857143">
+coverage sets.
+Unfortunately, existing unit testing tools and frameworks
+do not order unit tests in terms of method coverage, and do
+not even collect this information. In this paper we investi-
+gate the following hypothesis: When multiple unit tests fail,
+the ones that cover one another fail due to the same defects.
+We provide initial evidence that:
+</bodyText>
+<listItem confidence="0.9895172">
+• Most unit tests of a typical application are compara-
+ble by the covers relation, and can thus be partially
+ordered.
+• When a unit test fails, another test that covers it typi-
+cally fails too.
+</listItem>
+<bodyText confidence="0.953871428571428">
+If unit tests break in the same coverage chain of our
+coverage hierarchy, we can infer that there is a sin-
+gle defect that is causing all unit tests to break. Since
+PersonTesttestNew is the “smallest” test (in the sense that
+it covers the least methods), it provides us with better focus,
+and helps us find the defect more quickly. In any case, the
+fact that these unit tests are related makes us consider them
+as a group in the debugging process.
+3. Ordering broken unit tests
+In this section we explain our approach of ordering in
+detail, and discuss an implementation in a Smalltalk envi-
+ronment. The problem we tackle is to infer coverage hierar-
+chies, given a set of unit tests. We therefore need to generate
+traces and then order them.
+</bodyText>
+<subsectionHeader confidence="0.713802">
+3.1. Approach
+</subsectionHeader>
+<bodyText confidence="0.665325">
+To order the tests we used dynamic analysis because we
+</bodyText>
+<listItem confidence="0.99946125">
+• have runnable test cases
+• could apply it to both dynamically and statically typed
+languages
+• and are only interested in the actual paths taken of our
+</listItem>
+<bodyText confidence="0.8193082">
+unit tests
+The examined unit tests are all written in SUnit, the
+Smalltalk version of the XUnit series of unit test frame-
+works that exist for many languages. Our approach is struc-
+tured as follows:
+</bodyText>
+<listItem confidence="0.32155">
+1. We create an instance of a test sorter, into which we
+will store the partially ordered test cases.
+2. We iterate over all unit tests of a given application.
+</listItem>
+<bodyText confidence="0.895050111111111">
+We instrument all methods of the application so that
+we can obtain trace information on the messages be-
+ing sent. The exact instrumentation mechanism to ob-
+tain the information depends on the implementation
+language. We used the concept of method-wrappers
+([4]), where the methods looked up in the method dic-
+tionary are replaced by wrapped versions, which can
+trigger some actions before or after a method is exe-
+cuted. Here the method wrapper simply stores if its
+</bodyText>
+<listItem confidence="0.981167055555556">
+wrapped method was executed.
+3. We then
+(a) execute each unit test, in our case via the XUnit-
+API,
+(b) obtain the set of method signatures which were
+called by the test, in our case by iterating over all
+wrapped methods and checking if they have been
+executed,
+(c) check if this set is empty, which for example
+could be due to the fact that the test only called
+methods of prerequisite packages,
+(d) if the set is not empty, we create a new instance
+of a covered test case, where we store this set of
+method signatures together with the test,
+(e) add this covered test case to the test sorter,
+(f) reset the method wrappers, so that they are ready
+to store if the next unit test executes them.
+4. Some of the covered test cases are equivalent to others
+</listItem>
+<bodyText confidence="0.891634785714286">
+as their sets of covered method signatures are equal. To
+obtain a partial order we have to subsume this equiv-
+alent covered test cases under one node, that we call
+an equivalent test case. For all equivalent covered test
+cases we create an instance of an equivalent test case,
+store the set of method signatures and the names of the
+equivalent test cases in it, store it in the test sorter and
+then remove the equivalent covered test cases out of
+the test sorter. Note that both covered test cases and
+equivalent test cases are test nodes, a superclass where
+we store the shared behavior of this two.
+5. We then order the resulting test nodes stored in our test
+sorter using the following relationship: A test node A
+is smaller than a test node B if the set of method sig-
+</bodyText>
+<listItem confidence="0.780462583333333">
+natures of A is included in the set of method signa-
+tures of B. We therefore pairwise compare the remain-
+ing test nodes and thus build a partial order. We store
+both the covering and the being covered relationship in
+variables of the test node.
+6. Finally we compute the transitive reduction of this lat-
+tice, thus eliminating all redundant covering relations
+between the test nodes.
+7. Finally we obtain an instance of a test sorter that we
+can ask which of some given tests we should attack
+first. Note that we did the case studies with non break-
+ing unit tests. In the real world scenario with broken
+</listItem>
+<bodyText confidence="0.784989666666667">
+unit tests, we could either use a test sorter, which was
+initialized with the tests while they were non breaking,
+or reinitialize it with only the broken unit tests.
+</bodyText>
+<subsectionHeader confidence="0.698622">
+3.2. Implementation
+</subsectionHeader>
+<bodyText confidence="0.9442245">
+In order to perform experiments to validate our claim, we
+implemented our approach in VisualWorks Smalltalk2. We
+</bodyText>
+<footnote confidence="0.932227">
+2See www.cincomsmalltalk.com for more information.
+</footnote>
+<listItem confidence="0.819272142857143">
+chose to do the implementation in VisualWorks Smalltalk
+because
+• tools to wrap methods and assess coverage are freely
+available,
+• we have numerous case studies available,
+• we can build on the frrely available tool CodeCrawler
+[12] to visualize the information we obtained.
+</listItem>
+<bodyText confidence="0.946438571428571">
+We obtain the trace information by using AspectS [9], a
+flexible tool which builds upon John Brant’s MethodWrap-
+pers [4]. Though AspectS obtains the traces in the same
+way as method-wrappers described before, we used As-
+pectS because it lets us obtain more detailed information
+about the current state of the stack, when a method is en-
+tered. In Java we could use AspectJ [11].
+</bodyText>
+<sectionHeader confidence="0.755024" genericHeader="method">
+4. Case studies
+</sectionHeader>
+<bodyText confidence="0.9994195">
+We performed our experiments on the following four
+systems, which were created by four different developers,
+who were unaware of our attempts to structure their tests
+while they were writing them.
+</bodyText>
+<listItem confidence="0.973793181818182">
+1. MagicKeys3, an application that makes it easy to
+graphically view, change and export/import keyboard
+bindings in VisualWorks Smalltalk.
+2. Van (Gı̂rba et al. [8]), a version analysis tool built on
+top of the Moose Reengineering Environment [6].
+3. SmallWiki (Renggli [15]), a collaborative content man-
+agement tool.
+4. CodeCrawler (Lanza [12]), a language independent
+reverse engineering tool which combines metrics and
+software visualization.
+4.1. Setup of the experiments
+</listItem>
+<bodyText confidence="0.956906571428571">
+In a first phase, we ordered the unit tests for each case
+study as described in Section 3 and measured if a rele-
+vant portion of them were comparable by our coverage cri-
+terium.
+In a second phase, we introduced defects into the meth-
+ods to validate that if a unit test breaks, its covering unit
+tests are likely to break as well. We therefore
+</bodyText>
+<listItem confidence="0.6783505">
+1. iterated over all test cases of the case study that were
+covered by at least one other test case,
+</listItem>
+<footnote confidence="0.880419125">
+2. determined which methods were invoked by each of
+those tests, but not by any other test it is covered by,
+3http://homepages.ulb.ac.be/∼rowuyts/MagicKeys/index.html
+3. mutated the methods according to some mutation strat-
+egy,
+4. and, for each each mutation, executed the unit tests and
+all its covering unit tests and collected the results.
+We used the following mutation strategies:
+</footnote>
+<listItem confidence="0.989924384615385">
+1. full body deletion, i.e., we removed the complete
+method body.
+2. code mutations of JesTer [13]: JesTer is a mutation
+testing extension to test JUnit tests by finding code that
+is not covered by tests. JesTer makes some change to
+the code, runs the tests, and if the tests pass, JesTer re-
+ports what it changed. We applied the same mutations
+as JesTer, which are
+(a) change all occurrences of the number 0 to the
+number 1
+(b) flip true to false and vice versa
+(c) change the conditions of ifTrue statements to true
+and the conditions of ifFalse statements to false.
+</listItem>
+<sectionHeader confidence="0.596826" genericHeader="method">
+4.2. Results
+</sectionHeader>
+<bodyText confidence="0.8239695">
+The case studies are presented at more detail in Table 1
+and Table 2.
+</bodyText>
+<figureCaption confidence="0.815991">
+Figure 4. The coverage hierarchy of the Code
+</figureCaption>
+<bodyText confidence="0.985347666666667">
+Crawler tests visualized with Code Crawler.
+As we see in Table 1 our experiment was performed with
+applications which had 1600 to 5600 lines of code. The
+ratio of LOC(Tests) to LOC reached from 13 % to 56%.
+The maximum test coverage was 64%.
+In Figure 4 an arrow from the top to bottom denotes that
+the test node at the top covers the test node at the bottom.
+We see a typical coverage hierarchy obtained in the first part
+of our experiment: Most of the unit tests either covered or
+</bodyText>
+<table confidence="0.9985226">
+System LOC LOC (Tests) Coverage #Unit Tests Equivalent tests Tests covered by Tests
+Magic Keys 1683 224 37% 15 20% 53.3%
+Van 3014 716 64% 67 9% 24.2%
+CodeCrawler 4535 1071 24% 79 37.3% 40%
+SmallWiki 5660 3096 64% 110 29.8% 47.4%
+</table>
+<tableCaption confidence="0.988284">
+Table 1. The resulting coverage of unit tests in our case studies.
+</tableCaption>
+<figureCaption confidence="0.98651">
+Figure 5. The distribution of comparable test nodes in our four case studies.
+</figureCaption>
+<bodyText confidence="0.987725657894737">
+were covered by some other unit test and only 5% to 16%
+of them were stand alones (Figure 5).
+A considerable percentage of unit tests (9% to 37%, see
+Table 1) called the same set of method signatures as at least
+one other test. 25% to 53% of the unit tests were covered
+by at least one other unit test. This means that for roughly
+every third test of our case studies, the probability is high,
+that if the test fails, it will not fail alone.
+We carried out the second phase of our experiment, the
+automatic method mutation, in all case studies except Code-
+Crawler. As many mutations in CodeCrawler resulted in
+endless loops we did not have time to complete it. We
+merely did the full deletion mutation on every 10th method
+and omitted the JesTer mutations. The results are displayed
+in Table 2: 92% to 99.5% of the full deletion mutations of
+a method broke the smallest test calling this method and all
+its covering tests, as did 59% to 100% of the JesTer muta-
+tions. Note that the number of mutated methods is larger
+than the number of methods, as the same method could be
+mutated in the context of different tests.
+Let us have a detailed look at the effects of a full
+method deletion on the coverage hierarchy of the Magic
+Key tests in Figure 6. We are mutating a method which
+is called from the test MagicKeysTesttestMasks, thus
+from all of its covering tests. Here we picked a rare
+example, where not all of the covering tests are fail-
+ing. Both MagicKeysTesttestRegularCharCreating
+and the node including the equivalent test cases
+MagicKeysTesttestMetaDispatchWriting, testAltDis-
+patchWriting and testShiftDispatchWriting do not fail
+because of the deleted method. On the other hand the
+two tests MagicKeysTesttestSpecialConstantKeyCreating
+and MagicKeysTesttestKeyCopying also fail, though
+they do not cover the test MagicKeysTesttestMasks,
+they merely have a non-empty intersection set with
+it, including the mutated method. Also note, that
+MagicKeyTesttestKeyCopying, which is a standalone test,
+has the lowest number of method signatures called, and not
+</bodyText>
+<table confidence="0.996400875">
+System #Methods Strategy #Methods mutated Errors propagating to all covering tests
+Magic Keys 277 Full Deletion 46 93.5%
+JesTer 17 58.8%
+VAN Full Deletion 357 97.8%
+JesTer 59 100%
+CodeCrawler 1104 Full Deletion 41 92.7%
+SmallWiki 1565 Full Deletion 2415 99.5%
+JesTer 318 100%
+</table>
+<tableCaption confidence="0.990495">
+Table 2. Results of our automatic mutation experiments.
+</tableCaption>
+<figureCaption confidence="0.889757">
+Figure 6. An avalanche effect in the coverage hierarchy of Magic Keys. One manually introduced bug
+</figureCaption>
+<bodyText confidence="0.613897">
+causes 10 test cases to fail.
+MagicKeysTesttestMasks.
+</bodyText>
+<sectionHeader confidence="0.96983" genericHeader="method">
+5. Discussion
+</sectionHeader>
+<bodyText confidence="0.9994989">
+The experiments we performed are rather simple, but
+they are also remarkable for the consistency of their results:
+In each case, a significant majority of the test cases was
+comparable to other unit tests, using the rather stringent cri-
+terion of inclusion of the sets of called methods. Further-
+more, each case study consistently showed that if a defect
+causes a particular unit test to break, unit tests that precede
+it in the partial order also tend to break. The partial order
+over tests is therefore not accidental, but exposes implicit
+dependency relationships between the tests.
+</bodyText>
+<subsectionHeader confidence="0.780895">
+5.1. Semantic ordering of tests
+In this paper we focused on bug tracking via partial or-
+</subsectionHeader>
+<bodyText confidence="0.999276">
+dering of unit tests. Providing the order of unit tests could
+also help the developer to comprehend the structure of the
+unit tests and the structure of the underlying system. It can
+reassure the developer in his or her perceived layering of the
+system if the order of the test cases reflects this layering.
+The method names of the example in Table 3 indicate a
+parallel structure of the tests, while the method names in the
+</bodyText>
+<figure confidence="0.975295375">
+list below suggest a hierarchical one:
+• LoaderTesttestConvertXMIToCDIF
+(LoaderTesttestLoadXMI)
+• SystemHistoryTesttestAddVersionNamedCollection
+(SystemHistoryTesttestAddVersionNamed)
+System Signature of test case
+Magic Keys MagicKeysTesttestAltDispatchWriting
+Magic Keys MagicKeysTesttestMetaDispatchWriting
+Magic Keys MagicKeysTesttestShiftDispatchWriting
+CodeCrawler CCNodeTesttestRemovalOfEdgeRemovesChild
+CodeCrawler CCNodeTesttestRemovalOfEdgeRemovesParent
+CodeCrawler CCNodeTesttestRemovalOfSoleEdgeRemovesChildOrParent
+Table 3. Examples for equivalent test cases.
+• SystemHistoryTest
+testSelectClassHistoriesWithLifeSpan
+(SystemHistoryTesttestSelectClassHistories)
+</figure>
+<subsectionHeader confidence="0.559122">
+5.2. Limitations
+</subsectionHeader>
+<bodyText confidence="0.738496">
+The lightweight nature of our approach has some draw-
+backs and limitations:
+</bodyText>
+<listItem confidence="0.957776">
+• One unexpected result was that if the JesTer muta-
+</listItem>
+<bodyText confidence="0.9805421">
+tions were applicable to some unit tests, in 100% of
+the cases a broken inner test case meant that all its
+covering tests were broken. Thus our first assumption
+that the more specific JesTer mutations would let more
+covering test cases survive, seems to be incorrect: The
+JesTer method tweaks are even more fatal to the major-
+ity of covering tests than full body deletions. We plan
+to use more realistic mutations and manual introduc-
+tion of errors in future experiments to overcome this
+problem.
+</bodyText>
+<listItem confidence="0.992777">
+• Parallel tests seem to cover each other even if they dif-
+fer only by one method signature. Sorting these basi-
+cally equal unit tests does not add an advantage as any
+exception of them will be as telling as the other.
+• So far we have limited our case studies to Smalltalk
+programs. Perhaps style and conventions used in
+Smalltalk produce results which differ in other object-
+oriented languages.
+• The developers of the case studies are all members of
+our research group thus also working in academia: We
+plan to make case studies with programs developed in
+industrial settings.
+• We have not yet measured the implications of real
+bugs. How many unit tests break because of just one
+real bug and not because of one artificial mutation?
+• We did not make any distinction between failures and
+</listItem>
+<bodyText confidence="0.9678755">
+errors when we were evaluating the chain of failed tests
+caused by one mutation.
+</bodyText>
+<sectionHeader confidence="0.991274" genericHeader="related work">
+6. Related Work
+</sectionHeader>
+<bodyText confidence="0.997857773809524">
+Unit testing has become a major issue in software de-
+velopment during the last decade: Test-driven development
+(TDD) [1] is a technique in which testing and development
+occur in parallel, thereby providing developers with con-
+stant feedback. The most popular unit testing framework
+used in TDD named XUnit [2] does not currently prioritize
+failed unit tests.
+Parrish et al. [14] define a process for test-driven devel-
+opment that starts with fine-grained tests and proceeds to
+more coarse-grained tests. They state that “Once a set of
+test cases is identified an attempt is made to order the test
+case runs in a way that maximizes early testing. This means
+that defects are potentially revealed in the context of as few
+methods as possible, making those defects easier to local-
+ize.” In their approach, tests are written beforehand with a
+particular order in mind, while in our approach we investi-
+gate a posteriori orderings of existing tests.
+Rothermel et al. [16] introduce the term “granularity”
+for software testing, but they focus on cost-effectiveness of
+test suites rather than on debugging processes.
+Selective regression testing is concerned with determin-
+ing an optimal set of tests to run after a software change is
+made [17] [3]. Although there are some similarities with
+the work described in this paper, the emphasis is quite dif-
+ferent: Instead of selecting which tests to run, we analyse
+the set of tests that have failed, and suggest which of these
+should be examined first.
+Test case prioritization [18] has been successfully used
+in the past to increase the likelihood that failures will oc-
+cur early in test runs.The tests are prioritized using different
+criteria, the criterion which most closely matched our ap-
+proach was total function coverage [7]. Here a program is
+instrumented, and, for any test case, the number of func-
+tions in that program that were exercised by that test case is
+determined. The test cases are then prioritized according to
+the total number of functions they cover by sorting them in
+order of total function coverage achieved, starting with the
+highest.
+Wong et al. [19] compare different selection strategies
+for regression testing and propose a hybrid approach to se-
+lect a representative subset of tests combining modification
+based selection, minimization and prioritization. Again,
+they emphasize on which tests should be run and not on how
+failing tests should be ordered. Modification based selec-
+tion is their key to minimize the number of tests to run, thus
+they are relying on having prior versions of the tested pro-
+gram whereas our approach can in principle be used without
+having prior versions, as we could also order the tests using
+only the coverage of the failed tests.
+Zeller et al. [20] [5] use delta debugging to simplify test
+case input, reducing relevant execution states and finding
+failure-inducing changes. We focus on reducing failing tests
+from a set of semantically different tests to the most concise
+but still failing tests. Thus the technique of Zeller et al.
+could pay off more using this smaller tests as initial input.
+7. Conclusion and future work
+We have proposed a lightweight approach to partially or-
+der unit tests in terms of the sets of methods they invoke.
+Initial experiments with four case studies reveal that this
+technique exposes important implicit ordering relationships
+between otherwise independent tests. Furthermore, our ex-
+periments show that the partial order corresponds to a se-
+mantic relationship in which less specific unit tests tend to
+fail if more specific unit tests also fail.
+The reported experiments are only a first step. We plan
+to explore much larger case studies, and see if these results
+scale up. The correspondence between the partial order and
+failure dependency between unit tests needs to be tested
+with other kinds of defects. We plan to analyze historical
+test failure results for their correspondence with the partial
+order. Moreover, so far our experiments have been limited
+to Smalltalk; we plan to extend the approach to other lan-
+guages such as Java.
+In the long term we are interested in exploring the im-
+pact of the order and structure of unit tests in the develop-
+ment process. The partial order that is detected automati-
+cally may not only help to guide developers in the debug-
+ging process, but it may also provide hints on how tests can
+be better structured, refactored, and composed.
+We believe that the research presented in this paper is
+but a first step in using coverage information to get more
+information from failing tests. The next section describes
+some ideas we got for future experiments while validating
+the claims from this paper.
+</bodyText>
+<subsectionHeader confidence="0.646015">
+7.1. Defect tracking
+</subsectionHeader>
+<bodyText confidence="0.996225347826087">
+The coverage relationships could aid developers to track
+down defects in the software when changes are introduced:
+Whenever a change causes multiple unit tests to break, the
+partial order over the unit test set can be used to identify the
+most specific unit tests that have broken (i.e., those with the
+smallest coverage sets). Identifying these unit tests gives
+the developer the best focus when debugging. Less specific
+unit tests are probably breaking for the same reason, and
+may only introduce more noise into the debugging process.
+Currently we order the unit tests based the sets of cov-
+ered method signatures they produce while they run with-
+out failure. Thus our sets might be unnecessarily big and
+we need prior versions of the system under test. We want to
+compare this approach with one where only the coverage of
+the failed test cases is taken into account.
+7.2. Other lightweight metrics for sorting tests:
+Testing time and size of coverage sets
+Having given evidence that the situation of depending
+unit tests occurs on a regular basis, we can seek more
+lightweight variants to our approach: Can we for example
+also use testing time as an equivalent mechanism to order
+the tests? Unit tests which are covered by other unit tests
+might not be faster executed than the covering ones:
+</bodyText>
+<listItem confidence="0.9037245">
+• The methods of the inner test might occur in some loop
+while the outer ones are only executed once.
+• In languages with garbage collectors the testing time
+can vary.
+</listItem>
+<bodyText confidence="0.99665387755102">
+Using the size of the sets of covered method signatures
+is more practical.To be sure to get the most specific unit test
+first, it is sufficient to sort the test cases by the size of their
+covered sets, starting with the lowest. There the program
+has to be instrumented and the tests sorted also. But our
+admittedly simple way of pairwise comparing the test cases
+can be omitted which could lead to faster results. Using
+this metric alone would have made it difficult on the other
+hand, to show the semantic dependencies of unit tests we
+have presented in this paper.
+7.3. Using pre- and postcondition but keeping the
+scenarios
+Looking back to our small example from Figure 2, one
+could gain the same prioritizing effect with a little code
+refactoring: The assertion in PersonTesttestNew could
+be used in the program as a postcondition and should be
+moved into Person classnew. Then all covering tests
+would also immediately fail at this very same position giv-
+ing the developer the most specific information about the
+problem at hand. This refactoring would even make the
+PersonTesttestNew test superflous, as long as one knows
+that Person classnew is executed by some test case.
+The test code should be reduced to compose scenarios,
+execute methods on this scenarios, and possibly deliver the
+result of this executions for further scenario building. Iden-
+tifying the high level scenarios necessary to run all sub sce-
+narios would lead to a massive reduction of testing time,
+massive reuse of assertions also in unexpected scenarios,
+and would make our post mortem sorting approach unnec-
+essary: The most specific assertions will always fail first,
+directing the developer immediately to the problem at hand.
+In the four case studies we analyze in this paper, none of
+the software developers wrote any pre- or post-condition or
+invariant, thus relying solely on the assertions in their unit
+tests. This is a common behavior of Smalltalk developers
+today: The open source Smalltalk environment Squeak 4
+[10] in the version from February 2004 includes 1024 unit
+tests but only 23 pre- or post-conditions.
+Methods like XP suggest frequent testing and developing
+in small increments, so that developers can identify their lat-
+est changed code as a good starting point to know where an
+error is. But to know why the error occurred, they want to
+go to the most detailed test with the most focused assertion.
+Our experiments and experience show, that one failed unit
+test comes seldom alone, so unless they start putting asser-
+tions in the code, they still need to find the most specific of
+them.
+This approach of combining design by contract and clas-
+sical unit testing is facing several problems:
+</bodyText>
+<listItem confidence="0.958524545454545">
+• It requires manual refactoring of the test cases and the
+program.
+• Unit tests without assertions seem like a self contradic-
+tion and pose a mental barrier to developers.
+• Missing explicit relationships between between unit
+tests and methods under test make it hard to tell what
+scenarios are covering a method containing a postcon-
+dition.
+• Moreover missing integration of coverage browsers in
+current IDEs makes it hard to tell if some test scenario
+even executes a method containing a postcondition.
+</listItem>
+<sectionHeader confidence="0.987998" genericHeader="acknowledgments">
+Acknowledgments
+</sectionHeader>
+<bodyText confidence="0.7864115">
+We thank Orla Greevy and Tudor Gı̂rba for helpful com-
+ments. We gratefully acknowledge the financial support
+</bodyText>
+<reference confidence="0.9364135">
+of the Swiss National Science Foundation for the projects
+“Tools and Techniques for Decomposing and Composing
+Software” (SNF Project No. 2000-067855.02, Oct. 2002 -
+Sept. 2004) and “RECAST: Evolution of Object-Oriented
+Applications” (SNF Project No. 620-066077, Sept. 2002 -
+Aug. 2006).
+</reference>
+<footnote confidence="0.796567">
+4See http://www.squeak.org for more information.
+</footnote>
+<sectionHeader confidence="0.874314" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.999875735294117">
+[1] K. Beck. Test Driven Development: By Example. Addison-
+Wesley, 2003.
+[2] K. Beck and E. Gamma. Test infected: Programmers love
+writing tests. Java Report, 3(7):51–56, 1998.
+[3] J. Bible, G. Rothermel, and D. Rosenblum. A comparative
+study of coarse- and fine-grained safe regression test selec-
+tion. ACM TOSEM, 10(2):149–183, Apr. 2001.
+[4] J. Brant, B. Foote, R. Johnson, and D. Roberts. Wrappers
+to the Rescue. In Proceedings ECOOP ’98, volume 1445 of
+LNCS, pages 396–417. Springer-Verlag, 1998.
+[5] H. Cleve and A. Zeller. Finding failure causes through au-
+tomated testing. In Proceedings of the Fourth International
+Workshop on Automated Debugging, Aug. 2000.
+[6] S. Ducasse, M. Lanza, and S. Tichelaar. The moose reengi-
+neering environment. Smalltalk Chronicles, Aug. 2001.
+[7] S. G. Elbaum, A. G. Malishevsky, and G. Rothermel. Pri-
+oritizing test cases for regression testing. In International
+Symposium on Software Testing and Analysis, pages 102–
+112. ACM Press, 2000.
+[8] T. Gı̂rba, S. Ducasse, and M. Lanza. Yesterday’s weather:
+Guiding early reverse engineering efforts by summarizing
+the evolution of changes. In Proceedings of ICSM 2004
+(International Conference on Software Maintenance), pages
+40–49, 2004.
+[9] R. Hirschfeld. Aspects - aspect-oriented programming with
+squeak. In M. Aksit, M. Mezini, and R. Unland, editors,
+Objects, Components, Architectures, Services, and Applica-
+tions for a Networked World, International Conference Ne-
+tObjectDays 2002, pages 216–232, Erfurt, 2003. Springer.
+[10] D. Ingalls, T. Kaehler, J. Maloney, S. Wallace, and A. Kay.
+Back to the future: The story of Squeak, A practical
+Smalltalk written in itself. In Proceedings OOPSLA ’97,
+pages 318–326. ACM Press, Nov. 1997.
+[11] G. Kiczales, E. Hilsdale, J. Hugunin, M. Kersten, J. Palm,
+and W. G. Griswold. An overview of AspectJ. In Proceed-
+ing ECOOP 2001, number 2072 in LNCS. Springer Verlag,
+2001.
+[12] M. Lanza. Codecrawler — lessons learned in building a
+software visualization tool. In Proceedings of CSMR 2003,
+pages 409–418. IEEE Press, 2003.
+[13] I. Moore. Jester – a junit test tester. In M. Marchesi, editor,
+Proceedings of the 2nd International Conference on Extreme
+Programming and Flexible Processes (XP2001). University
+of Cagliari, 2001.
+[14] A. Parrish, J. Jones, and B. Dixon. Extreme unit testing: Or-
+dering test cases to maximize early testing. In M. Marchesi,
+G. Succi, D. Wells, and L. Williams, editors, Extreme Pro-
+gramming Perspectives, pages 123–140. Addison-Wesley,
+2002.
+[15] L. Renggli. Smallwiki: Collaborative content management.
+Informatikprojekt, University of Bern, 2003.
+[16] G. Rothermel, S. Elbaum, A. Malishevsky, P. Kallakuri, and
+B. Davia. The impact of test suite granularity on the cost-
+effectiveness of regression testing. In Proceedings ICSE-24,
+pages 230–240, May 2002.
+[17] G. Rothermel and M. J. Harrold. Analyzing regression test
+selection techniques. IEEE Transactions on Software Engi-
+neering, 22(8):529–551, 1996.
+[18] G. Rothermel, R. H. Untch, C. Chu, and M. J. Harrold.
+Test case prioritization: An empirical study. In Proceedings
+ICSM 1999, pages 179–188, Sept. 1999.
+[19] W. E. Wong, J. R. Horgan, S. London, and H. Agrawal. A
+study of effective regression testing in practice. In Proceed-
+ings of the Eighth International Symposium on Software Re-
+liability Engineering, pages 230–238, Nov. 1997.
+[20] A. Zeller and R. Hildebrandt. Simplifying and isolating
+failure-inducing input. IEEE Transactions on Software En-
+gineering, SE-28(2):183–200, Feb. 2002.
+</reference>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.279644">
+<title confidence="0.999955">Ordering Broken Unit Tests for Focused Debugging</title>
+<author confidence="0.999339">Markus Gälli</author>
+<author confidence="0.999339">Michele Lanza</author>
+<author confidence="0.999339">Oscar Nierstrasz</author>
+<affiliation confidence="0.94924">Software Composition Group University of Bern, Switzerland</affiliation>
+<email confidence="0.88125">gaelli@iam.unibe.ch</email>
+<email confidence="0.88125">lanza@iam.unibe.ch</email>
+<email confidence="0.88125">oscar@iam.unibe.ch</email>
+<author confidence="0.659119">Roel Wuyts</author>
+<affiliation confidence="0.672324">Lab for Software Composition and Decomposition Université Libre de Bruxelles</affiliation>
+<email confidence="0.91474">roel.wuyts@ulb.ac.be</email>
+<abstract confidence="0.9998875">1 Current unit test frameworks present broken unit tests in an arbitrary order, but developers want to focus on the most specific ones first. We have therefore inferred a partial order of unit tests corresponding to a coverage hierarchy of their sets of covered method signatures: When several unit tests in this coverage hierarchy break, we can guide the developer to the test calling the smallest number of methods. Our experiments with four case studies indicate that this partial order is semantically meaningful, since faults that cause a unit test to break generally cause less specific unit tests to break as well.</abstract>
+<keyword confidence="0.607696">Keywords: Unit testing, debugging</keyword>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<title>of the Swiss National Science Foundation for the projects “Tools and Techniques for Decomposing and Composing Software”</title>
+<date>2002</date>
+<tech>SNF Project No. 2000-067855.02,</tech>
+<marker>2002</marker>
+<rawString> of the Swiss National Science Foundation for the projects “Tools and Techniques for Decomposing and Composing Software” (SNF Project No. 2000-067855.02, Oct. 2002 -Sept. 2004) and “RECAST: Evolution of Object-Oriented Applications” (SNF Project No. 620-066077, Sept. 2002 -Aug. 2006).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>K Beck</author>
+</authors>
+<title>Test Driven Development: By Example.</title>
+<date>2003</date>
+<publisher>AddisonWesley,</publisher>
+<contexts>
+<context position="1102" citStr="[1]" startWordPosition="163" endWordPosition="163">t tests corresponding to a coverage hierarchy of their sets of covered method signatures: When several unit tests in this coverage hierarchy break, we can guide the developer to the test calling the smallest number of methods. Our experiments with four case studies indicate that this partial order is semantically meaningful, since faults that cause a unit test to break generally cause less specific unit tests to break as well. Keywords: Unit testing, debugging 1. Introduction Unit testing has become increasingly popular in recent years, partly due to the interest in agile development methods. [1] Since one fault can cause several unit tests to break, the developers do not know which of the broken unit tests gives them the most specific debugging context and should be examined first. We propose a partial order of unit tests by means of coverage sets — a unit test A covers a unit test B, if the set of method signatures invoked by A is a superset of the set of method signatures invoked by B. We explore the hypothesis that this order can provide developers with the focus needed during debugging phases. By exposing this order, we gain insight into the correspondence between unit tests and </context>
+<context position="20583" citStr="[1]" startWordPosition="3395" endWordPosition="3395">velopers of the case studies are all members of our research group thus also working in academia: We plan to make case studies with programs developed in industrial settings. • We have not yet measured the implications of real bugs. How many unit tests break because of just one real bug and not because of one artificial mutation? • We did not make any distinction between failures and errors when we were evaluating the chain of failed tests caused by one mutation. 6. Related Work Unit testing has become a major issue in software development during the last decade: Test-driven development (TDD) [1] is a technique in which testing and development occur in parallel, thereby providing developers with constant feedback. The most popular unit testing framework used in TDD named XUnit [2] does not currently prioritize failed unit tests. Parrish et al. [14] define a process for test-driven development that starts with fine-grained tests and proceeds to more coarse-grained tests. They state that “Once a set of test cases is identified an attempt is made to order the test case runs in a way that maximizes early testing. This means that defects are potentially revealed in the context of as few me</context>
+</contexts>
+<marker>[1]</marker>
+<rawString>K. Beck. Test Driven Development: By Example. AddisonWesley, 2003.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>K Beck</author>
+<author>E Gamma</author>
+</authors>
+<title>Test infected: Programmers love writing tests.</title>
+<date>1998</date>
+<journal>Java Report,</journal>
+<volume>3</volume>
+<issue>7</issue>
+<contexts>
+<context position="20771" citStr="[2]" startWordPosition="3425" endWordPosition="3425"> yet measured the implications of real bugs. How many unit tests break because of just one real bug and not because of one artificial mutation? • We did not make any distinction between failures and errors when we were evaluating the chain of failed tests caused by one mutation. 6. Related Work Unit testing has become a major issue in software development during the last decade: Test-driven development (TDD) [1] is a technique in which testing and development occur in parallel, thereby providing developers with constant feedback. The most popular unit testing framework used in TDD named XUnit [2] does not currently prioritize failed unit tests. Parrish et al. [14] define a process for test-driven development that starts with fine-grained tests and proceeds to more coarse-grained tests. They state that “Once a set of test cases is identified an attempt is made to order the test case runs in a way that maximizes early testing. This means that defects are potentially revealed in the context of as few methods as possible, making those defects easier to localize.” In their approach, tests are written beforehand with a particular order in mind, while in our approach we investigate a posteri</context>
+</contexts>
+<marker>[2]</marker>
+<rawString>K. Beck and E. Gamma. Test infected: Programmers love writing tests. Java Report, 3(7):51–56, 1998.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Bible</author>
+<author>G Rothermel</author>
+<author>D Rosenblum</author>
+</authors>
+<title>A comparative study of coarse- and fine-grained safe regression test selection.</title>
+<date>2001</date>
+<journal>ACM TOSEM,</journal>
+<volume>10</volume>
+<issue>2</issue>
+<contexts>
+<context position="21699" citStr="[3]" startWordPosition="3578" endWordPosition="3578">y testing. This means that defects are potentially revealed in the context of as few methods as possible, making those defects easier to localize.” In their approach, tests are written beforehand with a particular order in mind, while in our approach we investigate a posteriori orderings of existing tests. Rothermel et al. [16] introduce the term “granularity” for software testing, but they focus on cost-effectiveness of test suites rather than on debugging processes. Selective regression testing is concerned with determining an optimal set of tests to run after a software change is made [17] [3]. Although there are some similarities with the work described in this paper, the emphasis is quite different: Instead of selecting which tests to run, we analyse the set of tests that have failed, and suggest which of these should be examined first. Test case prioritization [18] has been successfully used in the past to increase the likelihood that failures will occur early in test runs.The tests are prioritized using different criteria, the criterion which most closely matched our approach was total function coverage [7]. Here a program is instrumented, and, for any test case, the number of </context>
+</contexts>
+<marker>[3]</marker>
+<rawString>J. Bible, G. Rothermel, and D. Rosenblum. A comparative study of coarse- and fine-grained safe regression test selection. ACM TOSEM, 10(2):149–183, Apr. 2001.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Brant</author>
+<author>B Foote</author>
+<author>R Johnson</author>
+<author>D Roberts</author>
+</authors>
+<title>Wrappers to the Rescue.</title>
+<date>1998</date>
+<booktitle>In Proceedings ECOOP ’98,</booktitle>
+<volume>1445</volume>
+<pages>396--417</pages>
+<publisher>Springer-Verlag,</publisher>
+<contexts>
+<context position="8198" citStr="[4]" startWordPosition="1338" endWordPosition="1338">he examined unit tests are all written in SUnit, the Smalltalk version of the XUnit series of unit test frameworks that exist for many languages. Our approach is structured as follows: 1. We create an instance of a test sorter, into which we will store the partially ordered test cases. 2. We iterate over all unit tests of a given application. We instrument all methods of the application so that we can obtain trace information on the messages being sent. The exact instrumentation mechanism to obtain the information depends on the implementation language. We used the concept of method-wrappers ([4]), where the methods looked up in the method dictionary are replaced by wrapped versions, which can trigger some actions before or after a method is executed. Here the method wrapper simply stores if its wrapped method was executed. 3. We then (a) execute each unit test, in our case via the XUnitAPI, (b) obtain the set of method signatures which were called by the test, in our case by iterating over all wrapped methods and checking if they have been executed, (c) check if this set is empty, which for example could be due to the fact that the test only called methods of prerequisite packages, (</context>
+<context position="11269" citStr="[4]" startWordPosition="1884" endWordPosition="1884"> the broken unit tests. 3.2. Implementation In order to perform experiments to validate our claim, we implemented our approach in VisualWorks Smalltalk2. We 2See www.cincomsmalltalk.com for more information. chose to do the implementation in VisualWorks Smalltalk because • tools to wrap methods and assess coverage are freely available, • we have numerous case studies available, • we can build on the frrely available tool CodeCrawler [12] to visualize the information we obtained. We obtain the trace information by using AspectS [9], a flexible tool which builds upon John Brant’s MethodWrappers [4]. Though AspectS obtains the traces in the same way as method-wrappers described before, we used AspectS because it lets us obtain more detailed information about the current state of the stack, when a method is entered. In Java we could use AspectJ [11]. 4. Case studies We performed our experiments on the following four systems, which were created by four different developers, who were unaware of our attempts to structure their tests while they were writing them. 1. MagicKeys3, an application that makes it easy to graphically view, change and export/import keyboard bindings in VisualWorks Sma</context>
+</contexts>
+<marker>[4]</marker>
+<rawString>J. Brant, B. Foote, R. Johnson, and D. Roberts. Wrappers to the Rescue. In Proceedings ECOOP ’98, volume 1445 of LNCS, pages 396–417. Springer-Verlag, 1998.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>H Cleve</author>
+<author>A Zeller</author>
+</authors>
+<title>Finding failure causes through automated testing.</title>
+<date>2000</date>
+<booktitle>In Proceedings of the Fourth International Workshop on Automated Debugging,</booktitle>
+<contexts>
+<context position="23209" citStr="[5]" startWordPosition="3830" endWordPosition="3830">tegies for regression testing and propose a hybrid approach to select a representative subset of tests combining modification based selection, minimization and prioritization. Again, they emphasize on which tests should be run and not on how failing tests should be ordered. Modification based selection is their key to minimize the number of tests to run, thus they are relying on having prior versions of the tested program whereas our approach can in principle be used without having prior versions, as we could also order the tests using only the coverage of the failed tests. Zeller et al. [20] [5] use delta debugging to simplify test case input, reducing relevant execution states and finding failure-inducing changes. We focus on reducing failing tests from a set of semantically different tests to the most concise but still failing tests. Thus the technique of Zeller et al. could pay off more using this smaller tests as initial input. 7. Conclusion and future work We have proposed a lightweight approach to partially order unit tests in terms of the sets of methods they invoke. Initial experiments with four case studies reveal that this technique exposes important implicit ordering relat</context>
+</contexts>
+<marker>[5]</marker>
+<rawString>H. Cleve and A. Zeller. Finding failure causes through automated testing. In Proceedings of the Fourth International Workshop on Automated Debugging, Aug. 2000.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Ducasse</author>
+<author>M Lanza</author>
+<author>S Tichelaar</author>
+</authors>
+<title>The moose reengineering environment. Smalltalk Chronicles,</title>
+<date>2001</date>
+<contexts>
+<context position="11984" citStr="[6]" startWordPosition="2001" endWordPosition="2001"> it lets us obtain more detailed information about the current state of the stack, when a method is entered. In Java we could use AspectJ [11]. 4. Case studies We performed our experiments on the following four systems, which were created by four different developers, who were unaware of our attempts to structure their tests while they were writing them. 1. MagicKeys3, an application that makes it easy to graphically view, change and export/import keyboard bindings in VisualWorks Smalltalk. 2. Van (Gırba et al. [8]), a version analysis tool built on top of the Moose Reengineering Environment [6]. 3. SmallWiki (Renggli [15]), a collaborative content management tool. 4. CodeCrawler (Lanza [12]), a language independent reverse engineering tool which combines metrics and software visualization. 4.1. Setup of the experiments In a first phase, we ordered the unit tests for each case study as described in Section 3 and measured if a relevant portion of them were comparable by our coverage criterium. In a second phase, we introduced defects into the methods to validate that if a unit test breaks, its covering unit tests are likely to break as well. We therefore 1. iterated over all test case</context>
+</contexts>
+<marker>[6]</marker>
+<rawString>S. Ducasse, M. Lanza, and S. Tichelaar. The moose reengineering environment. Smalltalk Chronicles, Aug. 2001.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S G Elbaum</author>
+<author>A G Malishevsky</author>
+<author>G Rothermel</author>
+</authors>
+<title>Prioritizing test cases for regression testing.</title>
+<date>2000</date>
+<booktitle>In International Symposium on Software Testing and Analysis,</booktitle>
+<pages>102--112</pages>
+<publisher>ACM Press,</publisher>
+<contexts>
+<context position="22227" citStr="[7]" startWordPosition="3665" endWordPosition="3665">ing an optimal set of tests to run after a software change is made [17] [3]. Although there are some similarities with the work described in this paper, the emphasis is quite different: Instead of selecting which tests to run, we analyse the set of tests that have failed, and suggest which of these should be examined first. Test case prioritization [18] has been successfully used in the past to increase the likelihood that failures will occur early in test runs.The tests are prioritized using different criteria, the criterion which most closely matched our approach was total function coverage [7]. Here a program is instrumented, and, for any test case, the number of functions in that program that were exercised by that test case is determined. The test cases are then prioritized according to the total number of functions they cover by sorting them in order of total function coverage achieved, starting with the highest. Wong et al. [19] compare different selection strategies for regression testing and propose a hybrid approach to select a representative subset of tests combining modification based selection, minimization and prioritization. Again, they emphasize on which tests should b</context>
+</contexts>
+<marker>[7]</marker>
+<rawString>S. G. Elbaum, A. G. Malishevsky, and G. Rothermel. Prioritizing test cases for regression testing. In International Symposium on Software Testing and Analysis, pages 102– 112. ACM Press, 2000.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>T Gırba</author>
+<author>S Ducasse</author>
+<author>M Lanza</author>
+</authors>
+<title>Yesterday’s weather: Guiding early reverse engineering efforts by summarizing the evolution of changes.</title>
+<date>2004</date>
+<booktitle>In Proceedings of ICSM 2004 (International Conference on Software Maintenance),</booktitle>
+<pages>40--49</pages>
+<contexts>
+<context position="11902" citStr="[8]" startWordPosition="1988" endWordPosition="1988">races in the same way as method-wrappers described before, we used AspectS because it lets us obtain more detailed information about the current state of the stack, when a method is entered. In Java we could use AspectJ [11]. 4. Case studies We performed our experiments on the following four systems, which were created by four different developers, who were unaware of our attempts to structure their tests while they were writing them. 1. MagicKeys3, an application that makes it easy to graphically view, change and export/import keyboard bindings in VisualWorks Smalltalk. 2. Van (Gırba et al. [8]), a version analysis tool built on top of the Moose Reengineering Environment [6]. 3. SmallWiki (Renggli [15]), a collaborative content management tool. 4. CodeCrawler (Lanza [12]), a language independent reverse engineering tool which combines metrics and software visualization. 4.1. Setup of the experiments In a first phase, we ordered the unit tests for each case study as described in Section 3 and measured if a relevant portion of them were comparable by our coverage criterium. In a second phase, we introduced defects into the methods to validate that if a unit test breaks, its covering u</context>
+</contexts>
+<marker>[8]</marker>
+<rawString>T. Gı̂rba, S. Ducasse, and M. Lanza. Yesterday’s weather: Guiding early reverse engineering efforts by summarizing the evolution of changes. In Proceedings of ICSM 2004 (International Conference on Software Maintenance), pages 40–49, 2004.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R Hirschfeld</author>
+</authors>
+<title>Aspects - aspect-oriented programming with squeak.</title>
+<date>2003</date>
+<booktitle>Objects, Components, Architectures, Services, and Applications for a Networked World, International Conference NetObjectDays 2002,</booktitle>
+<pages>216--232</pages>
+<editor>In M. Aksit, M. Mezini, and R. Unland, editors,</editor>
+<publisher>Springer.</publisher>
+<location>Erfurt,</location>
+<contexts>
+<context position="11202" citStr="[9]" startWordPosition="1873" endWordPosition="1873">he tests while they were non breaking, or reinitialize it with only the broken unit tests. 3.2. Implementation In order to perform experiments to validate our claim, we implemented our approach in VisualWorks Smalltalk2. We 2See www.cincomsmalltalk.com for more information. chose to do the implementation in VisualWorks Smalltalk because • tools to wrap methods and assess coverage are freely available, • we have numerous case studies available, • we can build on the frrely available tool CodeCrawler [12] to visualize the information we obtained. We obtain the trace information by using AspectS [9], a flexible tool which builds upon John Brant’s MethodWrappers [4]. Though AspectS obtains the traces in the same way as method-wrappers described before, we used AspectS because it lets us obtain more detailed information about the current state of the stack, when a method is entered. In Java we could use AspectJ [11]. 4. Case studies We performed our experiments on the following four systems, which were created by four different developers, who were unaware of our attempts to structure their tests while they were writing them. 1. MagicKeys3, an application that makes it easy to graphically </context>
+</contexts>
+<marker>[9]</marker>
+<rawString>R. Hirschfeld. Aspects - aspect-oriented programming with squeak. In M. Aksit, M. Mezini, and R. Unland, editors, Objects, Components, Architectures, Services, and Applications for a Networked World, International Conference NetObjectDays 2002, pages 216–232, Erfurt, 2003. Springer.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Ingalls</author>
+<author>T Kaehler</author>
+<author>J Maloney</author>
+<author>S Wallace</author>
+<author>A Kay</author>
+</authors>
+<title>Back to the future: The story of Squeak, A practical Smalltalk written in itself.</title>
+<date>1997</date>
+<booktitle>In Proceedings OOPSLA ’97,</booktitle>
+<pages>318--326</pages>
+<publisher>ACM Press,</publisher>
+<contexts>
+<context position="28615" citStr="[10]" startWordPosition="4732" endWordPosition="4732">o run all sub scenarios would lead to a massive reduction of testing time, massive reuse of assertions also in unexpected scenarios, and would make our post mortem sorting approach unnecessary: The most specific assertions will always fail first, directing the developer immediately to the problem at hand. In the four case studies we analyze in this paper, none of the software developers wrote any pre- or post-condition or invariant, thus relying solely on the assertions in their unit tests. This is a common behavior of Smalltalk developers today: The open source Smalltalk environment Squeak 4 [10] in the version from February 2004 includes 1024 unit tests but only 23 pre- or post-conditions. Methods like XP suggest frequent testing and developing in small increments, so that developers can identify their latest changed code as a good starting point to know where an error is. But to know why the error occurred, they want to go to the most detailed test with the most focused assertion. Our experiments and experience show, that one failed unit test comes seldom alone, so unless they start putting assertions in the code, they still need to find the most specific of them. This approach of c</context>
+</contexts>
+<marker>[10]</marker>
+<rawString>D. Ingalls, T. Kaehler, J. Maloney, S. Wallace, and A. Kay. Back to the future: The story of Squeak, A practical Smalltalk written in itself. In Proceedings OOPSLA ’97, pages 318–326. ACM Press, Nov. 1997.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>G Kiczales</author>
+<author>E Hilsdale</author>
+<author>J Hugunin</author>
+<author>M Kersten</author>
+<author>J Palm</author>
+<author>W G Griswold</author>
+</authors>
+<title>An overview of AspectJ.</title>
+<date>2001</date>
+<booktitle>In Proceeding ECOOP 2001, number 2072 in LNCS.</booktitle>
+<publisher>Springer Verlag,</publisher>
+<contexts>
+<context position="11523" citStr="[11]" startWordPosition="1929" endWordPosition="1929"> Smalltalk because • tools to wrap methods and assess coverage are freely available, • we have numerous case studies available, • we can build on the frrely available tool CodeCrawler [12] to visualize the information we obtained. We obtain the trace information by using AspectS [9], a flexible tool which builds upon John Brant’s MethodWrappers [4]. Though AspectS obtains the traces in the same way as method-wrappers described before, we used AspectS because it lets us obtain more detailed information about the current state of the stack, when a method is entered. In Java we could use AspectJ [11]. 4. Case studies We performed our experiments on the following four systems, which were created by four different developers, who were unaware of our attempts to structure their tests while they were writing them. 1. MagicKeys3, an application that makes it easy to graphically view, change and export/import keyboard bindings in VisualWorks Smalltalk. 2. Van (Gırba et al. [8]), a version analysis tool built on top of the Moose Reengineering Environment [6]. 3. SmallWiki (Renggli [15]), a collaborative content management tool. 4. CodeCrawler (Lanza [12]), a language independent reverse enginee</context>
+</contexts>
+<marker>[11]</marker>
+<rawString>G. Kiczales, E. Hilsdale, J. Hugunin, M. Kersten, J. Palm, and W. G. Griswold. An overview of AspectJ. In Proceeding ECOOP 2001, number 2072 in LNCS. Springer Verlag, 2001.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Lanza</author>
+</authors>
+<title>Codecrawler — lessons learned in building a software visualization tool.</title>
+<date>2003</date>
+<booktitle>In Proceedings of CSMR 2003,</booktitle>
+<pages>409--418</pages>
+<publisher>IEEE Press,</publisher>
+<contexts>
+<context position="11107" citStr="[12]" startWordPosition="1858" endWordPosition="1858">scenario with broken unit tests, we could either use a test sorter, which was initialized with the tests while they were non breaking, or reinitialize it with only the broken unit tests. 3.2. Implementation In order to perform experiments to validate our claim, we implemented our approach in VisualWorks Smalltalk2. We 2See www.cincomsmalltalk.com for more information. chose to do the implementation in VisualWorks Smalltalk because • tools to wrap methods and assess coverage are freely available, • we have numerous case studies available, • we can build on the frrely available tool CodeCrawler [12] to visualize the information we obtained. We obtain the trace information by using AspectS [9], a flexible tool which builds upon John Brant’s MethodWrappers [4]. Though AspectS obtains the traces in the same way as method-wrappers described before, we used AspectS because it lets us obtain more detailed information about the current state of the stack, when a method is entered. In Java we could use AspectJ [11]. 4. Case studies We performed our experiments on the following four systems, which were created by four different developers, who were unaware of our attempts to structure their tests</context>
+</contexts>
+<marker>[12]</marker>
+<rawString>M. Lanza. Codecrawler — lessons learned in building a software visualization tool. In Proceedings of CSMR 2003, pages 409–418. IEEE Press, 2003.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>I Moore</author>
+</authors>
+<title>Jester – a junit test tester.</title>
+<date>2001</date>
+<booktitle>Proceedings of the 2nd International Conference on Extreme Programming and Flexible Processes (XP2001). University of Cagliari,</booktitle>
+<editor>In M. Marchesi, editor,</editor>
+<contexts>
+<context position="13138" citStr="[13]" startWordPosition="2192" endWordPosition="2192"> well. We therefore 1. iterated over all test cases of the case study that were covered by at least one other test case, 2. determined which methods were invoked by each of those tests, but not by any other test it is covered by, 3http://homepages.ulb.ac.be/∼rowuyts/MagicKeys/index.html 3. mutated the methods according to some mutation strategy, 4. and, for each each mutation, executed the unit tests and all its covering unit tests and collected the results. We used the following mutation strategies: 1. full body deletion, i.e., we removed the complete method body. 2. code mutations of JesTer [13]: JesTer is a mutation testing extension to test JUnit tests by finding code that is not covered by tests. JesTer makes some change to the code, runs the tests, and if the tests pass, JesTer reports what it changed. We applied the same mutations as JesTer, which are (a) change all occurrences of the number 0 to the number 1 (b) flip true to false and vice versa (c) change the conditions of ifTrue statements to true and the conditions of ifFalse statements to false. 4.2. Results The case studies are presented at more detail in Table 1 and Table 2. Figure 4. The coverage hierarchy of the Code Cr</context>
+</contexts>
+<marker>[13]</marker>
+<rawString>I. Moore. Jester – a junit test tester. In M. Marchesi, editor, Proceedings of the 2nd International Conference on Extreme Programming and Flexible Processes (XP2001). University of Cagliari, 2001.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Parrish</author>
+<author>J Jones</author>
+<author>B Dixon</author>
+</authors>
+<title>Extreme unit testing: Ordering test cases to maximize early testing.</title>
+<date>2002</date>
+<booktitle>Extreme Programming Perspectives,</booktitle>
+<pages>123--140</pages>
+<editor>In M. Marchesi, G. Succi, D. Wells, and L. Williams, editors,</editor>
+<publisher>Addison-Wesley,</publisher>
+<contexts>
+<context position="20840" citStr="[14]" startWordPosition="3436" endWordPosition="3436">ak because of just one real bug and not because of one artificial mutation? • We did not make any distinction between failures and errors when we were evaluating the chain of failed tests caused by one mutation. 6. Related Work Unit testing has become a major issue in software development during the last decade: Test-driven development (TDD) [1] is a technique in which testing and development occur in parallel, thereby providing developers with constant feedback. The most popular unit testing framework used in TDD named XUnit [2] does not currently prioritize failed unit tests. Parrish et al. [14] define a process for test-driven development that starts with fine-grained tests and proceeds to more coarse-grained tests. They state that “Once a set of test cases is identified an attempt is made to order the test case runs in a way that maximizes early testing. This means that defects are potentially revealed in the context of as few methods as possible, making those defects easier to localize.” In their approach, tests are written beforehand with a particular order in mind, while in our approach we investigate a posteriori orderings of existing tests. Rothermel et al. [16] introduce the </context>
+</contexts>
+<marker>[14]</marker>
+<rawString>A. Parrish, J. Jones, and B. Dixon. Extreme unit testing: Ordering test cases to maximize early testing. In M. Marchesi, G. Succi, D. Wells, and L. Williams, editors, Extreme Programming Perspectives, pages 123–140. Addison-Wesley, 2002.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>L Renggli</author>
+</authors>
+<title>Smallwiki: Collaborative content management.</title>
+<date>2003</date>
+<institution>Informatikprojekt, University of Bern,</institution>
+<contexts>
+<context position="12012" citStr="[15]" startWordPosition="2005" endWordPosition="2005">ailed information about the current state of the stack, when a method is entered. In Java we could use AspectJ [11]. 4. Case studies We performed our experiments on the following four systems, which were created by four different developers, who were unaware of our attempts to structure their tests while they were writing them. 1. MagicKeys3, an application that makes it easy to graphically view, change and export/import keyboard bindings in VisualWorks Smalltalk. 2. Van (Gırba et al. [8]), a version analysis tool built on top of the Moose Reengineering Environment [6]. 3. SmallWiki (Renggli [15]), a collaborative content management tool. 4. CodeCrawler (Lanza [12]), a language independent reverse engineering tool which combines metrics and software visualization. 4.1. Setup of the experiments In a first phase, we ordered the unit tests for each case study as described in Section 3 and measured if a relevant portion of them were comparable by our coverage criterium. In a second phase, we introduced defects into the methods to validate that if a unit test breaks, its covering unit tests are likely to break as well. We therefore 1. iterated over all test cases of the case study that wer</context>
+</contexts>
+<marker>[15]</marker>
+<rawString>L. Renggli. Smallwiki: Collaborative content management. Informatikprojekt, University of Bern, 2003.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>G Rothermel</author>
+<author>S Elbaum</author>
+<author>A Malishevsky</author>
+<author>P Kallakuri</author>
+<author>B Davia</author>
+</authors>
+<title>The impact of test suite granularity on the costeffectiveness of regression testing.</title>
+<date>2002</date>
+<booktitle>In Proceedings ICSE-24,</booktitle>
+<pages>230--240</pages>
+<contexts>
+<context position="21425" citStr="[16]" startWordPosition="3535" endWordPosition="3535">Parrish et al. [14] define a process for test-driven development that starts with fine-grained tests and proceeds to more coarse-grained tests. They state that “Once a set of test cases is identified an attempt is made to order the test case runs in a way that maximizes early testing. This means that defects are potentially revealed in the context of as few methods as possible, making those defects easier to localize.” In their approach, tests are written beforehand with a particular order in mind, while in our approach we investigate a posteriori orderings of existing tests. Rothermel et al. [16] introduce the term “granularity” for software testing, but they focus on cost-effectiveness of test suites rather than on debugging processes. Selective regression testing is concerned with determining an optimal set of tests to run after a software change is made [17] [3]. Although there are some similarities with the work described in this paper, the emphasis is quite different: Instead of selecting which tests to run, we analyse the set of tests that have failed, and suggest which of these should be examined first. Test case prioritization [18] has been successfully used in the past to inc</context>
+</contexts>
+<marker>[16]</marker>
+<rawString>G. Rothermel, S. Elbaum, A. Malishevsky, P. Kallakuri, and B. Davia. The impact of test suite granularity on the costeffectiveness of regression testing. In Proceedings ICSE-24, pages 230–240, May 2002.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>G Rothermel</author>
+<author>M J Harrold</author>
+</authors>
+<title>Analyzing regression test selection techniques.</title>
+<date>1996</date>
+<journal>IEEE Transactions on Software Engineering,</journal>
+<volume>22</volume>
+<issue>8</issue>
+<contexts>
+<context position="21695" citStr="[17]" startWordPosition="3577" endWordPosition="3577"> early testing. This means that defects are potentially revealed in the context of as few methods as possible, making those defects easier to localize.” In their approach, tests are written beforehand with a particular order in mind, while in our approach we investigate a posteriori orderings of existing tests. Rothermel et al. [16] introduce the term “granularity” for software testing, but they focus on cost-effectiveness of test suites rather than on debugging processes. Selective regression testing is concerned with determining an optimal set of tests to run after a software change is made [17] [3]. Although there are some similarities with the work described in this paper, the emphasis is quite different: Instead of selecting which tests to run, we analyse the set of tests that have failed, and suggest which of these should be examined first. Test case prioritization [18] has been successfully used in the past to increase the likelihood that failures will occur early in test runs.The tests are prioritized using different criteria, the criterion which most closely matched our approach was total function coverage [7]. Here a program is instrumented, and, for any test case, the number</context>
+</contexts>
+<marker>[17]</marker>
+<rawString>G. Rothermel and M. J. Harrold. Analyzing regression test selection techniques. IEEE Transactions on Software Engineering, 22(8):529–551, 1996.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>G Rothermel</author>
+<author>R H Untch</author>
+<author>C Chu</author>
+<author>M J Harrold</author>
+</authors>
+<title>Test case prioritization: An empirical study.</title>
+<date>1999</date>
+<booktitle>In Proceedings ICSM</booktitle>
+<pages>179--188</pages>
+<contexts>
+<context position="21979" citStr="[18]" startWordPosition="3625" endWordPosition="3625">orderings of existing tests. Rothermel et al. [16] introduce the term “granularity” for software testing, but they focus on cost-effectiveness of test suites rather than on debugging processes. Selective regression testing is concerned with determining an optimal set of tests to run after a software change is made [17] [3]. Although there are some similarities with the work described in this paper, the emphasis is quite different: Instead of selecting which tests to run, we analyse the set of tests that have failed, and suggest which of these should be examined first. Test case prioritization [18] has been successfully used in the past to increase the likelihood that failures will occur early in test runs.The tests are prioritized using different criteria, the criterion which most closely matched our approach was total function coverage [7]. Here a program is instrumented, and, for any test case, the number of functions in that program that were exercised by that test case is determined. The test cases are then prioritized according to the total number of functions they cover by sorting them in order of total function coverage achieved, starting with the highest. Wong et al. [19] compa</context>
+</contexts>
+<marker>[18]</marker>
+<rawString>G. Rothermel, R. H. Untch, C. Chu, and M. J. Harrold. Test case prioritization: An empirical study. In Proceedings ICSM 1999, pages 179–188, Sept. 1999.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>W E Wong</author>
+<author>J R Horgan</author>
+<author>S London</author>
+<author>H Agrawal</author>
+</authors>
+<title>A study of effective regression testing in practice.</title>
+<date>1997</date>
+<booktitle>In Proceedings of the Eighth International Symposium on Software Reliability Engineering,</booktitle>
+<pages>230--238</pages>
+<contexts>
+<context position="22573" citStr="[19]" startWordPosition="3725" endWordPosition="3725">ation [18] has been successfully used in the past to increase the likelihood that failures will occur early in test runs.The tests are prioritized using different criteria, the criterion which most closely matched our approach was total function coverage [7]. Here a program is instrumented, and, for any test case, the number of functions in that program that were exercised by that test case is determined. The test cases are then prioritized according to the total number of functions they cover by sorting them in order of total function coverage achieved, starting with the highest. Wong et al. [19] compare different selection strategies for regression testing and propose a hybrid approach to select a representative subset of tests combining modification based selection, minimization and prioritization. Again, they emphasize on which tests should be run and not on how failing tests should be ordered. Modification based selection is their key to minimize the number of tests to run, thus they are relying on having prior versions of the tested program whereas our approach can in principle be used without having prior versions, as we could also order the tests using only the coverage of the </context>
+</contexts>
+<marker>[19]</marker>
+<rawString>W. E. Wong, J. R. Horgan, S. London, and H. Agrawal. A study of effective regression testing in practice. In Proceedings of the Eighth International Symposium on Software Reliability Engineering, pages 230–238, Nov. 1997.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Zeller</author>
+<author>R Hildebrandt</author>
+</authors>
+<title>Simplifying and isolating failure-inducing input.</title>
+<date>2002</date>
+<journal>IEEE Transactions on Software Engineering,</journal>
+<volume>28</volume>
+<issue>2</issue>
+<contexts>
+<context position="23205" citStr="[20]" startWordPosition="3829" endWordPosition="3829"> strategies for regression testing and propose a hybrid approach to select a representative subset of tests combining modification based selection, minimization and prioritization. Again, they emphasize on which tests should be run and not on how failing tests should be ordered. Modification based selection is their key to minimize the number of tests to run, thus they are relying on having prior versions of the tested program whereas our approach can in principle be used without having prior versions, as we could also order the tests using only the coverage of the failed tests. Zeller et al. [20] [5] use delta debugging to simplify test case input, reducing relevant execution states and finding failure-inducing changes. We focus on reducing failing tests from a set of semantically different tests to the most concise but still failing tests. Thus the technique of Zeller et al. could pay off more using this smaller tests as initial input. 7. Conclusion and future work We have proposed a lightweight approach to partially order unit tests in terms of the sets of methods they invoke. Initial experiments with four case studies reveal that this technique exposes important implicit ordering r</context>
+</contexts>
+<marker>[20]</marker>
+<rawString>A. Zeller and R. Hildebrandt. Simplifying and isolating failure-inducing input. IEEE Transactions on Software Engineering, SE-28(2):183–200, Feb. 2002.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

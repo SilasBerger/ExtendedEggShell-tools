@@ -1,0 +1,775 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.001937">
+<title confidence="0.6445995">
+DoodleDebug, Objects Should Sketch Themselves For
+Code Understanding
+</title>
+<author confidence="0.924762">
+Niko Schwarz
+</author>
+<affiliation confidence="0.996096">
+University of Bern
+</affiliation>
+<sectionHeader confidence="0.684461" genericHeader="abstract">
+ABSTRACT
+</sectionHeader>
+<bodyText confidence="0.99440525">
+Developers override toString() and printOn: methods to
+allow objects to display themselves. This is done to track
+object state while debugging. Although very popular, the
+technique breaks down when displaying complex, multi-di-
+mensional objects. We propose an approach in which objects
+have two-dimensional visualizations at various levels of gran-
+ularity. This makes it easier to compose visualizations from
+object parts, and enables “semantic zooming” of object visu-
+alizations while debugging. We have carried out an empiri-
+cal study to understand how printOn: methods are used in
+practice, and we are developing DoodleDebug, a framework
+to support visualizable objects.
+</bodyText>
+<sectionHeader confidence="0.998288" genericHeader="introduction">
+1. INTRODUCTION
+</sectionHeader>
+<bodyText confidence="0.999493608695652">
+In a survey on software visualization among 111 researchers
+in software maintenance, reengineering and reverse engineer-
+ing, 40 % of the researchers found software visualization ab-
+solutely necessary for their work [9]. However, when 31 de-
+velopers were observed, each for 70 minutes while perform-
+ing software maintenance tasks, not a single one of them
+is reported to have used any kind of visualization whatso-
+ever [7]. At the very least, current visualizations haven’t be-
+come an integral part of the professional developer’s toolkit,
+as Reiss [12] laments. On the other hand, the use of textually
+visualizing objects via the toString (in Java) or printOn:
+(in Smalltalk) method and equivalent facilities in other lan-
+guages, is widespread.
+We attempt to explain the popularity of the printOn:
+method in Smalltalk. We present the results from looking
+at 2145 open source projects, of which 590 overwrote the
+printOn: method.
+A downside of the printOn: method is that it makes it
+hard to compose visualizations of objects. We outline our
+idea of DoodleDebug, our vision of a library that improves
+on the printOn: method by making it easy for developers
+to specify how their objects can be shown as 2-dimensional
+drawings. To delve deeper into an object’s representation,
+</bodyText>
+<copyright confidence="0.996996857142857">
+Permission to make digital or hard copies of all or part of this work for
+personal or classroom use is granted without fee provided that copies are
+not made or distributed for profit or commercial advantage and that copies
+bear this notice and the full citation on the first page. To copy otherwise, to
+republish, to post on servers or to redistribute to lists, requires prior specific
+permission and/or a fee.
+Copyright 20XX ACM X-XXXXX-XX-X/XX/XX ...$10.00.
+</copyright>
+<bodyText confidence="0.998902555555555">
+we suggest using semantic zooming [14].
+In section 2, we present the results of looking at 590 soft-
+ware repositories that use the printOn: method for object
+visualization. In section 3, we attempt to explain the success
+of this way of visualizing objects, and collect requirements
+that any improvement would have to meet. In section 4, we
+outline our proposed improvement over merely textually vi-
+sualizing objects. In section 5, we list the related work and
+in section 6, we conclude.
+</bodyText>
+<sectionHeader confidence="0.99605" genericHeader="method">
+2. CURRENT TEXTUAL VISUALIZATION
+</sectionHeader>
+<bodyText confidence="0.997793913043478">
+The textual visualization provided by the printOn: method
+is used in two sets of circumstances—in print statements to
+the transcript, or as a shortcut when viewing objects in a de-
+bugger, reducing the need to delve too deep into the object
+graph.
+To get a feeling for how this feature is used, we down-
+loaded all 2711 projects from the Squeaksource open source
+software repository1. Of these, we were able to extract the
+latest sources of 2145 of these repositories. The remaining
+repositories were either empty, or unreadable (some of the
+zip files holding the sources appear to be damaged).
+Of the 2145 repositories that we analyzed, 590 overwrite
+the printOn: method, amounting to 28 % of all projects.
+In total, we found 2688 overwritten printOn: methods. We
+then extracted some basic properties from those 2688 over-
+written printOn: methods, to get a feeling for what they
+were used for. We used a mix of scripts and manual inspec-
+tion.
+The average method length we observed was 7.1 lines,
+although a number of these methods seemed to call private
+methods in the same class to help with textually visualizing
+the class’s objects.
+Of the 590 printOn: methods,
+</bodyText>
+<listItem confidence="0.888154">
+• 44 already print a two-dimensional structure of them-
+selves as ASCII graphics, separating the output into
+several lines which contain key-value pairs, or even tab-
+ular information2. Examples include classes that model
+matrices and addresses.
+• 137 used parentheses to mark their contained instance
+</listItem>
+<bodyText confidence="0.984275666666667">
+variables. However, not all instance had to be printed.
+Also, we saw extra measures to ensure the brevity of
+every string’s length.
+</bodyText>
+<footnote confidence="0.9999465">
+1http://squeaksource.com
+2We obtained this number by automatically selecting meth-
+</footnote>
+<bodyText confidence="0.9707125">
+ods that print newlines, and then manually inspecting those.
+Other results were obtained similarly.
+</bodyText>
+<listItem confidence="0.9923045">
+• 219 called the implementation of printOn: in their su-
+per class, which usually just prints the class name.
+• 233 directly print their own class names.
+• 452, or 77 % of all printOn: methods, included their
+</listItem>
+<bodyText confidence="0.957659375">
+class name. This suggests that the dominant and most
+important kind of information of interest about an ob-
+ject is its class, present in most instances.
+From the study on the usage of printOn:, we learned that
+developers value concise textual descriptions (because of the
+care to only have short textual descriptions). And they value
+cheap to produce textual descriptions (since the lines of code
+were comparatively short).
+</bodyText>
+<sectionHeader confidence="0.999556" genericHeader="method">
+3. ADVANTAGES OF SUMMARIZING OB-
+JECTS IN TEXT
+</sectionHeader>
+<bodyText confidence="0.9806769375">
+Especially in a programming environment like Smalltalk,
+which usually features a perfectly workable inspector, it is
+interesting to ask why textual visualization is still so popu-
+lar. While visualizing an object as a short string of text does
+not use much of what is available to software visualization,
+it still reaps a number of benefits commonly attributed to
+more advanced software visualizations: it makes use of the
+pattern recognition abilities of the human brain, and can
+summarize a wide array of information in a concise format.
+To help us shape DoobleDebug, we try to find the informa-
+tion needs that cause developers to overwrite the printOn:
+method. Ko et al. [5] observed 17 developers over the course
+of two months for a total of 25 work hours, noting the infor-
+mation needs that arose. He lists a total of 21 information
+needs, of which the following three can be attended to by
+overwriting the printOn: method:
+</bodyText>
+<listItem confidence="0.997456">
+1. What code caused this program state?
+2. What does the failure look like?
+3. In what situations does this failure occur?
+</listItem>
+<bodyText confidence="0.901316">
+“Program state” is explicit in the first question, and implicit
+in the other two. This leads us, combined with our experi-
+ence, to the following hypothesis:
+The strengths of overwriting the printOn: method as a tex-
+tual visualization technique are the following:
+1. Great numbers of snapshots of an object can be printed,
+so that the repeated printing of the same object vi-
+sualizes the course of a program. The changes from
+one printout to the next can show the developer which
+stages occurred during computation. If the developer is
+not sure at which point in time an object may be inter-
+esting to inspect, he can print the object at all possible
+times, and then quickly scan over the transcript to find
+</bodyText>
+<listItem confidence="0.7493165">
+the stage that he is interested in.
+2. Textual visualization integrates well into current IDEs.
+Default debuggers and inspectors are aware of the printOn:
+method and use it to visualize objects. To share a visu-
+alization, the developer only has to share code, which
+is part of his usual process. The overall effort for cre-
+ating and sharing a visualization is therefore small.
+3. Textual printouts can be easily exchanged, save for en-
+</listItem>
+<bodyText confidence="0.993397565217392">
+coding problems. They are easy to compare, and can be
+used in bug reports, questions on community boards,
+or even in unit tests to assert correct behavior.
+To understand these upsides, consider not overwriting the
+printOn: method and solely relying on a debugger that can
+only show basic data types. Since debugging race conditions
+without the help of print statements seems nearly unthink-
+able, print statements for debugging race conditions might
+have to become considerably longer, because they have to
+print all basic data types at every point of interest. If a de-
+veloper is unsure at which point in time a certain line of code
+is interesting, setting a breakpoint would require him to pro-
+ceed manually until the relevant moment is found. Once it
+is found, he has nothing to compare it to, since all previ-
+ous moments have already passed without being displayed
+in the debugger. Unable to show the history of an object,
+current debuggers are unable to explain how these states
+came about. This is even though some research projects aim
+at making the past more accessible to the developer. [10, 6,
+11]. However, none of these approaches provides what de-
+velopers now get from printing to the transcript: a quick
+overview over a possibly large number of machine states,
+together with an easy way to compare those side-by-side.
+</bodyText>
+<sectionHeader confidence="0.996745" genericHeader="method">
+4. DOODLEDEBUG
+</sectionHeader>
+<bodyText confidence="0.999126535714286">
+In this section, we propose an approach to satisfying the
+information needs attended to by the printOn: method, at a
+similarly low cost to the user, but with improved usefulness.
+Our approach is informed by the success of the printOn:
+feature and tries to add to it, without losing its upsides. We
+discuss directions in which this research could continue.
+We intend to allow every object to overwrite the drawOn:,
+and drawSmallOn: methods, specifying its own 2D drawing,
+in a simple DSL. A default implementation is provided which
+simply inserts the current string representation.
+When overwriting the drawOn: method, the user can therein
+choose from a set of simple data layouts, or draw directly
+on the canvas. However, the canvas must be quite unlike
+current graphical canvases, which are pixel-accurate. As we
+have found above, developers value visualizations that are
+cheap to produce. It is therefore imperative to allow the
+user to express his visualization wish in the simplest, most
+abstract terms, while still generating useful visualizations.
+The vocabulary of the canvas must thus be very coarse, as
+in: “draw i as an external resource”, where i is an instance
+variable. It is then up to the canvas to choose a location and
+visual indication for external resources.
+Since objects may be composed of other objects, they may
+need to draw these when drawing themselves. To summarize
+objects to what is needed from an abstract level, we provide
+the drawSmallOn: method, which can draw a shorter sum-
+mary, which can then be zoomed in on by clicking it. This
+kind of zooming is called semantic zooming [14].
+</bodyText>
+<subsectionHeader confidence="0.984787">
+4.1 Example
+</subsectionHeader>
+<bodyText confidence="0.98391825">
+Let us suppose that the developer is constructing a num-
+ber of affine transformations, which are then concatenated.
+Since the concatenated affine transformations are not as the
+developer expects, he wishes to see all of them, at various
+stages of the course of the program. In the Pharo Smalltalk
+IDE, he could now choose to open an inspector for the array
+of affine transformations in an appropriate line of code in his
+program. This would open a plethora of inspector windows
+with no clear ordering, making it impossible to use them for
+tracing the program state. As an alternative, he could set a
+break point in the same line, looking at the array of affine
+transformations on each step. Or, he could write the array
+to the transcript on every iteration. Since an affine transfor-
+mation is best described as a 2×3 matrix, and since it seems
+the least awkward option to use the transcript, he may there
+find output as seen in Figure 1.
+</bodyText>
+<figure confidence="0.982672">
+an Array()
+an Array(
+MatrixTransform2x3(
+2.0 0.0 0.0
+0.0 2.0 0.0
+))
+an Array(
+MatrixTransform2x3(
+2.0 0.0 0.0
+0.0 2.0 0.0
+) MatrixTransform2x3(
+0.707107 -0.707107 0.0
+0.707107 0.707107 0.0
+))
+</figure>
+<figureCaption confidence="0.9877805">
+Figure 1: Textual visualization of an array of affine
+transformations. They can only be listed vertically.
+</figureCaption>
+<bodyText confidence="0.993930806451613">
+The affine transformations represent a scale by 2,
+followed by a rotation by π/4
+The default visualization of arrays and affine transformation
+in Pharo Smalltalk shows matrices in their 2-dimensional
+structure. However, it cannot show the two matrices next
+to each other, since when nesting strings that contain new-
+line characters, 2-dimensional structures cannot always be
+nested. Instead, they are shown vertically aligned. Thus,
+when we print the course of our program by printing three
+stages of the construction of the array, as seen in Figure 1,
+there is almost no visual clue as to where one step of the pro-
+gram ends and the next one starts. Even worse: comparing
+states of the program is not easy, because the visualization
+does not help us map the individual matrices from state to
+state of the program.
+In contrast, if we allow matrix objects to visualize them-
+selves non-textually, several matrices can be fit on one line.
+Our developer could, for similar effort, see the visualization
+in Figure 2. In this new visualization, with every program
+state being exactly one line, it is visually clear where each
+print begins and ends. Since the scaling matrices appear
+vertically aligned, we can easily see that from the second to
+the third state, the scaling matrix was not changed, but a
+rotation matrix was added.
+To achieve this result, all we need is the composition of
+two simple data layouts. One horizontal layout, so that the
+array can print its contents truly horizontally, even if it con-
+tains 2-dimensional entries. And a table layout, which dis-
+plays nested arrays as tables. We are hopeful that similar
+improvements will be cheap for developers in a wide range
+of situations.
+</bodyText>
+<subsectionHeader confidence="0.961128">
+4.2 Future directions
+</subsectionHeader>
+<bodyText confidence="0.951282">
+Having objects that specify their visual layout opens the
+path for new research possibilities. Once objects know how
+</bodyText>
+<figure confidence="0.8347916">
+Out[18]= 8&lt;
+Out[19]= :
+2. 0. 0.
+0. 2. 0.
+0. 0. 2.
+&amp;gt;
+Out[20]= :
+2. 0. 0.
+0. 2. 0.
+0. 0. 2.
+,
+0.707107 -0.707107 0.
+0.707107 0.707107 0.
+0. 0. 1.
+&amp;gt;
+</figure>
+<figureCaption confidence="0.99843">
+Figure 2: If objects defining their own visualiza-
+</figureCaption>
+<bodyText confidence="0.998248576923077">
+tion are not restricted to text, nesting 2-dimensional
+structures becomes possible.
+to sketch themselves, we can use the instructions that define
+the drawing to determine a raw outline of what matters for
+the developer. Using it, we can construct a simplified data
+model of an object, which may be helpful for comparing
+different versions of that object, so helping understand the
+history of a program’s state.
+The next step is to make the visualizations more interac-
+tive. For example, right-clicking on an object should open its
+class, so we can navigate from visualization to code. Drag-
+ging an object into a visualization should assign it to the
+slot represented by the location where it was dropped.
+We have learned in Section 3 that one key advantage of
+using printOn: is the easy shareability of the textual out-
+put of objects. We intend to use the drawing instructions to
+create textual descriptions of the object to be visualized to
+improve shareability.
+If properly exploited, we believe that the zooming meta-
+phor has the potential to get rid of the need for a separate
+inspector altogether. If, for example, every doodle is accom-
+panied by a list of instance variables at the current zoom
+level, then zooming in is just like diving into the object graph
+using an inspector, making the ladder superfluous. Some ex-
+perimentation will be needed to answer whether doodles can
+entirely take over object inspection.
+</bodyText>
+<sectionHeader confidence="0.999683" genericHeader="related work">
+5. RELATED WORK
+</sectionHeader>
+<bodyText confidence="0.982791666666667">
+GNU DDD, the Data Display Debugger [15] uses visual
+metaphors to give insight into the state of a program. To
+that, LIVE [1] adds metaphors with animations, although
+empirical results as to the helpfulness of animation in under-
+standing algorithm is mixed [4]. JGRASP [3] and Travis [8]
+provide automatic mappings between data and its visualiza-
+tion.
+Cheng et al. provide the xDIVA tool [2], which provides
+a number of mappings from data types to “visualization
+metaphors” which render the data. Since data types can
+be nested, visualization metaphors can be composed. for
+a number of reasons, however, the visualizations are diffi-
+cult to specify. First, xDIVA is a separate tool, rather than
+being integrated into the IDE, like printOn:. Second, the
+visualizations are configured in a graphical interface, rather
+than in the code of a class, and thus can not easily be ex-
+changed with members of the same team. Third, the visu-
+alizations are a great deal more complex than we think is
+necessary. The visualization in xDIVA is 3D, allowing for
+circling around objects of interests. This complexity likely
+increases the complexity of creating new visualizations.
+Mathematica [13] ships with some data layouts for ta-
+bles, matrices, and curves. However, as Mathematica is not
+object-oriented, objects cannot define their own behavior,
+and using any but the predefined commands for viewing
+data is uncommon. Further, Mathematica does not allow
+data layouts to be composed.
+</bodyText>
+<sectionHeader confidence="0.99932" genericHeader="conclusions">
+6. CONCLUSION
+</sectionHeader>
+<bodyText confidence="0.999256">
+Developers overwrite the printOn: method because they
+need to understand what caused a certain program state,
+what caused a failure, and what exactly a program failure
+looks like. They use textual visualizations because they give
+a quick overview over a possibly large number of machine
+states, together with an easy way to compare those side-
+by-side. Textual visualization of objects helps in using the
+debugger and inspector. It simplifies printing program states
+to the transcript, as is useful, among other things, for debug-
+ging race conditions. Textual visualizations integrate well
+into the development processes, are cheap to produce and
+allow easy exchange with developers. We thus account for
+their tremendous adoption among developers.
+We outline DoodleDebug, a suggested research prototype
+which allows the developer to better compare program states
+than printOn: allows. DoodleDebug sacrifices some of the
+easy sharing of program states that strings allowed, in ex-
+change for a denser view of information, by allowing the
+nesting of 2-dimensional structures. By allowing the user to
+zoom into doodles, we hope to receive a new way of explor-
+ing the data during the running of his program. We hope to
+achieve the same degree of integration into the IDE and the
+same cheap production cost as textual visualization tools.
+</bodyText>
+<sectionHeader confidence="0.943982" genericHeader="acknowledgments">
+Acknowledgements
+</sectionHeader>
+<bodyText confidence="0.984990777777778">
+We gratefully acknowledge the financial support of the Swiss
+National Science Foundation for the project “Synchronizing
+Models and Code” (SNF Project No. 200020-131827, Oct.
+2010 - Sept. 2012). We also thank CHOOSE, the special in-
+terest group for Object-Oriented Systems and Environments
+of the Swiss Informatics Society, for its financial contribution
+to the presentation of this paper. We thank Adrian Kuhn,
+Cedric Reichenbach, Oscar Nierstrasz and Edouard Tavinor
+for their input to this paper.
+</bodyText>
+<sectionHeader confidence="0.923544" genericHeader="references">
+7. REFERENCES
+</sectionHeader>
+<reference confidence="0.998639693548387">
+[1] Alistair E. R. Campbell, Geoffrey L. Catto, and
+Eric E. Hansen. Language-independent interactive
+data visualization. SIGCSE Bull., 35:215–219, January
+2003.
+[2] Yung P. Cheng, Jih F. Chen, Ming C. Chiu, Nien W.
+Lai, and Chien C. Tseng. xDIVA: a debugging
+visualization system with composable visualization
+metaphors. In Companion to the 23rd ACM SIGPLAN
+conference on Object-oriented programming systems
+languages and applications, OOPSLA Companion ’08,
+pages 807–810, New York, NY, USA, 2008. ACM.
+[3] James H. Cross and T. Dean Hendrix. jGRASP: an
+integrated development environment with
+visualizations for teaching java in CS1, CS2, and
+beyond. J. Comput. Small Coll., 23:170–172,
+December 2007.
+[4] Christopher D. Hundhausen, Sarah A. Douglas, and
+John T. Stasko. A Meta-Study of algorithm
+visualization effectiveness.
+[5] Andrew J. Ko. Information needs in collocated
+software development teams. In in International
+Conference on Software Engineering (ICSE 2007,
+pages 344–353, 2007.
+[6] Andrew J. Ko and Brad A. Myers. Debugging
+reinvented: asking and answering why and why not
+questions about program behavior. In Proceedings of
+the 30th international conference on Software
+engineering, ICSE ’08, pages 301–310, New York, NY,
+USA, 2008. ACM.
+[7] Andrew J. Ko, Brad A. Myers, Michael J. Coblenz,
+and Htet H. Aung. An exploratory study of how
+developers seek, relate, and collect relevant
+information during software maintenance tasks. IEEE
+Trans. Softw. Eng., 32(12):971–987, December 2006.
+[8] J. L. Korn and A. W. Appel. Traversal-based
+visualization of data structures. pages 11–18.
+[9] Rainer Koschke. Software visualization in software
+maintenance, reverse engineering, and re-engineering:
+a research survey. J. Softw. Maint. Evol.: Res. Pract.,
+15(2):87–109, 2003.
+[10] A. Lienhard, S. Ducasse, and T. Girba. Taking an
+object-centric view on dynamic information with
+object flow analysis. Computer Languages, Systems &amp;
+Structures, 35(1):63–79, April 2009.
+[11] Frédéric Pluquet, Stefan Langerman, and Roel Wuyts.
+Executing code in the past: efficient in-memory object
+graph versioning. SIGPLAN Not., 44:391–408,
+October 2009.
+[12] S. P. Reiss. The paradox of software visualization. In
+3rd IEEE International Workshop on Visualizing
+Software for Understanding and Analysis, pages 1–5.
+IEEE, 2005.
+[13] Stephen Wolfram. The Mathematica Book, Fifth
+Edition. Wolfram Media, 5th edition, August 2003.
+[14] Allison Woodruff, James Landay, and Michael
+Stonebraker. Goal-directed zoom. In CHI 98
+conference summary on Human factors in computing
+systems, CHI ’98, pages 305–306, New York, NY,
+USA, 1998. ACM.
+[15] Andreas Zeller and Dorothea Lütkehaus. DDD—a free
+graphical front-end for UNIX debuggers. SIGPLAN
+Not., 31(1):22–27, January 1996.
+</reference>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.933627">
+<title confidence="0.9990985">DoodleDebug, Objects Should Sketch Themselves For Code Understanding</title>
+<author confidence="0.999954">Niko Schwarz</author>
+<affiliation confidence="0.999868">University of Bern</affiliation>
+<abstract confidence="0.994057230769231">Developers override toString() and printOn: methods to allow objects to display themselves. This is done to track object state while debugging. Although very popular, the technique breaks down when displaying complex, multi-dimensional objects. We propose an approach in which objects have two-dimensional visualizations at various levels of granularity. This makes it easier to compose visualizations from object parts, and enables “semantic zooming” of object visualizations while debugging. We have carried out an empirical study to understand how printOn: methods are used in practice, and we are developing DoodleDebug, a framework to support visualizable objects.</abstract>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>Alistair E R Campbell</author>
+<author>Geoffrey L Catto</author>
+<author>Eric E Hansen</author>
+</authors>
+<title>Language-independent interactive data visualization.</title>
+<date>2003</date>
+<journal>SIGCSE Bull.,</journal>
+<pages>35--215</pages>
+<contexts>
+<context position="15453" citStr="[1]" startWordPosition="2572" endWordPosition="2572">bility. If properly exploited, we believe that the zooming metaphor has the potential to get rid of the need for a separate inspector altogether. If, for example, every doodle is accompanied by a list of instance variables at the current zoom level, then zooming in is just like diving into the object graph using an inspector, making the ladder superfluous. Some experimentation will be needed to answer whether doodles can entirely take over object inspection. 5. RELATED WORK GNU DDD, the Data Display Debugger [15] uses visual metaphors to give insight into the state of a program. To that, LIVE [1] adds metaphors with animations, although empirical results as to the helpfulness of animation in understanding algorithm is mixed [4]. JGRASP [3] and Travis [8] provide automatic mappings between data and its visualization. Cheng et al. provide the xDIVA tool [2], which provides a number of mappings from data types to “visualization metaphors” which render the data. Since data types can be nested, visualization metaphors can be composed. for a number of reasons, however, the visualizations are difficult to specify. First, xDIVA is a separate tool, rather than being integrated into the IDE, li</context>
+</contexts>
+<marker>[1]</marker>
+<rawString>Alistair E. R. Campbell, Geoffrey L. Catto, and Eric E. Hansen. Language-independent interactive data visualization. SIGCSE Bull., 35:215–219, January 2003.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Yung P Cheng</author>
+<author>Jih F Chen</author>
+<author>Ming C Chiu</author>
+<author>Nien W Lai</author>
+<author>Chien C Tseng</author>
+</authors>
+<title>xDIVA: a debugging visualization system with composable visualization metaphors.</title>
+<date>2008</date>
+<booktitle>In Companion to the 23rd ACM SIGPLAN conference on Object-oriented programming systems languages and applications, OOPSLA Companion ’08,</booktitle>
+<pages>807--810</pages>
+<publisher>ACM.</publisher>
+<location>New York, NY, USA,</location>
+<contexts>
+<context position="15717" citStr="[2]" startWordPosition="2614" endWordPosition="2614">n is just like diving into the object graph using an inspector, making the ladder superfluous. Some experimentation will be needed to answer whether doodles can entirely take over object inspection. 5. RELATED WORK GNU DDD, the Data Display Debugger [15] uses visual metaphors to give insight into the state of a program. To that, LIVE [1] adds metaphors with animations, although empirical results as to the helpfulness of animation in understanding algorithm is mixed [4]. JGRASP [3] and Travis [8] provide automatic mappings between data and its visualization. Cheng et al. provide the xDIVA tool [2], which provides a number of mappings from data types to “visualization metaphors” which render the data. Since data types can be nested, visualization metaphors can be composed. for a number of reasons, however, the visualizations are difficult to specify. First, xDIVA is a separate tool, rather than being integrated into the IDE, like printOn:. Second, the visualizations are configured in a graphical interface, rather than in the code of a class, and thus can not easily be exchanged with members of the same team. Third, the visualizations are a great deal more complex than we think is necess</context>
+</contexts>
+<marker>[2]</marker>
+<rawString>Yung P. Cheng, Jih F. Chen, Ming C. Chiu, Nien W. Lai, and Chien C. Tseng. xDIVA: a debugging visualization system with composable visualization metaphors. In Companion to the 23rd ACM SIGPLAN conference on Object-oriented programming systems languages and applications, OOPSLA Companion ’08, pages 807–810, New York, NY, USA, 2008. ACM.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>James H Cross</author>
+<author>T Dean Hendrix</author>
+</authors>
+<title>jGRASP: an integrated development environment with visualizations for teaching java in CS1, CS2, and beyond.</title>
+<date>2007</date>
+<journal>J. Comput. Small Coll.,</journal>
+<pages>23--170</pages>
+<contexts>
+<context position="15599" citStr="[3]" startWordPosition="2594" endWordPosition="2594">If, for example, every doodle is accompanied by a list of instance variables at the current zoom level, then zooming in is just like diving into the object graph using an inspector, making the ladder superfluous. Some experimentation will be needed to answer whether doodles can entirely take over object inspection. 5. RELATED WORK GNU DDD, the Data Display Debugger [15] uses visual metaphors to give insight into the state of a program. To that, LIVE [1] adds metaphors with animations, although empirical results as to the helpfulness of animation in understanding algorithm is mixed [4]. JGRASP [3] and Travis [8] provide automatic mappings between data and its visualization. Cheng et al. provide the xDIVA tool [2], which provides a number of mappings from data types to “visualization metaphors” which render the data. Since data types can be nested, visualization metaphors can be composed. for a number of reasons, however, the visualizations are difficult to specify. First, xDIVA is a separate tool, rather than being integrated into the IDE, like printOn:. Second, the visualizations are configured in a graphical interface, rather than in the code of a class, and thus can not easily be ex</context>
+</contexts>
+<marker>[3]</marker>
+<rawString>James H. Cross and T. Dean Hendrix. jGRASP: an integrated development environment with visualizations for teaching java in CS1, CS2, and beyond. J. Comput. Small Coll., 23:170–172, December 2007.</rawString>
+</citation>
+<citation valid="false">
+<authors>
+<author>Christopher D Hundhausen</author>
+<author>Sarah A Douglas</author>
+<author>John T Stasko</author>
+</authors>
+<title>A Meta-Study of algorithm visualization effectiveness.</title>
+<contexts>
+<context position="15587" citStr="[4]" startWordPosition="2592" endWordPosition="2592">altogether. If, for example, every doodle is accompanied by a list of instance variables at the current zoom level, then zooming in is just like diving into the object graph using an inspector, making the ladder superfluous. Some experimentation will be needed to answer whether doodles can entirely take over object inspection. 5. RELATED WORK GNU DDD, the Data Display Debugger [15] uses visual metaphors to give insight into the state of a program. To that, LIVE [1] adds metaphors with animations, although empirical results as to the helpfulness of animation in understanding algorithm is mixed [4]. JGRASP [3] and Travis [8] provide automatic mappings between data and its visualization. Cheng et al. provide the xDIVA tool [2], which provides a number of mappings from data types to “visualization metaphors” which render the data. Since data types can be nested, visualization metaphors can be composed. for a number of reasons, however, the visualizations are difficult to specify. First, xDIVA is a separate tool, rather than being integrated into the IDE, like printOn:. Second, the visualizations are configured in a graphical interface, rather than in the code of a class, and thus can not </context>
+</contexts>
+<marker>[4]</marker>
+<rawString>Christopher D. Hundhausen, Sarah A. Douglas, and John T. Stasko. A Meta-Study of algorithm visualization effectiveness.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Andrew J Ko</author>
+</authors>
+<title>Information needs in collocated software development teams.</title>
+<date>2007</date>
+<booktitle>In in International Conference on Software Engineering (ICSE</booktitle>
+<pages>344--353</pages>
+<contexts>
+<context position="6161" citStr="[5]" startWordPosition="991" endWordPosition="991">eatures a perfectly workable inspector, it is interesting to ask why textual visualization is still so popular. While visualizing an object as a short string of text does not use much of what is available to software visualization, it still reaps a number of benefits commonly attributed to more advanced software visualizations: it makes use of the pattern recognition abilities of the human brain, and can summarize a wide array of information in a concise format. To help us shape DoobleDebug, we try to find the information needs that cause developers to overwrite the printOn: method. Ko et al. [5] observed 17 developers over the course of two months for a total of 25 work hours, noting the information needs that arose. He lists a total of 21 information needs, of which the following three can be attended to by overwriting the printOn: method: 1. What code caused this program state? 2. What does the failure look like? 3. In what situations does this failure occur? “Program state” is explicit in the first question, and implicit in the other two. This leads us, combined with our experience, to the following hypothesis: The strengths of overwriting the printOn: method as a textual visualiz</context>
+</contexts>
+<marker>[5]</marker>
+<rawString>Andrew J. Ko. Information needs in collocated software development teams. In in International Conference on Software Engineering (ICSE 2007, pages 344–353, 2007.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Andrew J Ko</author>
+<author>Brad A Myers</author>
+</authors>
+<title>Debugging reinvented: asking and answering why and why not questions about program behavior.</title>
+<date>2008</date>
+<booktitle>In Proceedings of the 30th international conference on Software engineering, ICSE ’08,</booktitle>
+<pages>301--310</pages>
+<publisher>ACM.</publisher>
+<location>New York, NY, USA,</location>
+<contexts>
+<context position="8771" citStr="[10, 6, 11]" startWordPosition="1440" endWordPosition="1442"> they have to print all basic data types at every point of interest. If a developer is unsure at which point in time a certain line of code is interesting, setting a breakpoint would require him to proceed manually until the relevant moment is found. Once it is found, he has nothing to compare it to, since all previous moments have already passed without being displayed in the debugger. Unable to show the history of an object, current debuggers are unable to explain how these states came about. This is even though some research projects aim at making the past more accessible to the developer. [10, 6, 11]. However, none of these approaches provides what developers now get from printing to the transcript: a quick overview over a possibly large number of machine states, together with an easy way to compare those side-by-side. 4. DOODLEDEBUG In this section, we propose an approach to satisfying the information needs attended to by the printOn: method, at a similarly low cost to the user, but with improved usefulness. Our approach is informed by the success of the printOn: feature and tries to add to it, without losing its upsides. We discuss directions in which this research could continue. We in</context>
+</contexts>
+<marker>[6]</marker>
+<rawString>Andrew J. Ko and Brad A. Myers. Debugging reinvented: asking and answering why and why not questions about program behavior. In Proceedings of the 30th international conference on Software engineering, ICSE ’08, pages 301–310, New York, NY, USA, 2008. ACM.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Andrew J Ko</author>
+<author>Brad A Myers</author>
+<author>Michael J Coblenz</author>
+<author>Htet H Aung</author>
+</authors>
+<title>An exploratory study of how developers seek, relate, and collect relevant information during software maintenance tasks.</title>
+<date>2006</date>
+<journal>IEEE Trans. Softw. Eng.,</journal>
+<volume>32</volume>
+<issue>12</issue>
+<contexts>
+<context position="1212" citStr="[7]" startWordPosition="180" endWordPosition="180">ve carried out an empirical study to understand how printOn: methods are used in practice, and we are developing DoodleDebug, a framework to support visualizable objects. 1. INTRODUCTION In a survey on software visualization among 111 researchers in software maintenance, reengineering and reverse engineering, 40 % of the researchers found software visualization absolutely necessary for their work [9]. However, when 31 developers were observed, each for 70 minutes while performing software maintenance tasks, not a single one of them is reported to have used any kind of visualization whatsoever [7]. At the very least, current visualizations haven’t become an integral part of the professional developer’s toolkit, as Reiss [12] laments. On the other hand, the use of textually visualizing objects via the toString (in Java) or printOn: (in Smalltalk) method and equivalent facilities in other languages, is widespread. We attempt to explain the popularity of the printOn: method in Smalltalk. We present the results from looking at 2145 open source projects, of which 590 overwrote the printOn: method. A downside of the printOn: method is that it makes it hard to compose visualizations of object</context>
+</contexts>
+<marker>[7]</marker>
+<rawString>Andrew J. Ko, Brad A. Myers, Michael J. Coblenz, and Htet H. Aung. An exploratory study of how developers seek, relate, and collect relevant information during software maintenance tasks. IEEE Trans. Softw. Eng., 32(12):971–987, December 2006.</rawString>
+</citation>
+<citation valid="false">
+<authors>
+<author>J L Korn</author>
+<author>A W Appel</author>
+</authors>
+<title>Traversal-based visualization of data structures.</title>
+<pages>11--18</pages>
+<contexts>
+<context position="15614" citStr="[8]" startWordPosition="2597" endWordPosition="2597">, every doodle is accompanied by a list of instance variables at the current zoom level, then zooming in is just like diving into the object graph using an inspector, making the ladder superfluous. Some experimentation will be needed to answer whether doodles can entirely take over object inspection. 5. RELATED WORK GNU DDD, the Data Display Debugger [15] uses visual metaphors to give insight into the state of a program. To that, LIVE [1] adds metaphors with animations, although empirical results as to the helpfulness of animation in understanding algorithm is mixed [4]. JGRASP [3] and Travis [8] provide automatic mappings between data and its visualization. Cheng et al. provide the xDIVA tool [2], which provides a number of mappings from data types to “visualization metaphors” which render the data. Since data types can be nested, visualization metaphors can be composed. for a number of reasons, however, the visualizations are difficult to specify. First, xDIVA is a separate tool, rather than being integrated into the IDE, like printOn:. Second, the visualizations are configured in a graphical interface, rather than in the code of a class, and thus can not easily be exchanged with me</context>
+</contexts>
+<marker>[8]</marker>
+<rawString>J. L. Korn and A. W. Appel. Traversal-based visualization of data structures. pages 11–18.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Rainer Koschke</author>
+</authors>
+<title>Software visualization in software maintenance, reverse engineering, and re-engineering: a research survey.</title>
+<date>2003</date>
+<journal>J. Softw. Maint. Evol.: Res. Pract.,</journal>
+<volume>15</volume>
+<issue>2</issue>
+<contexts>
+<context position="1012" citStr="[9]" startWordPosition="145" endWordPosition="145">sional visualizations at various levels of granularity. This makes it easier to compose visualizations from object parts, and enables “semantic zooming” of object visualizations while debugging. We have carried out an empirical study to understand how printOn: methods are used in practice, and we are developing DoodleDebug, a framework to support visualizable objects. 1. INTRODUCTION In a survey on software visualization among 111 researchers in software maintenance, reengineering and reverse engineering, 40 % of the researchers found software visualization absolutely necessary for their work [9]. However, when 31 developers were observed, each for 70 minutes while performing software maintenance tasks, not a single one of them is reported to have used any kind of visualization whatsoever [7]. At the very least, current visualizations haven’t become an integral part of the professional developer’s toolkit, as Reiss [12] laments. On the other hand, the use of textually visualizing objects via the toString (in Java) or printOn: (in Smalltalk) method and equivalent facilities in other languages, is widespread. We attempt to explain the popularity of the printOn: method in Smalltalk. We p</context>
+</contexts>
+<marker>[9]</marker>
+<rawString>Rainer Koschke. Software visualization in software maintenance, reverse engineering, and re-engineering: a research survey. J. Softw. Maint. Evol.: Res. Pract., 15(2):87–109, 2003.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Lienhard</author>
+<author>S Ducasse</author>
+<author>T Girba</author>
+</authors>
+<title>Taking an object-centric view on dynamic information with object flow analysis.</title>
+<date>2009</date>
+<booktitle>Computer Languages, Systems &amp; Structures,</booktitle>
+<volume>35</volume>
+<issue>1</issue>
+<contexts>
+<context position="8771" citStr="[10, 6, 11]" startWordPosition="1440" endWordPosition="1442"> they have to print all basic data types at every point of interest. If a developer is unsure at which point in time a certain line of code is interesting, setting a breakpoint would require him to proceed manually until the relevant moment is found. Once it is found, he has nothing to compare it to, since all previous moments have already passed without being displayed in the debugger. Unable to show the history of an object, current debuggers are unable to explain how these states came about. This is even though some research projects aim at making the past more accessible to the developer. [10, 6, 11]. However, none of these approaches provides what developers now get from printing to the transcript: a quick overview over a possibly large number of machine states, together with an easy way to compare those side-by-side. 4. DOODLEDEBUG In this section, we propose an approach to satisfying the information needs attended to by the printOn: method, at a similarly low cost to the user, but with improved usefulness. Our approach is informed by the success of the printOn: feature and tries to add to it, without losing its upsides. We discuss directions in which this research could continue. We in</context>
+</contexts>
+<marker>[10]</marker>
+<rawString>A. Lienhard, S. Ducasse, and T. Girba. Taking an object-centric view on dynamic information with object flow analysis. Computer Languages, Systems &amp; Structures, 35(1):63–79, April 2009.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Frederic Pluquet</author>
+<author>Stefan Langerman</author>
+<author>Roel Wuyts</author>
+</authors>
+<title>Executing code in the past: efficient in-memory object graph versioning.</title>
+<date>2009</date>
+<journal>SIGPLAN Not.,</journal>
+<pages>44--391</pages>
+<contexts>
+<context position="8771" citStr="[10, 6, 11]" startWordPosition="1440" endWordPosition="1442"> they have to print all basic data types at every point of interest. If a developer is unsure at which point in time a certain line of code is interesting, setting a breakpoint would require him to proceed manually until the relevant moment is found. Once it is found, he has nothing to compare it to, since all previous moments have already passed without being displayed in the debugger. Unable to show the history of an object, current debuggers are unable to explain how these states came about. This is even though some research projects aim at making the past more accessible to the developer. [10, 6, 11]. However, none of these approaches provides what developers now get from printing to the transcript: a quick overview over a possibly large number of machine states, together with an easy way to compare those side-by-side. 4. DOODLEDEBUG In this section, we propose an approach to satisfying the information needs attended to by the printOn: method, at a similarly low cost to the user, but with improved usefulness. Our approach is informed by the success of the printOn: feature and tries to add to it, without losing its upsides. We discuss directions in which this research could continue. We in</context>
+</contexts>
+<marker>[11]</marker>
+<rawString>Frédéric Pluquet, Stefan Langerman, and Roel Wuyts. Executing code in the past: efficient in-memory object graph versioning. SIGPLAN Not., 44:391–408, October 2009.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S P Reiss</author>
+</authors>
+<title>The paradox of software visualization.</title>
+<date>2005</date>
+<booktitle>In 3rd IEEE International Workshop on Visualizing Software for Understanding and Analysis,</booktitle>
+<pages>1--5</pages>
+<publisher>IEEE,</publisher>
+<contexts>
+<context position="1342" citStr="[12]" startWordPosition="200" endWordPosition="200">ramework to support visualizable objects. 1. INTRODUCTION In a survey on software visualization among 111 researchers in software maintenance, reengineering and reverse engineering, 40 % of the researchers found software visualization absolutely necessary for their work [9]. However, when 31 developers were observed, each for 70 minutes while performing software maintenance tasks, not a single one of them is reported to have used any kind of visualization whatsoever [7]. At the very least, current visualizations haven’t become an integral part of the professional developer’s toolkit, as Reiss [12] laments. On the other hand, the use of textually visualizing objects via the toString (in Java) or printOn: (in Smalltalk) method and equivalent facilities in other languages, is widespread. We attempt to explain the popularity of the printOn: method in Smalltalk. We present the results from looking at 2145 open source projects, of which 590 overwrote the printOn: method. A downside of the printOn: method is that it makes it hard to compose visualizations of objects. We outline our idea of DoodleDebug, our vision of a library that improves on the printOn: method by making it easy for develope</context>
+</contexts>
+<marker>[12]</marker>
+<rawString>S. P. Reiss. The paradox of software visualization. In 3rd IEEE International Workshop on Visualizing Software for Understanding and Analysis, pages 1–5. IEEE, 2005.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Stephen Wolfram</author>
+</authors>
+<title>The Mathematica Book, Fifth Edition. Wolfram Media, 5th edition,</title>
+<date>2003</date>
+<contexts>
+<context position="16503" citStr="[13]" startWordPosition="2740" endWordPosition="2740"> a number of reasons, however, the visualizations are difficult to specify. First, xDIVA is a separate tool, rather than being integrated into the IDE, like printOn:. Second, the visualizations are configured in a graphical interface, rather than in the code of a class, and thus can not easily be exchanged with members of the same team. Third, the visualizations are a great deal more complex than we think is necessary. The visualization in xDIVA is 3D, allowing for circling around objects of interests. This complexity likely increases the complexity of creating new visualizations. Mathematica [13] ships with some data layouts for tables, matrices, and curves. However, as Mathematica is not object-oriented, objects cannot define their own behavior, and using any but the predefined commands for viewing data is uncommon. Further, Mathematica does not allow data layouts to be composed. 6. CONCLUSION Developers overwrite the printOn: method because they need to understand what caused a certain program state, what caused a failure, and what exactly a program failure looks like. They use textual visualizations because they give a quick overview over a possibly large number of machine states, </context>
+</contexts>
+<marker>[13]</marker>
+<rawString>Stephen Wolfram. The Mathematica Book, Fifth Edition. Wolfram Media, 5th edition, August 2003.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Allison Woodruff</author>
+<author>James Landay</author>
+<author>Michael Stonebraker</author>
+</authors>
+<title>Goal-directed zoom.</title>
+<date>1998</date>
+<booktitle>In CHI 98 conference summary on Human factors in computing systems, CHI ’98,</booktitle>
+<pages>305--306</pages>
+<publisher>ACM.</publisher>
+<location>New York, NY, USA,</location>
+<contexts>
+<context position="2561" citStr="[14]" startWordPosition="400" endWordPosition="400">ow their objects can be shown as 2-dimensional drawings. To delve deeper into an object’s representation, Permission to make digital or hard copies of all or part of this work for personal or classroom use is granted without fee provided that copies are not made or distributed for profit or commercial advantage and that copies bear this notice and the full citation on the first page. To copy otherwise, to republish, to post on servers or to redistribute to lists, requires prior specific permission and/or a fee. Copyright 20XX ACM X-XXXXX-XX-X/XX/XX ...$10.00. we suggest using semantic zooming [14]. In section 2, we present the results of looking at 590 software repositories that use the printOn: method for object visualization. In section 3, we attempt to explain the success of this way of visualizing objects, and collect requirements that any improvement would have to meet. In section 4, we outline our proposed improvement over merely textually visualizing objects. In section 5, we list the related work and in section 6, we conclude. 2. CURRENT TEXTUAL VISUALIZATION The textual visualization provided by the printOn: method is used in two sets of circumstances—in print statements to th</context>
+<context position="10621" citStr="[14]" startWordPosition="1747" endWordPosition="1747"> while still generating useful visualizations. The vocabulary of the canvas must thus be very coarse, as in: “draw i as an external resource”, where i is an instance variable. It is then up to the canvas to choose a location and visual indication for external resources. Since objects may be composed of other objects, they may need to draw these when drawing themselves. To summarize objects to what is needed from an abstract level, we provide the drawSmallOn: method, which can draw a shorter summary, which can then be zoomed in on by clicking it. This kind of zooming is called semantic zooming [14]. 4.1 Example Let us suppose that the developer is constructing a number of affine transformations, which are then concatenated. Since the concatenated affine transformations are not as the developer expects, he wishes to see all of them, at various stages of the course of the program. In the Pharo Smalltalk IDE, he could now choose to open an inspector for the array of affine transformations in an appropriate line of code in his program. This would open a plethora of inspector windows with no clear ordering, making it impossible to use them for tracing the program state. As an alternative, he</context>
+</contexts>
+<marker>[14]</marker>
+<rawString>Allison Woodruff, James Landay, and Michael Stonebraker. Goal-directed zoom. In CHI 98 conference summary on Human factors in computing systems, CHI ’98, pages 305–306, New York, NY, USA, 1998. ACM.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Andreas Zeller</author>
+<author>Dorothea Lutkehaus</author>
+</authors>
+<title>DDD—a free graphical front-end for UNIX debuggers.</title>
+<date>1996</date>
+<journal>SIGPLAN Not.,</journal>
+<volume>31</volume>
+<issue>1</issue>
+<contexts>
+<context position="15368" citStr="[15]" startWordPosition="2556" endWordPosition="2556">ctions to create textual descriptions of the object to be visualized to improve shareability. If properly exploited, we believe that the zooming metaphor has the potential to get rid of the need for a separate inspector altogether. If, for example, every doodle is accompanied by a list of instance variables at the current zoom level, then zooming in is just like diving into the object graph using an inspector, making the ladder superfluous. Some experimentation will be needed to answer whether doodles can entirely take over object inspection. 5. RELATED WORK GNU DDD, the Data Display Debugger [15] uses visual metaphors to give insight into the state of a program. To that, LIVE [1] adds metaphors with animations, although empirical results as to the helpfulness of animation in understanding algorithm is mixed [4]. JGRASP [3] and Travis [8] provide automatic mappings between data and its visualization. Cheng et al. provide the xDIVA tool [2], which provides a number of mappings from data types to “visualization metaphors” which render the data. Since data types can be nested, visualization metaphors can be composed. for a number of reasons, however, the visualizations are difficult to sp</context>
+</contexts>
+<marker>[15]</marker>
+<rawString>Andreas Zeller and Dorothea Lütkehaus. DDD—a free graphical front-end for UNIX debuggers. SIGPLAN Not., 31(1):22–27, January 1996.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

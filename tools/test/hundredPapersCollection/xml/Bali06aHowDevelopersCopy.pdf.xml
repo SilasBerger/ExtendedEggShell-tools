@@ -1,0 +1,1330 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.000000">
+<title confidence="0.532946">
+How Developers Copy
+In Proceedings of International Conference on Program Comprehension (ICPC 2006), pp. 56–65
+</title>
+<author confidence="0.641963">
+Mihai Balint1, Tudor Gı̂rba2 and Radu Marinescu1
+</author>
+<footnote confidence="0.996277">
+1LOOSE Research Group, Politehnica University of Timişoara, Romania
+2Software Composition Group, University of Berne, Switzerland
+</footnote>
+<sectionHeader confidence="0.923615" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.9909678125">
+Copy-paste programming is dangerous as it may lead to
+hidden dependencies between different parts of the system.
+Modifying clones is not always straight forward, because
+we might not know all the places that need modification.
+This is even more of a problem when several developers
+need to know about how to change the clones. In this paper,
+we correlate the code clones with the time of the modifica-
+tion and with the developer that performed the modification
+to detect patterns of how developers copy from one another.
+We develop a visualization, named Clone Evolution View1,
+to represent the evolution of the duplicated code. We show
+the relevance of our approach on several large case studies
+and we distill our experience in forms of interesting copy
+patterns.
+Keywords: code duplication, reverse engineering, soft-
+ware evolution, visualization
+</bodyText>
+<sectionHeader confidence="0.997933" genericHeader="introduction">
+1 Introduction
+</sectionHeader>
+<bodyText confidence="0.998926285714286">
+Code duplication appears because of several reasons:
+time pressure, shortcomings of the programming languages,
+inexperienced developers etc. No matter the reason, du-
+plicating the code introduces implicit dependencies be-
+tween the duplicated parts (named clones hereafter) because
+changing one part requires changing the other parts as well.
+Detecting code clones has long been in the center of the
+reverse engineering community [1, 6, 10, 12]. Most of the
+work in this area has been focused on the detection of prob-
+lems in the code and in relating clones with their impact in
+terms of quality assurance.
+Kim et al. made an interesting observation by exper-
+imentally showing that “refactorings may not always im-
+prove the software with respect to clones” [13]. Indeed,
+their empirical study showed that the short-lived clones are
+1The visualization presented here makes heavy use of colors. Please
+obtain a color copy of this article for better understanding.
+sometimes not worthwhile extensive refactoring, while the
+long living ones are often in the system due to shortcom-
+ings of the programming language. In the same line, Cordy
+observed that in special cases changing the clones is not
+advisable from a risk management point of view [4]. How-
+ever, typically, extensive code duplication is clearly related
+to problems in maintenance [5, 11, 8].
+One aspect that was neglected in the past when analyz-
+ing clones and their impact on quality is the authorship of
+clones; in other words, how developers create and maintain
+clones. As stated by Conway the shape of an organization
+influences the shape of the code structure [3]. Therefore, we
+believe that identifying and understanding the patterns by
+which a team of developers deals with duplicated code, will
+provide us with a better understanding of both a project’s
+structure and of its development team, and ultimately on
+the cloning phenomenon [9].
+In this paper we aim to provide a novel view on clone de-
+tection, by focusing on how developers create and maintain
+clones, and integrating this knowledge with further infor-
+mation about the clones (e.g., time of cloning, location of
+clones etc.). In order to detect who copies from whom we
+need the information of who changed each line of code in-
+volved in duplication. For that, instead of just analyzing the
+actual code, we analyze the information provided by ver-
+sioning systems and recover for each line of code, the date
+and the developer that changed that line.
+To get insight into what are the patterns of how the de-
+velopers create and modify clones, we decompose the clone
+analysis along several axes: the developers that created the
+lines, the time of the modifications, the localization of the
+clones in the system, and the size of the clones.
+To analyze the above variables we develop a visualiza-
+tion named Clone Evolution View. The visualization dis-
+plays the details of how a code fragment is cloned into sev-
+eral places. Based on it we detect several copy-patterns.
+For example, we detect places where a developer forgets to
+change all the clones, clones that are changed by several
+developers, fresh clones etc.
+</bodyText>
+<page confidence="0.918985">
+1
+</page>
+<bodyText confidence="0.979313411764706">
+Typically in a software system we can have several hun-
+dreds such duplicated fragments. To help the reverse engi-
+neer cope with the large amount of data, we also introduce
+several measurements that can be used to detect interesting
+clones.
+We apply our approach on three large case studies and
+we present the experience in the form of a list of copy pat-
+terns.
+Structure of the paper. In the next section we briefly talk
+about the detection technique we use. Section 3 introduces
+our visualization of the clones. In Section 4 we present ev-
+idence of several copy patterns detected in two large case
+studies. Section 5 presents a set of metrics that we use to
+guide our search through the clone space. Section 6 dis-
+cusses the different variation points of the approach. Sec-
+tion 7 presents the related work and Section 8 concludes the
+paper.
+</bodyText>
+<sectionHeader confidence="0.97425" genericHeader="method">
+2 Detecting How Developers Copy
+</sectionHeader>
+<bodyText confidence="0.9997618">
+In this section we describe our approach of analyzing
+how developers copy. First, we describe how we automat-
+ically detect duplicated fragments in several places, and
+afterwards we describe how the developer information is
+added to the analysis.
+</bodyText>
+<subsectionHeader confidence="0.994167">
+2.1 Detecting Clones
+</subsectionHeader>
+<bodyText confidence="0.977986333333333">
+The most popular approach to comprehend clones is us-
+ing a scatterplot: it displays a matrix where the element
+(i, j) is black if the line on the row i is the same as the
+line on the column j [6, 10, 12]. Figure 1 shows the details
+of such a scatter plot.
+lines from source 2
+</bodyText>
+<figure confidence="0.929221">
+lines
+from
+source 1
+exact
+chunk
+exact
+chunk
+line
+bias
+</figure>
+<figureCaption confidence="0.999478">
+Figure 1. Detecting clones on the scatterplot.
+</figureCaption>
+<bodyText confidence="0.952599555555556">
+To find duplicated fragments of text using the scatterplot
+we need to look through the scatterplot for patterns of di-
+agonal rows of dots. If such a row of dots can be found it
+means that the text represented by the rows is the same (or
+very simillar) to the text represented by the columns.
+For our analysis, we needed an automated approach. The
+approach is based on the quantification of the visual detec-
+tion using thresholds. Three thresholds are used based on
+the work of Wettel [22, 23]:
+</bodyText>
+<listItem confidence="0.996944833333333">
+• Minimum clone length defines the minimum amount of
+lines present in a clone. In our experiments we used 7.
+• Maximum line bias defines the maximum amount of
+lines in between two exact chunks. In our experiments
+we used 2.
+• Minimum chunk size defines the minimum amount of
+</listItem>
+<bodyText confidence="0.994113424242424">
+lines of an exact chunk. In our experiments we used 3.
+The problem with the scatterplot approach is that once
+we find a diagonal pattern we are only looking at two pieces
+of text at once (i.e., a duplication). For some systems, the
+number of such duplications between two fragments of text
+can be up to several thousands. However, in such large sys-
+tems it is common to find the same fragment of text copied
+over and over a few times.
+In our approach we have chosen to aggregate these dupli-
+cated text fragments into sets which we call multiplications
+or clone families [19]. Unlike duplications which describe
+a cloning relationship only between two fragments, a mul-
+tiplication describes the cloning relationship between mul-
+tiple fragments of text.
+Because we automatically detect duplications by analyz-
+ing the scatterplot, we can also detect the multiplications. In
+a nutshell, if A, B and C name three fragments of text and
+A is duplicated by B, and B is duplicated by C then (A,B,C)
+are part of the same multiplication. With this aggregation
+technique we are able to lower (sometimes by more than
+half) the number entities we have to analyze [19].
+For example, using the above mentioned values for the
+thresholds and this aggregation technique, the result of the
+automated detection is a list of multiplications where the
+detected clones will be at least 7 lines long, will have at
+most two lines between exact chunks and the exact chunks
+will be at least 3 lines long.
+We also strive to reduce the number of detected dupli-
+cations by eliminating some of the false positives generated
+by source code: duplications in programming language syn-
+tax (e.g., java import statements), comments, text format-
+ting. This is done by a simple parser that eliminates certain
+strings that match regular expressions [18].
+</bodyText>
+<subsectionHeader confidence="0.882473">
+2.2 Improving the Clone Detection with Devel-
+oper Information
+</subsectionHeader>
+<bodyText confidence="0.993454">
+To identify how the developers create the clones, we
+make use of cvs annotate. In Figure 2 we give an exam-
+</bodyText>
+<page confidence="0.921566">
+2
+</page>
+<subsectionHeader confidence="0.777083333333333">
+1.1 (red
+1.3 (red
+1.2 (cyan
+</subsectionHeader>
+<footnote confidence="0.682837142857143">
+1.3 (red
+1.4 (blue
+date1): original line written by red
+date3): line written by red
+date2): another line written by cyan
+date3): yet another line written by red
+date4): line written by blue
+</footnote>
+<figure confidence="0.979725875">
+SourceLine
+Date
+Author
+Source
+cv
+s
+an
+no
+ta
+te
+m
+et
+a-
+m
+od
+el
+</figure>
+<figureCaption confidence="0.999869">
+Figure 2. Example of a result of a cvs annotate
+</figureCaption>
+<bodyText confidence="0.989284333333333">
+and the meta-model that describes it.
+ple of a fictive result of running cvs annotate on a file. Each
+line is annotated with the version information (e.g., 1.1),
+the name of the user (e.g., red), the date of the modification
+(e.g., date 1).
+Prior to applying the clone detection, we first process the
+annotations and create a model that conforms to the meta-
+model in the lower part of the figure. With this information
+at hand we can analyze how developers copy.
+</bodyText>
+<sectionHeader confidence="0.972872" genericHeader="method">
+3 Visualizing How Developers Copy
+</sectionHeader>
+<bodyText confidence="0.984867">
+There are myriads of questions that pop-up while trying
+to identify patterns that occur during the process of cloning.
+In our view most of these questions address one of the fol-
+lowing four categories of problems:
+</bodyText>
+<listItem confidence="0.986887222222222">
+• Quantity e.g., How large are the clones? And how
+many clones are there in a multiplication?
+• Time e.g.,When were the changes made to the clones?
+Where there inconsistent modifications?
+• Developers e.g., Who created the original fragment?
+Who copied from the original? How many developers
+are involved in cloning?
+• Localization e.g., Are clones in the same file, or in sep-
+arate files?
+</listItem>
+<subsectionHeader confidence="0.961217">
+3.1 Clone Evolution View
+</subsectionHeader>
+<bodyText confidence="0.99947715">
+Because our aim is to explore an unexplored territory,
+we want to be exposed to as many variables as possible to
+answer the above questions. That is the reason why we de-
+sign a novel visualization: the Clone Evolution View. On
+the one hand we need to give indication for when changes
+were made and by whom, and on the other hand we need to
+give an indication of what is the text of the clones. Figure 3
+shows an example of our visualization.
+Each line represents a source line. We attach a unique
+color to each developer present in the duplication, and we
+color each line with the color of the developer that changed
+it last. We can safely use a distinct color for each developer
+because usually, the number of developers participating in
+a multiplication is low (in our experiments we encountered
+at most 5 developers).
+The visualization has two parts: on the left, we show
+a time representation of the modification of the line, and
+on the right we show the text of the line as obtained from
+the last version. The date of the modification of the line is
+shown with a vertical line annotated with the actual date.
+</bodyText>
+<subsectionHeader confidence="0.950309">
+3.2 How to Read the Clone Evolution View
+</subsectionHeader>
+<bodyText confidence="0.910701461538462">
+In Figure 3 we display 3 fictive clones. RED wrote the
+original line of the multiplication at date 1 in the first two
+clones. At a later date (i.e., date 2) BLUE added another line
+in the two clones. At date 3 RED added two more lines, and
+created another complete clone in source 2. At date 4, PINK
+added another line, but only in 2 clones, and very soon after,
+ORANGE intervened and added the missing line to the third
+clone.
+Based on the visualization we develop a vocabulary to
+describe the activities that may occur while cloning. Each
+activity can be further accompanied by several attributes
+that characterize in more detail the general context (and im-
+pact) of the activity.
+</bodyText>
+<listItem confidence="0.9025825">
+Typical Developer Activities. We identified three main
+activities that in our experience are the most encountered
+ones, namely:
+• Line Cloning denotes the act of introducing one new
+</listItem>
+<bodyText confidence="0.6818456">
+line to the multiplication. In Clone Evolution View we
+see that this activity happened if we see a line starting
+in one of the clones, and by looking left in the visual-
+ization (i.e., earlier in time) at all the other clones, there
+is not another clone where the corresponding line has
+</bodyText>
+<listItem confidence="0.899604142857143">
+already been started. For example, in Figure 3, at date
+4, the action of the PINK author is a Line Cloning as in
+none of the other clones that lines started by PINK has
+not been started at an earlier date.
+• Block Cloning denotes a simultaneous creation of a
+significant number of lines from a clone, or even of an
+entire clone. In our example, RED created the entire
+</listItem>
+<page confidence="0.975417">
+3
+</page>
+<bodyText confidence="0.982287619047619">
+date 2
+date 3
+date 5
+last date
+first date
+date 1
+line written by red in 2 clones and copied in the third
+line written by red
+line written by blue and copied by red
+another line written by red
+line written by pink only in 2 clones and fixed by orange
+line written by red in 2 clones and copied in the third
+line written by red
+line written by blue and copied by red
+another line written by red
+line written by pink only in 2 clones and fixed by orange
+line written by red in 2 clones and copied in the third
+line written by red
+line written by blue and copied by red
+another line written by red
+line written by pink only in 2 clones and fixed by orange
+</bodyText>
+<figure confidence="0.989287258064516">
+date 4
+clo
+ne
+1
+in
+s
+ou
+rc
+e
+1
+clo
+ne
+2
+in
+s
+ou
+rc
+e
+1
+clo
+ne
+3
+in
+s
+ou
+rc
+e
+2
+source 1
+source 1
+source 2
+</figure>
+<figureCaption confidence="0.7637242">
+the line of text written by orange
+date of the last change of two lines committed by pink
+Figure 3. Example of the Clone Evolution View of a fictive multiplication.
+third clone by copying the lines existent in the other
+two.
+</figureCaption>
+<listItem confidence="0.6239075">
+• Line Fixing denotes the act of cloning at a later time
+then the original line, and at a later time then the clone
+birth. In our example, the action of ORANGE (date 5)
+is a Line Fixing as it fixes the lines committed by PINK.
+Consistency Attributes. For the above actions we can
+take into account several attributes. From our empirical ob-
+servations the attribute that is most relevant from the point
+of view of the maintenance impact is the consistency. Thus,
+each activity is characterized by one of the two attributes:
+• Consistent – denotes a cloning (either of a line or of
+a block) that propagates the involved lines into all the
+clones that exist at the moment of cloning and addi-
+tionally in all the clones that appear afterwards, at the
+very moment of the clone birth. For example, in Fig-
+</listItem>
+<bodyText confidence="0.905679333333333">
+ure 3 BLUE makes a Consistent Line Cloning because
+at date 2 when he or she initiates a Line Cloning activ-
+ity, the author propagates it in the other clone existing
+at that time, and also because at date 3, in the context
+of a Block Cloning activity that gives birth to the third
+clone, that line is also cloned, by RED.
+</bodyText>
+<listItem confidence="0.987503">
+• Inconsistent – denotes a cloning that does not get
+</listItem>
+<bodyText confidence="0.939477294117647">
+propagated to all the existing clones. Additionally, a
+cloning is considered to be inconsistent if the involved
+lines are not propagated in the clones that appear later
+at the very moment of their birth. In our example,
+PINK is responsible for an Inconsistent Line Cloning
+activity (date 4) as the cloning was not propagated in
+the third clone, and because of that at date 5 we notice
+a Line Fixing activity done by ORANGE.
+Speaking about the consistency attributes we should note
+that the Line Fixing activity is always the result of an earlier
+inconsistent cloning activity.
+Having an explicit vocabulary has a twofold advantage:
+on the one hand it offers the basic terms in which to express
+the reasoning, and on the other hand it provides a commu-
+nication means. The vocabulary presented here comes from
+our experience, and it covers the interesting cases we dis-
+covered.
+</bodyText>
+<sectionHeader confidence="0.834619" genericHeader="method">
+4 Patterns of Cloning Activity
+</sectionHeader>
+<bodyText confidence="0.804263">
+In this section we present the results of our experiments
+on the file system of three case studies: Ant, ArgoUML
+and Ptolemy2. The aim of our experimental study was to
+empirically detect cloning activity patterns. Table 1 shows
+</bodyText>
+<page confidence="0.97597">
+4
+</page>
+<figureCaption confidence="0.921792">
+Figure 4. Case I: Consistent Block Cloning with Unique Author (Ptolemy2)
+the size of the case studies (cloner denotes a developer that
+copied at least on line of code).
+</figureCaption>
+<table confidence="0.99455425">
+System Files Multiplications Developers Cloners
+Ant 1115 156 30 11
+ArgoUML 1446 326 30 12
+Ptolemy2 2715 902 63 22
+</table>
+<tableCaption confidence="0.9992">
+Table 1. Case studies
+</tableCaption>
+<bodyText confidence="0.9954584">
+Next we are going to discuss the most interesting pat-
+terns discovered so far. We considered a pattern to be inter-
+esting, and selected it for presentation if it was either very
+frequently encountered, or if we considered it to have a par-
+ticular negative impact from the maintenance point of view.
+</bodyText>
+<subsectionHeader confidence="0.991146">
+4.1 Case I: Consistent Line/Block Cloning with
+Unique Author
+</subsectionHeader>
+<bodyText confidence="0.9910234">
+In this case one single developer is creating and consis-
+tently maintaining a number of clones. Usually the number
+of clones in the multiplication is not too high (usually be-
+tween 3 and 6). This pattern may appear in several forms:
+either the first clone (i.e., the original code) was developed
+at some point in time, and then is later multiplied in several
+clones (either simultaneously or one by one) by Consistent
+Block Clonings; or, all the clones are created synchronously
+(in this case we cannot say which one the original is), as
+seen in Figure 4. In both cases, one common characteristic
+is that after the clones are created, all the modifications are
+permanently propagated in all the clones.
+Due to the consistency of change propagation and to the
+fact that all the clones are one-minded this is the least harm-
+ful case encountered.
+</bodyText>
+<subsectionHeader confidence="0.910452">
+4.2 Case II: Creation of Clones by Multiple Au-
+</subsectionHeader>
+<bodyText confidence="0.983808722222222">
+thors using Consistent Block Cloning
+In this second pattern, we encounter at least two devel-
+opers (but usually the number of involved developers is 3
+or 4). The other main characteristic of this case is that the
+Consistent Block Cloning activity leads to the birth of a new
+clone that is created by a single developer, who is usually
+different from the authors of the original piece of code, just
+like in Figure 5. In this case the number of clones belonging
+to the same multiplication is rather high (usually between 4
+and 7) and the size of the cloned block is also significant
+(higher that 7 lines). Another common characteristic is the
+fact that there is almost no further change in the multiplica-
+tion after the block cloning creation of the other clones.
+The consistency of the cloning activity makes this case
+to look harmless, yet the risk of a future inconsistent modi-
+fication is strongly increased by the large number of distinct
+developers involved, by the tendency to have larger clones
+and by the number of clones created.
+</bodyText>
+<subsectionHeader confidence="0.996146">
+4.3 Case III: Consistent Line/Block Cloning with
+Multiple Authors
+</subsectionHeader>
+<bodyText confidence="0.999386307692308">
+In Figure 6 we see the illustration of this third case of
+consistent line cloning. In this case there is again more
+than one developer involved in creating and keeping con-
+sistent the multiplication. But in this case, the clones tend
+appear and to be modified at the same time, while each de-
+veloper takes responsibility for the creation and consistent
+propagation of a subset of lines. In other words, the multi-
+plication involves several developers (usually either two or
+three), but each of them propagates the cloning activity in
+all the clones.
+A further interesting example is depicted in Figure 7
+where after several step-wise creation and modifications of
+the first three clones, made by the BLUE, RED and PINK
+</bodyText>
+<page confidence="0.966425">
+5
+</page>
+<figureCaption confidence="0.999969">
+Figure 5. Case II: Creation of Clones by Multiple Authors using Consistent Block Cloning (ArgoUML)
+Figure 6. Consistent Line/Block Cloning with Multiple Authors (ArgoUML)
+</figureCaption>
+<page confidence="0.752421">
+6
+</page>
+<figureCaption confidence="0.997929">
+Figure 7. An example of a complex cloning activity pattern, involving Case III, followed by Case II
+</figureCaption>
+<equation confidence="0.594185">
+(Ptolemy2)
+</equation>
+<bodyText confidence="0.99583247368421">
+authors, using the currently described pattern, we see the
+ORANGE author eventually acting in conformity with the
+previous pattern (i.e., Creation of Clones by Multiple Au-
+thors using Consistent Block Cloning) by adding suddenly
+a completely new clone to the multiplication. This example
+reveals that beyond each of the identified patterns, in ”real-
+life” cloning activities tend to appear as complex combina-
+tions of these (or other patterns).
+Concluding, we may say that this pattern is less harm-
+ful than the previous one, due to the fact that all the clones
+tend to live their lives in a perfectly synchronized manner.
+Furthermore, the fact that only a small number of develop-
+ers are involved makes the process of keeping the clones
+consistent manageable.
+Remark: We believe that beyond its utility for the under-
+standing of cloning activities, this pattern has also a remark-
+able side effect: it might reveal within an organization small
+cohesive teams of developers that work together in a one-
+minded manner.
+</bodyText>
+<subsectionHeader confidence="0.77592">
+4.4 Case IV: Inconsistent Line Cloning Fixed by
+the Same Author
+</subsectionHeader>
+<bodyText confidence="0.992334142857143">
+The fact that a cloned line controlled by a single author
+is not a guarantee that inconsistencies will not appear dur-
+ing cloning activities. This pattern captures the case where
+one or more lines cloned by a single author are not consis-
+tently propagated in all the other existing clones, and it is
+only after a while that the initial author remembers (or finds
+out) about the inconsistency and reestablishes himself the
+consistency of the clones at that later moment in time. For
+example, in Figure 8 we see that the BLUE author keeps the
+consistency of the clones during his/her first two cloning ac-
+tivities, but fails to do so the third time (6/24/04) when he
+fails to update the upper clone. We see that it is only almost
+a year later (5/11/05) that the inconsistency is removed by a
+Fix Line activity.
+</bodyText>
+<subsectionHeader confidence="0.986371">
+4.5 Case V: Inconsistent Line Cloning Fixed by
+Different Authors
+</subsectionHeader>
+<bodyText confidence="0.9993936">
+In Figure 9 we encounter several developers, where at
+least one developer makes an inconsistent line cloning, and
+another developer intervenes at a later time to fix the in-
+consistency. In our example, PINK creates two clones but
+without lines 2, 3 and 4 (or at least the lines were not iden-
+tical), and at a later time BLUE intervenes and fixes the 3
+lines in both clones.
+We found very few cases of this pattern. This is an indi-
+cation that authors are rarely able to fix the cloning incon-
+sistencies of others.
+</bodyText>
+<sectionHeader confidence="0.662444" genericHeader="method">
+5 Guiding the Detection of Copy Patterns
+</sectionHeader>
+<bodyText confidence="0.9817974">
+The Clone Evolution View is useful for providing in-
+sights into one multiplication. However, as Table 1 shows,
+in a software system we might find hundreds of such multi-
+plications, and not all of them are interesting from a reverse
+engineering point of view. As such, we need an automated
+</bodyText>
+<page confidence="0.998573">
+7
+</page>
+<figureCaption confidence="0.9999855">
+Figure 8. Case IV: Inconsistent Line Cloning Fixed by the Same Author (ArgoUML)
+Figure 9. Case V: Inconsistent Line Cloning Fixed by Different Authors (ArgoUML)
+</figureCaption>
+<bodyText confidence="0.940845">
+tool support to guide the reverse engineer through the maze
+of multiplications.
+In this section we distill the experience we gained while
+performing the experiments. In the process, (see Figure 2)
+we defined several metrics, and found the following to re-
+veal interesting insights:
+</bodyText>
+<listItem confidence="0.9894766">
+• Number of developers involved. We use this measure-
+ment to detect multiplications which are done by one
+or more developers.
+• Number of clones. We noticed that the most interesting
+cases are in multiplications with more than 2 clones.
+• Number of line fixes. We use this to identify the cases
+of inconsistent cloning.
+• Knowledge extent over developers. This measurement
+returns the number of lines cloned by more than one
+developer. We use this measurement to discriminate
+the cases in which several authors participate in an in-
+consistent cloning.
+• Number of modifications. We use this measurement as
+activity indicator. A variation is to count the consistent
+modifications versus the inconsistent ones.
+</listItem>
+<sectionHeader confidence="0.936626" genericHeader="method">
+6 Discussion
+</sectionHeader>
+<bodyText confidence="0.998120875">
+On the usage of cvs annotate. Our current approach re-
+lies on the usage of cvs annotate, instead of analyzing the
+entire evolution. In this way, we are actually analyzing only
+the clones present in the analyzed version, and not their his-
+tory. However, the initial results reported here are promis-
+ing. In the future we plan to investigate in more details how
+developers copy by taking the clone genealogy approach of
+Kim et al. [13].
+</bodyText>
+<page confidence="0.990844">
+8
+</page>
+<bodyText confidence="0.999854432432432">
+On the visualization decisions. The time is represented
+in the visualization on a linear scale. However, if two modi-
+fication lines are too close from one another, it is difficult to
+distinguish the different moments. That is the reason why
+we imposed a minimum distance between two modification
+lines. An example of the effectiveness of this approach can
+be seen in Figure 5 (the last four modifications).
+Another variable of the visualization was the choice of
+colors. In our experiments, the multiplications were devel-
+oped by at most 5 developers. The limited amount of re-
+quired colors allowed us to explore several color schemes
+trying to enhance the contrast both between the lines and
+against the white background, while also avoiding to com-
+bine red with green.
+As we wanted to focus on how developers copy, we
+chose to represent the duplicated text detached from its con-
+text. In this way the attention is entirely dedicated to the
+cloning actions. However, after understanding the cloning
+phenomenon, we need to know if the clones are in the same
+context or not. That is why we chose to put the name of
+the context in a non disturbing color on the left side of the
+visualization.
+To ease the interpretation of the visualization, we also
+arranged the clones in a meaningful way, trying to put the
+older clones on top of the newer ones. This follows our cul-
+ture of reading from top to bottom [17], while it also pro-
+vides more information. The colors inside the clone are also
+ordered by the the date of the first apparition in the multi-
+plication. The order is: RED, BLUE, PINK and ORANGE.
+On the interactive nature of the implementation. We
+implemented the approach in our tool called SmallDude on
+top of the Moose reengineering environment [16]. The im-
+plementation consists in extending the meta-model with the
+notion of multiplication, in building the visualization and
+in defining the measurements. Due to the capabilities of
+Moose we can easily query the multiplication space. This
+allowed us to explore different detection variations.
+</bodyText>
+<sectionHeader confidence="0.999412" genericHeader="related work">
+7 Related Work
+</sectionHeader>
+<bodyText confidence="0.999910583333333">
+There have been several implementations of text based
+approaches to detect clones. These approaches use either
+individual lines [1, 23, 6] or tokens as units for comparison
+[12]. Another way of finding duplications is by comparing
+the abstract syntax trees of methods (or parts of trees), this
+was implemented in a tool called CloneDR by Baxter et al.
+[2]. Mayrand et al. developed a tool for detecting duplica-
+tion based on source code measurements [15]. They define
+a fingerprinting function which they then use to compare
+different entities from the source (e.g., classes, methods).
+Another related area is the use of visualization to display
+duplicated code. The most common way to visualize code
+clones is with a scatterplot [10, 12, 6]. The main drawback
+of this approach is that we can only see the duplications and
+not multiplications.
+Rieger et al. aimed to visualize duplications at the level
+of the system using polymetric views to show the duplica-
+tions as a relations between the parts involved [18]. For
+example, the showed classes as boxes and duplication as
+edges between them. However, they did not provide evi-
+dence of how multiplications are spread over the system.
+The difference with our visualization is that we proposed
+the visualization of a multiplication, and we related it to the
+the location in the source and with the author and the date
+that changed it.
+The changes in clones have first been studied by Laguë
+et al. [14]. They use a metric based detection to identify the
+clones and then studied the number of clones added or re-
+moved. A much improved approach to study the evolution
+of clones was introduced by Kim et al. with their notion
+of clone genealogy [13]. They analyzed in detail several
+versions of the code, aiming to detect how clones get refac-
+tored. As opposed to the above ones, we aimed to analyze
+the clones in relation with the developers.
+The analysis of developers actions has also attracted re-
+search over time. Girba et al. proposed an approach to an-
+alyze CVS repositories to detect how developers drive soft-
+ware evolution [9]. They define the owner of a file as a the
+developer that wrote the most lines of code and they develop
+a visualization to analyze how the authors have changed the
+different parts of the system.
+C̆ubranić and Murphy bridged information from several
+sources to form what they call a “group memory” [20]. The
+sources used were: source code, versioning information,
+mailing lists, documentation.
+Eick et al. proposed multiple visualizations to show
+changes using colors to denote the developer and width to
+map the module size [7]. They also discuss different types
+of views (matrix, 3D, bar and pie charts, etc.) about their
+usability and use this views to show change metrics. These
+change metrics include change count by developer, severity
+and status of the change.
+Voinea et al. implemented a tool called CVSscan to ana-
+lyze files from CVS repositories by showing all versions of
+the text lines [21]. They use colors to encode attributes like
+“author”, “construct”, and “line status” on each of these line
+versions.
+The novelty of our approach as compared to the above
+ones is that we focused on providing information on how
+the developers copy.
+</bodyText>
+<sectionHeader confidence="0.998343" genericHeader="conclusions">
+8 Conclusions
+</sectionHeader>
+<bodyText confidence="0.9997675">
+The detection of clones have long been studied, and re-
+cently, their evolution has also attracted attention. However,
+</bodyText>
+<page confidence="0.939304">
+9
+</page>
+<bodyText confidence="0.9386386">
+to our knowledge, no attempt has been made to relate the
+developer information into the study of clones.
+In this paper, we propose the usage of cvs annotate as
+a simple way of relating the developer and evolution infor-
+mation with the duplication information. Based on the col-
+lected data, we designed the Clone Evolution View to get
+insights into how developers copy.
+We analyzed the clones of three large case studies and we
+identified several recurring patterns. We first browsed the
+systems to assess if interesting cases appear. The detection
+was made by looking just at the visualization to see striking
+cases from a reverse engineering point of view. In a second
+step we started to classify our findings and develop a vo-
+cabulary to describe the detected cases and then we checked
+(also assisted by automated filtering) the recurrence of the
+cases. In a third step, we tried to automate the detection of
+such interesting cases by developing measurements. As a
+result we provided a number of recommendations.
+In this way, we detected that inconsistent changes are de-
+tected when more developers are involved in the multiplica-
+tion. This enforces our original perception that the develop-
+ers are relevant variables when analyzing code cloning. The
+experiments presented in this paper were more explorative,
+yet we believe the results are promising. In the future, we
+plan to undertake a more rigorous empirical study to clas-
+sify a larger base of case studies.
+Acknowledgments. Gı̂rba gratefully acknowledge the finan-
+cial support of the Swiss National Science Foundation for the
+project Recast: Evolution of Object-Oriented Applications (SNF
+2000-061655.00/1).
+</bodyText>
+<sectionHeader confidence="0.777345" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.999818566265061">
+[1] B. S. Baker. A program for identifying duplicated code.
+Computing Science and Statistics, 24:49–57, 1992.
+[2] I. Baxter, A. Yahin, L. Moura, M. S. Anna, and L. Bier.
+Clone detection using abstract syntax trees. In Proceed-
+ings of the International Conference on Software Mainte-
+nance (ICSM 1998), pages 368–377. IEEE Computer Soci-
+ety, Washington, DC, USA, 1998.
+[3] M. E. Conway. How do committees invent ? Datamation,
+14(4):28–31, Apr. 1968.
+[4] J. R. Cordy. Comprehending reality—practical barriers
+to industrial adoption of software maintenance automation.
+In Proc. 11th Int. Workshop on Program Comprehension
+(IWPC’03), pages 196–205, Portland, Oregon, USA, May
+2003. IEEE.
+[5] S. Demeyer, S. Ducasse, and O. Nierstrasz. Object-Oriented
+Reengineering Patterns. Morgan Kaufmann, 2002.
+[6] S. Ducasse, M. Rieger, and S. Demeyer. A language indepen-
+dent approach for detecting duplicated code. In H. Yang and
+L. White, editors, Proceedings of theInternational Confer-
+ence on Software Maintenance (ICSM ’99), pages 109–118.
+IEEE Computer Society, Sept. 1999.
+[7] S. Eick, T. Graves, A. Karr, A. Mockus, and P. Schuster. Vi-
+sualizing software changes. IEEE Transactions on Software
+Engineering, 28(4):396–412, 2002.
+[8] M. Fowler, K. Beck, J. Brant, W. Opdyke, and D. Roberts.
+Refactoring: Improving the Design of Existing Code. Addi-
+son Wesley, 1999.
+[9] T. Gı̂rba, A. Kuhn, M. Seeberger, and S. Ducasse. How de-
+velopers drive software evolution. In Proceedings of Inter-
+national Workshop on Principles of Software Evolution (IW-
+PSE), pages 113–122. IEEE Computer Society Press, 2005.
+[10] J. I. Helfman. Dotplot patterns: a literal look at pattern lan-
+guages. TAPOS, 2(1):31–41, 1995.
+[11] J. H. Johnson. Substring matching for clone detection and
+change tracking. In Proceedings of the International Con-
+ference on Software Maintence (ICSM 94), pages 120–126,
+1994.
+[12] T. Kamiya, S. Kusumoto, and K. Inoue. CCFinder: A multi-
+linguistic token-based code clone detection system for large
+scale source code. IEEE Transactions on Software Engineer-
+ing, 28(6):654–670, 2002.
+[13] M. Kim, V. Sazawal, D. Notkin, and G. C. Murphy. An
+empirical study of code clone genealogies. In Proceedings
+of European Software Engineering Conference (ESEC/FSE
+2005), pages 187–196, New York NY, 2005. ACM Press.
+[14] B. Laguë, D. Proulx, E. M. Merlo, J. Mayrand, and J. Hude-
+pohl. Assessing the benefits of incorporating function clone
+detection in a development process. In Proceedings of ICSM
+(International Conference on Software Maintenance). IEEE,
+1997.
+[15] J. Mayrand, C. Leblanc, and E. M. Merlo. Experiment on
+the automatic detection of function clones in a software sys-
+tem using metrics. In International Conference on Software
+Maintenance (ICSM), pages 244–253, 1996.
+[16] O. Nierstrasz, S. Ducasse, and T. Gı̂rba. The story of Moose:
+an agile reengineering environment. In Proceedings of
+the European Software Engineering Conference (ESEC/FSE
+2005), pages 1–10, New York NY, 2005. ACM Press. Invited
+paper.
+[17] D. A. Norman. The Design of Everyday Things. The MIT
+Press, 1988.
+[18] M. Rieger. Effective Clone Detection Without Language Bar-
+riers. PhD thesis, University of Berne, June 2005.
+[19] M. Rieger, S. Ducasse, and M. Lanza. Insights into system-
+wide code duplication. In Proceedings of WCRE 2004 (11th
+Working Conference on Reverse Engineering), pages 100–
+109. IEEE Computer Society Press, Nov. 2004.
+[20] D. C̆ubranić and G. Murphy. Hipikat: Recommending per-
+tinent software development artifacts. In Proceedings 25th
+International Conference on Software Engineering (ICSE
+2003), pages 408–418, New York NY, 2003. ACM Press.
+[21] L. Voinea, A. Telea, and J. J. van Wijk. CVSscan: visu-
+alization of code evolution. In Proceedings of 2005 ACM
+Symposium on Software Visualization (Softviz 2005), pages
+47–56, St. Louis, Missouri, USA, May 2005.
+[22] R. Wettel. Automated detection of code duplication clus-
+ters. Master’s thesis, Faculty of Automatics and Computer
+Science, ”Politehnica” University of Timişoara, June 2004.
+[23] R.Wettel and R.Marinescu. Archeology of code duplication:
+Recovering duplication chains from small duplication frag-
+ments. In Proceedings of the 7th International Symposium
+on Symbolic and Numeric Algorithms for Scientific Comput-
+ing (SYNASC 2005), pages ??–??, 2005.
+</reference>
+<page confidence="0.994657">
+10
+</page>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.197886">
+<title confidence="0.854562">How Developers Copy</title>
+<note confidence="0.65765">In Proceedings of International Conference on Program Comprehension (ICPC 2006), pp. 56–65 Mihai Balint1, Tudor Gı̂rba2 and Radu Marinescu1 1LOOSE Research Group, Politehnica University of Timişoara, Romania 2Software Composition Group, University of Berne, Switzerland</note>
+<abstract confidence="0.998911866666667">Copy-paste programming is dangerous as it may lead to hidden dependencies between different parts of the system. Modifying clones is not always straight forward, because we might not know all the places that need modification. This is even more of a problem when several developers need to know about how to change the clones. In this paper, we correlate the code clones with the time of the modification and with the developer that performed the modification to detect patterns of how developers copy from one another. We develop a visualization, named Clone Evolution View1, to represent the evolution of the duplicated code. We show the relevance of our approach on several large case studies and we distill our experience in forms of interesting copy patterns.</abstract>
+<keyword confidence="0.989028">Keywords: code duplication, reverse engineering, soft-</keyword>
+<intro confidence="0.665655">ware evolution, visualization</intro>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>B S Baker</author>
+</authors>
+<title>A program for identifying duplicated code.</title>
+<date>1992</date>
+<journal>Computing Science and Statistics,</journal>
+<volume>24</volume>
+<contexts>
+<context position="1604" citStr="[1, 6, 10, 12]" startWordPosition="236" endWordPosition="239">udies and we distill our experience in forms of interesting copy patterns. Keywords: code duplication, reverse engineering, software evolution, visualization 1 Introduction Code duplication appears because of several reasons: time pressure, shortcomings of the programming languages, inexperienced developers etc. No matter the reason, duplicating the code introduces implicit dependencies between the duplicated parts (named clones hereafter) because changing one part requires changing the other parts as well. Detecting code clones has long been in the center of the reverse engineering community [1, 6, 10, 12]. Most of the work in this area has been focused on the detection of problems in the code and in relating clones with their impact in terms of quality assurance. Kim et al. made an interesting observation by experimentally showing that “refactorings may not always improve the software with respect to clones” [13]. Indeed, their empirical study showed that the short-lived clones are 1The visualization presented here makes heavy use of colors. Please obtain a color copy of this article for better understanding. sometimes not worthwhile extensive refactoring, while the long living ones are often </context>
+<context position="26174" citStr="[1, 23, 6]" startWordPosition="4531" endWordPosition="4533">ANGE. On the interactive nature of the implementation. We implemented the approach in our tool called SmallDude on top of the Moose reengineering environment [16]. The implementation consists in extending the meta-model with the notion of multiplication, in building the visualization and in defining the measurements. Due to the capabilities of Moose we can easily query the multiplication space. This allowed us to explore different detection variations. 7 Related Work There have been several implementations of text based approaches to detect clones. These approaches use either individual lines [1, 23, 6] or tokens as units for comparison [12]. Another way of finding duplications is by comparing the abstract syntax trees of methods (or parts of trees), this was implemented in a tool called CloneDR by Baxter et al. [2]. Mayrand et al. developed a tool for detecting duplication based on source code measurements [15]. They define a fingerprinting function which they then use to compare different entities from the source (e.g., classes, methods). Another related area is the use of visualization to display duplicated code. The most common way to visualize code clones is with a scatterplot [10, 12, </context>
+</contexts>
+<marker>[1]</marker>
+<rawString>B. S. Baker. A program for identifying duplicated code. Computing Science and Statistics, 24:49–57, 1992.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>I Baxter</author>
+<author>A Yahin</author>
+<author>L Moura</author>
+<author>M S Anna</author>
+<author>L Bier</author>
+</authors>
+<title>Clone detection using abstract syntax trees.</title>
+<date>1998</date>
+<booktitle>In Proceedings of the International Conference on Software Maintenance (ICSM</booktitle>
+<pages>368--377</pages>
+<publisher>IEEE Computer Society,</publisher>
+<location>Washington, DC, USA,</location>
+<contexts>
+<context position="26391" citStr="[2]" startWordPosition="4571" endWordPosition="4571"> the notion of multiplication, in building the visualization and in defining the measurements. Due to the capabilities of Moose we can easily query the multiplication space. This allowed us to explore different detection variations. 7 Related Work There have been several implementations of text based approaches to detect clones. These approaches use either individual lines [1, 23, 6] or tokens as units for comparison [12]. Another way of finding duplications is by comparing the abstract syntax trees of methods (or parts of trees), this was implemented in a tool called CloneDR by Baxter et al. [2]. Mayrand et al. developed a tool for detecting duplication based on source code measurements [15]. They define a fingerprinting function which they then use to compare different entities from the source (e.g., classes, methods). Another related area is the use of visualization to display duplicated code. The most common way to visualize code clones is with a scatterplot [10, 12, 6]. The main drawback of this approach is that we can only see the duplications and not multiplications. Rieger et al. aimed to visualize duplications at the level of the system using polymetric views to show the dupl</context>
+</contexts>
+<marker>[2]</marker>
+<rawString>I. Baxter, A. Yahin, L. Moura, M. S. Anna, and L. Bier. Clone detection using abstract syntax trees. In Proceedings of the International Conference on Software Maintenance (ICSM 1998), pages 368–377. IEEE Computer Society, Washington, DC, USA, 1998.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M E Conway</author>
+</authors>
+<title>How do committees invent ?</title>
+<date>1968</date>
+<journal>Datamation,</journal>
+<volume>14</volume>
+<issue>4</issue>
+<contexts>
+<context position="2781" citStr="[3]" startWordPosition="436" endWordPosition="436">ong living ones are often in the system due to shortcomings of the programming language. In the same line, Cordy observed that in special cases changing the clones is not advisable from a risk management point of view [4]. However, typically, extensive code duplication is clearly related to problems in maintenance [5, 11, 8]. One aspect that was neglected in the past when analyzing clones and their impact on quality is the authorship of clones; in other words, how developers create and maintain clones. As stated by Conway the shape of an organization influences the shape of the code structure [3]. Therefore, we believe that identifying and understanding the patterns by which a team of developers deals with duplicated code, will provide us with a better understanding of both a project’s structure and of its development team, and ultimately on the cloning phenomenon [9]. In this paper we aim to provide a novel view on clone detection, by focusing on how developers create and maintain clones, and integrating this knowledge with further information about the clones (e.g., time of cloning, location of clones etc.). In order to detect who copies from whom we need the information of who chan</context>
+</contexts>
+<marker>[3]</marker>
+<rawString>M. E. Conway. How do committees invent ? Datamation, 14(4):28–31, Apr. 1968.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J R Cordy</author>
+</authors>
+<title>Comprehending reality—practical barriers to industrial adoption of software maintenance automation.</title>
+<date>2003</date>
+<booktitle>In Proc. 11th Int. Workshop on Program Comprehension (IWPC’03),</booktitle>
+<pages>196--205</pages>
+<publisher>IEEE.</publisher>
+<location>Portland, Oregon, USA,</location>
+<contexts>
+<context position="2399" citStr="[4]" startWordPosition="372" endWordPosition="372"> observation by experimentally showing that “refactorings may not always improve the software with respect to clones” [13]. Indeed, their empirical study showed that the short-lived clones are 1The visualization presented here makes heavy use of colors. Please obtain a color copy of this article for better understanding. sometimes not worthwhile extensive refactoring, while the long living ones are often in the system due to shortcomings of the programming language. In the same line, Cordy observed that in special cases changing the clones is not advisable from a risk management point of view [4]. However, typically, extensive code duplication is clearly related to problems in maintenance [5, 11, 8]. One aspect that was neglected in the past when analyzing clones and their impact on quality is the authorship of clones; in other words, how developers create and maintain clones. As stated by Conway the shape of an organization influences the shape of the code structure [3]. Therefore, we believe that identifying and understanding the patterns by which a team of developers deals with duplicated code, will provide us with a better understanding of both a project’s structure and of its dev</context>
+</contexts>
+<marker>[4]</marker>
+<rawString>J. R. Cordy. Comprehending reality—practical barriers to industrial adoption of software maintenance automation. In Proc. 11th Int. Workshop on Program Comprehension (IWPC’03), pages 196–205, Portland, Oregon, USA, May 2003. IEEE.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Demeyer</author>
+<author>S Ducasse</author>
+<author>O Nierstrasz</author>
+</authors>
+<title>Object-Oriented Reengineering Patterns.</title>
+<date>2002</date>
+<publisher>Morgan Kaufmann,</publisher>
+<contexts>
+<context position="2504" citStr="[5, 11, 8]" startWordPosition="386" endWordPosition="388"> respect to clones” [13]. Indeed, their empirical study showed that the short-lived clones are 1The visualization presented here makes heavy use of colors. Please obtain a color copy of this article for better understanding. sometimes not worthwhile extensive refactoring, while the long living ones are often in the system due to shortcomings of the programming language. In the same line, Cordy observed that in special cases changing the clones is not advisable from a risk management point of view [4]. However, typically, extensive code duplication is clearly related to problems in maintenance [5, 11, 8]. One aspect that was neglected in the past when analyzing clones and their impact on quality is the authorship of clones; in other words, how developers create and maintain clones. As stated by Conway the shape of an organization influences the shape of the code structure [3]. Therefore, we believe that identifying and understanding the patterns by which a team of developers deals with duplicated code, will provide us with a better understanding of both a project’s structure and of its development team, and ultimately on the cloning phenomenon [9]. In this paper we aim to provide a novel view</context>
+</contexts>
+<marker>[5]</marker>
+<rawString>S. Demeyer, S. Ducasse, and O. Nierstrasz. Object-Oriented Reengineering Patterns. Morgan Kaufmann, 2002.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Ducasse</author>
+<author>M Rieger</author>
+<author>S Demeyer</author>
+</authors>
+<title>A language independent approach for detecting duplicated code.</title>
+<date>1999</date>
+<booktitle>Proceedings of theInternational Conference on Software Maintenance (ICSM ’99),</booktitle>
+<pages>109--118</pages>
+<editor>In H. Yang and L. White, editors,</editor>
+<publisher>IEEE Computer Society,</publisher>
+<contexts>
+<context position="1604" citStr="[1, 6, 10, 12]" startWordPosition="236" endWordPosition="239">udies and we distill our experience in forms of interesting copy patterns. Keywords: code duplication, reverse engineering, software evolution, visualization 1 Introduction Code duplication appears because of several reasons: time pressure, shortcomings of the programming languages, inexperienced developers etc. No matter the reason, duplicating the code introduces implicit dependencies between the duplicated parts (named clones hereafter) because changing one part requires changing the other parts as well. Detecting code clones has long been in the center of the reverse engineering community [1, 6, 10, 12]. Most of the work in this area has been focused on the detection of problems in the code and in relating clones with their impact in terms of quality assurance. Kim et al. made an interesting observation by experimentally showing that “refactorings may not always improve the software with respect to clones” [13]. Indeed, their empirical study showed that the short-lived clones are 1The visualization presented here makes heavy use of colors. Please obtain a color copy of this article for better understanding. sometimes not worthwhile extensive refactoring, while the long living ones are often </context>
+<context position="5620" citStr="[6, 10, 12]" startWordPosition="926" endWordPosition="928">erent variation points of the approach. Section 7 presents the related work and Section 8 concludes the paper. 2 Detecting How Developers Copy In this section we describe our approach of analyzing how developers copy. First, we describe how we automatically detect duplicated fragments in several places, and afterwards we describe how the developer information is added to the analysis. 2.1 Detecting Clones The most popular approach to comprehend clones is using a scatterplot: it displays a matrix where the element (i, j) is black if the line on the row i is the same as the line on the column j [6, 10, 12]. Figure 1 shows the details of such a scatter plot. lines from source 2 lines from source 1 exact chunk exact chunk line bias Figure 1. Detecting clones on the scatterplot. To find duplicated fragments of text using the scatterplot we need to look through the scatterplot for patterns of diagonal rows of dots. If such a row of dots can be found it means that the text represented by the rows is the same (or very simillar) to the text represented by the columns. For our analysis, we needed an automated approach. The approach is based on the quantification of the visual detection using thresholds</context>
+<context position="26174" citStr="[1, 23, 6]" startWordPosition="4531" endWordPosition="4533">ANGE. On the interactive nature of the implementation. We implemented the approach in our tool called SmallDude on top of the Moose reengineering environment [16]. The implementation consists in extending the meta-model with the notion of multiplication, in building the visualization and in defining the measurements. Due to the capabilities of Moose we can easily query the multiplication space. This allowed us to explore different detection variations. 7 Related Work There have been several implementations of text based approaches to detect clones. These approaches use either individual lines [1, 23, 6] or tokens as units for comparison [12]. Another way of finding duplications is by comparing the abstract syntax trees of methods (or parts of trees), this was implemented in a tool called CloneDR by Baxter et al. [2]. Mayrand et al. developed a tool for detecting duplication based on source code measurements [15]. They define a fingerprinting function which they then use to compare different entities from the source (e.g., classes, methods). Another related area is the use of visualization to display duplicated code. The most common way to visualize code clones is with a scatterplot [10, 12, </context>
+</contexts>
+<marker>[6]</marker>
+<rawString>S. Ducasse, M. Rieger, and S. Demeyer. A language independent approach for detecting duplicated code. In H. Yang and L. White, editors, Proceedings of theInternational Conference on Software Maintenance (ICSM ’99), pages 109–118. IEEE Computer Society, Sept. 1999.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Eick</author>
+<author>T Graves</author>
+<author>A Karr</author>
+<author>A Mockus</author>
+<author>P Schuster</author>
+</authors>
+<title>Visualizing software changes.</title>
+<date>2002</date>
+<journal>IEEE Transactions on Software Engineering,</journal>
+<volume>28</volume>
+<issue>4</issue>
+<contexts>
+<context position="28638" citStr="[7]" startWordPosition="4952" endWordPosition="4952">lyze CVS repositories to detect how developers drive software evolution [9]. They define the owner of a file as a the developer that wrote the most lines of code and they develop a visualization to analyze how the authors have changed the different parts of the system. Cubranic and Murphy bridged information from several sources to form what they call a “group memory” [20]. The sources used were: source code, versioning information, mailing lists, documentation. Eick et al. proposed multiple visualizations to show changes using colors to denote the developer and width to map the module size [7]. They also discuss different types of views (matrix, 3D, bar and pie charts, etc.) about their usability and use this views to show change metrics. These change metrics include change count by developer, severity and status of the change. Voinea et al. implemented a tool called CVSscan to analyze files from CVS repositories by showing all versions of the text lines [21]. They use colors to encode attributes like “author”, “construct”, and “line status” on each of these line versions. The novelty of our approach as compared to the above ones is that we focused on providing information on how t</context>
+</contexts>
+<marker>[7]</marker>
+<rawString>S. Eick, T. Graves, A. Karr, A. Mockus, and P. Schuster. Visualizing software changes. IEEE Transactions on Software Engineering, 28(4):396–412, 2002.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Fowler</author>
+<author>K Beck</author>
+<author>J Brant</author>
+<author>W Opdyke</author>
+<author>D Roberts</author>
+</authors>
+<title>Refactoring: Improving the Design of Existing Code.</title>
+<date>1999</date>
+<publisher>Addison Wesley,</publisher>
+<contexts>
+<context position="2504" citStr="[5, 11, 8]" startWordPosition="386" endWordPosition="388"> respect to clones” [13]. Indeed, their empirical study showed that the short-lived clones are 1The visualization presented here makes heavy use of colors. Please obtain a color copy of this article for better understanding. sometimes not worthwhile extensive refactoring, while the long living ones are often in the system due to shortcomings of the programming language. In the same line, Cordy observed that in special cases changing the clones is not advisable from a risk management point of view [4]. However, typically, extensive code duplication is clearly related to problems in maintenance [5, 11, 8]. One aspect that was neglected in the past when analyzing clones and their impact on quality is the authorship of clones; in other words, how developers create and maintain clones. As stated by Conway the shape of an organization influences the shape of the code structure [3]. Therefore, we believe that identifying and understanding the patterns by which a team of developers deals with duplicated code, will provide us with a better understanding of both a project’s structure and of its development team, and ultimately on the cloning phenomenon [9]. In this paper we aim to provide a novel view</context>
+</contexts>
+<marker>[8]</marker>
+<rawString>M. Fowler, K. Beck, J. Brant, W. Opdyke, and D. Roberts. Refactoring: Improving the Design of Existing Code. Addison Wesley, 1999.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>T Gırba</author>
+<author>A Kuhn</author>
+<author>M Seeberger</author>
+<author>S Ducasse</author>
+</authors>
+<title>How developers drive software evolution.</title>
+<date>2005</date>
+<booktitle>In Proceedings of International Workshop on Principles of Software Evolution (IWPSE),</booktitle>
+<pages>113--122</pages>
+<publisher>IEEE Computer Society Press,</publisher>
+<contexts>
+<context position="3058" citStr="[9]" startWordPosition="479" endWordPosition="479">rly related to problems in maintenance [5, 11, 8]. One aspect that was neglected in the past when analyzing clones and their impact on quality is the authorship of clones; in other words, how developers create and maintain clones. As stated by Conway the shape of an organization influences the shape of the code structure [3]. Therefore, we believe that identifying and understanding the patterns by which a team of developers deals with duplicated code, will provide us with a better understanding of both a project’s structure and of its development team, and ultimately on the cloning phenomenon [9]. In this paper we aim to provide a novel view on clone detection, by focusing on how developers create and maintain clones, and integrating this knowledge with further information about the clones (e.g., time of cloning, location of clones etc.). In order to detect who copies from whom we need the information of who changed each line of code involved in duplication. For that, instead of just analyzing the actual code, we analyze the information provided by versioning systems and recover for each line of code, the date and the developer that changed that line. To get insight into what are the </context>
+<context position="28110" citStr="[9]" startWordPosition="4865" endWordPosition="4865">ed detection to identify the clones and then studied the number of clones added or removed. A much improved approach to study the evolution of clones was introduced by Kim et al. with their notion of clone genealogy [13]. They analyzed in detail several versions of the code, aiming to detect how clones get refactored. As opposed to the above ones, we aimed to analyze the clones in relation with the developers. The analysis of developers actions has also attracted research over time. Girba et al. proposed an approach to analyze CVS repositories to detect how developers drive software evolution [9]. They define the owner of a file as a the developer that wrote the most lines of code and they develop a visualization to analyze how the authors have changed the different parts of the system. Cubranic and Murphy bridged information from several sources to form what they call a “group memory” [20]. The sources used were: source code, versioning information, mailing lists, documentation. Eick et al. proposed multiple visualizations to show changes using colors to denote the developer and width to map the module size [7]. They also discuss different types of views (matrix, 3D, bar and pie ch</context>
+</contexts>
+<marker>[9]</marker>
+<rawString>T. Gı̂rba, A. Kuhn, M. Seeberger, and S. Ducasse. How developers drive software evolution. In Proceedings of International Workshop on Principles of Software Evolution (IWPSE), pages 113–122. IEEE Computer Society Press, 2005.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J I Helfman</author>
+</authors>
+<title>Dotplot patterns: a literal look at pattern languages.</title>
+<date>1995</date>
+<journal>TAPOS,</journal>
+<volume>2</volume>
+<issue>1</issue>
+<contexts>
+<context position="1604" citStr="[1, 6, 10, 12]" startWordPosition="236" endWordPosition="239">udies and we distill our experience in forms of interesting copy patterns. Keywords: code duplication, reverse engineering, software evolution, visualization 1 Introduction Code duplication appears because of several reasons: time pressure, shortcomings of the programming languages, inexperienced developers etc. No matter the reason, duplicating the code introduces implicit dependencies between the duplicated parts (named clones hereafter) because changing one part requires changing the other parts as well. Detecting code clones has long been in the center of the reverse engineering community [1, 6, 10, 12]. Most of the work in this area has been focused on the detection of problems in the code and in relating clones with their impact in terms of quality assurance. Kim et al. made an interesting observation by experimentally showing that “refactorings may not always improve the software with respect to clones” [13]. Indeed, their empirical study showed that the short-lived clones are 1The visualization presented here makes heavy use of colors. Please obtain a color copy of this article for better understanding. sometimes not worthwhile extensive refactoring, while the long living ones are often </context>
+<context position="5620" citStr="[6, 10, 12]" startWordPosition="926" endWordPosition="928">erent variation points of the approach. Section 7 presents the related work and Section 8 concludes the paper. 2 Detecting How Developers Copy In this section we describe our approach of analyzing how developers copy. First, we describe how we automatically detect duplicated fragments in several places, and afterwards we describe how the developer information is added to the analysis. 2.1 Detecting Clones The most popular approach to comprehend clones is using a scatterplot: it displays a matrix where the element (i, j) is black if the line on the row i is the same as the line on the column j [6, 10, 12]. Figure 1 shows the details of such a scatter plot. lines from source 2 lines from source 1 exact chunk exact chunk line bias Figure 1. Detecting clones on the scatterplot. To find duplicated fragments of text using the scatterplot we need to look through the scatterplot for patterns of diagonal rows of dots. If such a row of dots can be found it means that the text represented by the rows is the same (or very simillar) to the text represented by the columns. For our analysis, we needed an automated approach. The approach is based on the quantification of the visual detection using thresholds</context>
+<context position="26776" citStr="[10, 12, 6]" startWordPosition="4631" endWordPosition="4633">1, 23, 6] or tokens as units for comparison [12]. Another way of finding duplications is by comparing the abstract syntax trees of methods (or parts of trees), this was implemented in a tool called CloneDR by Baxter et al. [2]. Mayrand et al. developed a tool for detecting duplication based on source code measurements [15]. They define a fingerprinting function which they then use to compare different entities from the source (e.g., classes, methods). Another related area is the use of visualization to display duplicated code. The most common way to visualize code clones is with a scatterplot [10, 12, 6]. The main drawback of this approach is that we can only see the duplications and not multiplications. Rieger et al. aimed to visualize duplications at the level of the system using polymetric views to show the duplications as a relations between the parts involved [18]. For example, the showed classes as boxes and duplication as edges between them. However, they did not provide evidence of how multiplications are spread over the system. The difference with our visualization is that we proposed the visualization of a multiplication, and we related it to the the location in the source and with </context>
+</contexts>
+<marker>[10]</marker>
+<rawString>J. I. Helfman. Dotplot patterns: a literal look at pattern languages. TAPOS, 2(1):31–41, 1995.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J H Johnson</author>
+</authors>
+<title>Substring matching for clone detection and change tracking.</title>
+<date>1994</date>
+<booktitle>In Proceedings of the International Conference on Software Maintence (ICSM 94),</booktitle>
+<pages>120--126</pages>
+<contexts>
+<context position="2504" citStr="[5, 11, 8]" startWordPosition="386" endWordPosition="388"> respect to clones” [13]. Indeed, their empirical study showed that the short-lived clones are 1The visualization presented here makes heavy use of colors. Please obtain a color copy of this article for better understanding. sometimes not worthwhile extensive refactoring, while the long living ones are often in the system due to shortcomings of the programming language. In the same line, Cordy observed that in special cases changing the clones is not advisable from a risk management point of view [4]. However, typically, extensive code duplication is clearly related to problems in maintenance [5, 11, 8]. One aspect that was neglected in the past when analyzing clones and their impact on quality is the authorship of clones; in other words, how developers create and maintain clones. As stated by Conway the shape of an organization influences the shape of the code structure [3]. Therefore, we believe that identifying and understanding the patterns by which a team of developers deals with duplicated code, will provide us with a better understanding of both a project’s structure and of its development team, and ultimately on the cloning phenomenon [9]. In this paper we aim to provide a novel view</context>
+</contexts>
+<marker>[11]</marker>
+<rawString>J. H. Johnson. Substring matching for clone detection and change tracking. In Proceedings of the International Conference on Software Maintence (ICSM 94), pages 120–126, 1994.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>T Kamiya</author>
+<author>S Kusumoto</author>
+<author>K Inoue</author>
+</authors>
+<title>CCFinder: A multilinguistic token-based code clone detection system for large scale source code.</title>
+<date>2002</date>
+<journal>IEEE Transactions on Software Engineering,</journal>
+<volume>28</volume>
+<issue>6</issue>
+<contexts>
+<context position="1604" citStr="[1, 6, 10, 12]" startWordPosition="236" endWordPosition="239">udies and we distill our experience in forms of interesting copy patterns. Keywords: code duplication, reverse engineering, software evolution, visualization 1 Introduction Code duplication appears because of several reasons: time pressure, shortcomings of the programming languages, inexperienced developers etc. No matter the reason, duplicating the code introduces implicit dependencies between the duplicated parts (named clones hereafter) because changing one part requires changing the other parts as well. Detecting code clones has long been in the center of the reverse engineering community [1, 6, 10, 12]. Most of the work in this area has been focused on the detection of problems in the code and in relating clones with their impact in terms of quality assurance. Kim et al. made an interesting observation by experimentally showing that “refactorings may not always improve the software with respect to clones” [13]. Indeed, their empirical study showed that the short-lived clones are 1The visualization presented here makes heavy use of colors. Please obtain a color copy of this article for better understanding. sometimes not worthwhile extensive refactoring, while the long living ones are often </context>
+<context position="5620" citStr="[6, 10, 12]" startWordPosition="926" endWordPosition="928">erent variation points of the approach. Section 7 presents the related work and Section 8 concludes the paper. 2 Detecting How Developers Copy In this section we describe our approach of analyzing how developers copy. First, we describe how we automatically detect duplicated fragments in several places, and afterwards we describe how the developer information is added to the analysis. 2.1 Detecting Clones The most popular approach to comprehend clones is using a scatterplot: it displays a matrix where the element (i, j) is black if the line on the row i is the same as the line on the column j [6, 10, 12]. Figure 1 shows the details of such a scatter plot. lines from source 2 lines from source 1 exact chunk exact chunk line bias Figure 1. Detecting clones on the scatterplot. To find duplicated fragments of text using the scatterplot we need to look through the scatterplot for patterns of diagonal rows of dots. If such a row of dots can be found it means that the text represented by the rows is the same (or very simillar) to the text represented by the columns. For our analysis, we needed an automated approach. The approach is based on the quantification of the visual detection using thresholds</context>
+<context position="26213" citStr="[12]" startWordPosition="4540" endWordPosition="4540">entation. We implemented the approach in our tool called SmallDude on top of the Moose reengineering environment [16]. The implementation consists in extending the meta-model with the notion of multiplication, in building the visualization and in defining the measurements. Due to the capabilities of Moose we can easily query the multiplication space. This allowed us to explore different detection variations. 7 Related Work There have been several implementations of text based approaches to detect clones. These approaches use either individual lines [1, 23, 6] or tokens as units for comparison [12]. Another way of finding duplications is by comparing the abstract syntax trees of methods (or parts of trees), this was implemented in a tool called CloneDR by Baxter et al. [2]. Mayrand et al. developed a tool for detecting duplication based on source code measurements [15]. They define a fingerprinting function which they then use to compare different entities from the source (e.g., classes, methods). Another related area is the use of visualization to display duplicated code. The most common way to visualize code clones is with a scatterplot [10, 12, 6]. The main drawback of this approach </context>
+</contexts>
+<marker>[12]</marker>
+<rawString>T. Kamiya, S. Kusumoto, and K. Inoue. CCFinder: A multilinguistic token-based code clone detection system for large scale source code. IEEE Transactions on Software Engineering, 28(6):654–670, 2002.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Kim</author>
+<author>V Sazawal</author>
+<author>D Notkin</author>
+<author>G C Murphy</author>
+</authors>
+<title>An empirical study of code clone genealogies.</title>
+<date>2005</date>
+<booktitle>In Proceedings of European Software Engineering Conference (ESEC/FSE</booktitle>
+<pages>187--196</pages>
+<publisher>ACM Press.</publisher>
+<location>New York NY,</location>
+<contexts>
+<context position="1918" citStr="[13]" startWordPosition="295" endWordPosition="295">the reason, duplicating the code introduces implicit dependencies between the duplicated parts (named clones hereafter) because changing one part requires changing the other parts as well. Detecting code clones has long been in the center of the reverse engineering community [1, 6, 10, 12]. Most of the work in this area has been focused on the detection of problems in the code and in relating clones with their impact in terms of quality assurance. Kim et al. made an interesting observation by experimentally showing that “refactorings may not always improve the software with respect to clones” [13]. Indeed, their empirical study showed that the short-lived clones are 1The visualization presented here makes heavy use of colors. Please obtain a color copy of this article for better understanding. sometimes not worthwhile extensive refactoring, while the long living ones are often in the system due to shortcomings of the programming language. In the same line, Cordy observed that in special cases changing the clones is not advisable from a risk management point of view [4]. However, typically, extensive code duplication is clearly related to problems in maintenance [5, 11, 8]. One aspect t</context>
+<context position="23973" citStr="[13]" startWordPosition="4162" endWordPosition="4162">ng. • Number of modifications. We use this measurement as activity indicator. A variation is to count the consistent modifications versus the inconsistent ones. 6 Discussion On the usage of cvs annotate. Our current approach relies on the usage of cvs annotate, instead of analyzing the entire evolution. In this way, we are actually analyzing only the clones present in the analyzed version, and not their history. However, the initial results reported here are promising. In the future we plan to investigate in more details how developers copy by taking the clone genealogy approach of Kim et al. [13]. 8 On the visualization decisions. The time is represented in the visualization on a linear scale. However, if two modification lines are too close from one another, it is difficult to distinguish the different moments. That is the reason why we imposed a minimum distance between two modification lines. An example of the effectiveness of this approach can be seen in Figure 5 (the last four modifications). Another variable of the visualization was the choice of colors. In our experiments, the multiplications were developed by at most 5 developers. The limited amount of required colors allowed </context>
+<context position="27727" citStr="[13]" startWordPosition="4799" endWordPosition="4799">hem. However, they did not provide evidence of how multiplications are spread over the system. The difference with our visualization is that we proposed the visualization of a multiplication, and we related it to the the location in the source and with the author and the date that changed it. The changes in clones have first been studied by Lague et al. [14]. They use a metric based detection to identify the clones and then studied the number of clones added or removed. A much improved approach to study the evolution of clones was introduced by Kim et al. with their notion of clone genealogy [13]. They analyzed in detail several versions of the code, aiming to detect how clones get refactored. As opposed to the above ones, we aimed to analyze the clones in relation with the developers. The analysis of developers actions has also attracted research over time. Girba et al. proposed an approach to analyze CVS repositories to detect how developers drive software evolution [9]. They define the owner of a file as a the developer that wrote the most lines of code and they develop a visualization to analyze how the authors have changed the different parts of the system. Cubranic and Murphy </context>
+</contexts>
+<marker>[13]</marker>
+<rawString>M. Kim, V. Sazawal, D. Notkin, and G. C. Murphy. An empirical study of code clone genealogies. In Proceedings of European Software Engineering Conference (ESEC/FSE 2005), pages 187–196, New York NY, 2005. ACM Press.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>B Lague</author>
+<author>D Proulx</author>
+<author>E M Merlo</author>
+<author>J Mayrand</author>
+<author>J Hudepohl</author>
+</authors>
+<title>Assessing the benefits of incorporating function clone detection in a development process.</title>
+<date>1997</date>
+<booktitle>In Proceedings of ICSM (International Conference on Software Maintenance). IEEE,</booktitle>
+<contexts>
+<context position="27484" citStr="[14]" startWordPosition="4755" endWordPosition="4755">ieger et al. aimed to visualize duplications at the level of the system using polymetric views to show the duplications as a relations between the parts involved [18]. For example, the showed classes as boxes and duplication as edges between them. However, they did not provide evidence of how multiplications are spread over the system. The difference with our visualization is that we proposed the visualization of a multiplication, and we related it to the the location in the source and with the author and the date that changed it. The changes in clones have first been studied by Lague et al. [14]. They use a metric based detection to identify the clones and then studied the number of clones added or removed. A much improved approach to study the evolution of clones was introduced by Kim et al. with their notion of clone genealogy [13]. They analyzed in detail several versions of the code, aiming to detect how clones get refactored. As opposed to the above ones, we aimed to analyze the clones in relation with the developers. The analysis of developers actions has also attracted research over time. Girba et al. proposed an approach to analyze CVS repositories to detect how developers dr</context>
+</contexts>
+<marker>[14]</marker>
+<rawString>B. Laguë, D. Proulx, E. M. Merlo, J. Mayrand, and J. Hudepohl. Assessing the benefits of incorporating function clone detection in a development process. In Proceedings of ICSM (International Conference on Software Maintenance). IEEE, 1997.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Mayrand</author>
+<author>C Leblanc</author>
+<author>E M Merlo</author>
+</authors>
+<title>Experiment on the automatic detection of function clones in a software system using metrics.</title>
+<date>1996</date>
+<booktitle>In International Conference on Software Maintenance (ICSM),</booktitle>
+<pages>244--253</pages>
+<contexts>
+<context position="26489" citStr="[15]" startWordPosition="4587" endWordPosition="4587">e to the capabilities of Moose we can easily query the multiplication space. This allowed us to explore different detection variations. 7 Related Work There have been several implementations of text based approaches to detect clones. These approaches use either individual lines [1, 23, 6] or tokens as units for comparison [12]. Another way of finding duplications is by comparing the abstract syntax trees of methods (or parts of trees), this was implemented in a tool called CloneDR by Baxter et al. [2]. Mayrand et al. developed a tool for detecting duplication based on source code measurements [15]. They define a fingerprinting function which they then use to compare different entities from the source (e.g., classes, methods). Another related area is the use of visualization to display duplicated code. The most common way to visualize code clones is with a scatterplot [10, 12, 6]. The main drawback of this approach is that we can only see the duplications and not multiplications. Rieger et al. aimed to visualize duplications at the level of the system using polymetric views to show the duplications as a relations between the parts involved [18]. For example, the showed classes as boxes </context>
+</contexts>
+<marker>[15]</marker>
+<rawString>J. Mayrand, C. Leblanc, and E. M. Merlo. Experiment on the automatic detection of function clones in a software system using metrics. In International Conference on Software Maintenance (ICSM), pages 244–253, 1996.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>O Nierstrasz</author>
+<author>S Ducasse</author>
+<author>T Gırba</author>
+</authors>
+<title>The story of Moose: an agile reengineering environment.</title>
+<date>2005</date>
+<booktitle>In Proceedings of the European Software Engineering Conference (ESEC/FSE</booktitle>
+<pages>1--10</pages>
+<publisher>ACM Press.</publisher>
+<location>New York NY,</location>
+<note>Invited paper.</note>
+<contexts>
+<context position="25726" citStr="[16]" startWordPosition="4466" endWordPosition="4466">r on the left side of the visualization. To ease the interpretation of the visualization, we also arranged the clones in a meaningful way, trying to put the older clones on top of the newer ones. This follows our culture of reading from top to bottom [17], while it also provides more information. The colors inside the clone are also ordered by the the date of the first apparition in the multiplication. The order is: RED, BLUE, PINK and ORANGE. On the interactive nature of the implementation. We implemented the approach in our tool called SmallDude on top of the Moose reengineering environment [16]. The implementation consists in extending the meta-model with the notion of multiplication, in building the visualization and in defining the measurements. Due to the capabilities of Moose we can easily query the multiplication space. This allowed us to explore different detection variations. 7 Related Work There have been several implementations of text based approaches to detect clones. These approaches use either individual lines [1, 23, 6] or tokens as units for comparison [12]. Another way of finding duplications is by comparing the abstract syntax trees of methods (or parts of trees), t</context>
+</contexts>
+<marker>[16]</marker>
+<rawString>O. Nierstrasz, S. Ducasse, and T. Gı̂rba. The story of Moose: an agile reengineering environment. In Proceedings of the European Software Engineering Conference (ESEC/FSE 2005), pages 1–10, New York NY, 2005. ACM Press. Invited paper.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D A Norman</author>
+</authors>
+<title>The Design of Everyday Things.</title>
+<date>1988</date>
+<publisher>The MIT Press,</publisher>
+<contexts>
+<context position="25377" citStr="[17]" startWordPosition="4407" endWordPosition="4407">developers copy, we chose to represent the duplicated text detached from its context. In this way the attention is entirely dedicated to the cloning actions. However, after understanding the cloning phenomenon, we need to know if the clones are in the same context or not. That is why we chose to put the name of the context in a non disturbing color on the left side of the visualization. To ease the interpretation of the visualization, we also arranged the clones in a meaningful way, trying to put the older clones on top of the newer ones. This follows our culture of reading from top to bottom [17], while it also provides more information. The colors inside the clone are also ordered by the the date of the first apparition in the multiplication. The order is: RED, BLUE, PINK and ORANGE. On the interactive nature of the implementation. We implemented the approach in our tool called SmallDude on top of the Moose reengineering environment [16]. The implementation consists in extending the meta-model with the notion of multiplication, in building the visualization and in defining the measurements. Due to the capabilities of Moose we can easily query the multiplication space. This allowed us</context>
+</contexts>
+<marker>[17]</marker>
+<rawString>D. A. Norman. The Design of Everyday Things. The MIT Press, 1988.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Rieger</author>
+</authors>
+<title>Effective Clone Detection Without Language Barriers.</title>
+<date>2005</date>
+<tech>PhD thesis,</tech>
+<institution>University of Berne,</institution>
+<contexts>
+<context position="8365" citStr="[18]" startWordPosition="1405" endWordPosition="1405">the thresholds and this aggregation technique, the result of the automated detection is a list of multiplications where the detected clones will be at least 7 lines long, will have at most two lines between exact chunks and the exact chunks will be at least 3 lines long. We also strive to reduce the number of detected duplications by eliminating some of the false positives generated by source code: duplications in programming language syntax (e.g., java import statements), comments, text formatting. This is done by a simple parser that eliminates certain strings that match regular expressions [18]. 2.2 Improving the Clone Detection with Developer Information To identify how the developers create the clones, we make use of cvs annotate. In Figure 2 we give an exam2 1.1 (red 1.3 (red 1.2 (cyan 1.3 (red 1.4 (blue date1): original line written by red date3): line written by red date2): another line written by cyan date3): yet another line written by red date4): line written by blue SourceLine Date Author Source cv s an no ta te m et am od el Figure 2. Example of a result of a cvs annotate and the meta-model that describes it. ple of a fictive result of running cvs annotate on a file. Each </context>
+<context position="27046" citStr="[18]" startWordPosition="4679" endWordPosition="4679">lication based on source code measurements [15]. They define a fingerprinting function which they then use to compare different entities from the source (e.g., classes, methods). Another related area is the use of visualization to display duplicated code. The most common way to visualize code clones is with a scatterplot [10, 12, 6]. The main drawback of this approach is that we can only see the duplications and not multiplications. Rieger et al. aimed to visualize duplications at the level of the system using polymetric views to show the duplications as a relations between the parts involved [18]. For example, the showed classes as boxes and duplication as edges between them. However, they did not provide evidence of how multiplications are spread over the system. The difference with our visualization is that we proposed the visualization of a multiplication, and we related it to the the location in the source and with the author and the date that changed it. The changes in clones have first been studied by Lague et al. [14]. They use a metric based detection to identify the clones and then studied the number of clones added or removed. A much improved approach to study the evolution</context>
+</contexts>
+<marker>[18]</marker>
+<rawString>M. Rieger. Effective Clone Detection Without Language Barriers. PhD thesis, University of Berne, June 2005.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Rieger</author>
+<author>S Ducasse</author>
+<author>M Lanza</author>
+</authors>
+<title>Insights into systemwide code duplication.</title>
+<date>2004</date>
+<booktitle>In Proceedings of WCRE 2004 (11th Working Conference on Reverse Engineering),</booktitle>
+<pages>100--109</pages>
+<publisher>IEEE Computer Society Press,</publisher>
+<contexts>
+<context position="7133" citStr="[19]" startWordPosition="1202" endWordPosition="1202">e defines the minimum amount of lines of an exact chunk. In our experiments we used 3. The problem with the scatterplot approach is that once we find a diagonal pattern we are only looking at two pieces of text at once (i.e., a duplication). For some systems, the number of such duplications between two fragments of text can be up to several thousands. However, in such large systems it is common to find the same fragment of text copied over and over a few times. In our approach we have chosen to aggregate these duplicated text fragments into sets which we call multiplications or clone families [19]. Unlike duplications which describe a cloning relationship only between two fragments, a multiplication describes the cloning relationship between multiple fragments of text. Because we automatically detect duplications by analyzing the scatterplot, we can also detect the multiplications. In a nutshell, if A, B and C name three fragments of text and A is duplicated by B, and B is duplicated by C then (A,B,C) are part of the same multiplication. With this aggregation technique we are able to lower (sometimes by more than half) the number entities we have to analyze [19]. For example, using the</context>
+</contexts>
+<marker>[19]</marker>
+<rawString>M. Rieger, S. Ducasse, and M. Lanza. Insights into systemwide code duplication. In Proceedings of WCRE 2004 (11th Working Conference on Reverse Engineering), pages 100– 109. IEEE Computer Society Press, Nov. 2004.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Cubranic</author>
+<author>G Murphy</author>
+</authors>
+<title>Hipikat: Recommending pertinent software development artifacts.</title>
+<date>2003</date>
+<booktitle>In Proceedings 25th International Conference on Software Engineering (ICSE</booktitle>
+<pages>408--418</pages>
+<publisher>ACM Press.</publisher>
+<location>New York NY,</location>
+<contexts>
+<context position="28412" citStr="[20]" startWordPosition="4918" endWordPosition="4918">es get refactored. As opposed to the above ones, we aimed to analyze the clones in relation with the developers. The analysis of developers actions has also attracted research over time. Girba et al. proposed an approach to analyze CVS repositories to detect how developers drive software evolution [9]. They define the owner of a file as a the developer that wrote the most lines of code and they develop a visualization to analyze how the authors have changed the different parts of the system. Cubranic and Murphy bridged information from several sources to form what they call a “group memory” [20]. The sources used were: source code, versioning information, mailing lists, documentation. Eick et al. proposed multiple visualizations to show changes using colors to denote the developer and width to map the module size [7]. They also discuss different types of views (matrix, 3D, bar and pie charts, etc.) about their usability and use this views to show change metrics. These change metrics include change count by developer, severity and status of the change. Voinea et al. implemented a tool called CVSscan to analyze files from CVS repositories by showing all versions of the text lines [21].</context>
+</contexts>
+<marker>[20]</marker>
+<rawString>D. C̆ubranić and G. Murphy. Hipikat: Recommending pertinent software development artifacts. In Proceedings 25th International Conference on Software Engineering (ICSE 2003), pages 408–418, New York NY, 2003. ACM Press.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>L Voinea</author>
+<author>A Telea</author>
+<author>J J van Wijk</author>
+</authors>
+<title>CVSscan: visualization of code evolution.</title>
+<date>2005</date>
+<booktitle>In Proceedings of 2005 ACM Symposium on Software Visualization (Softviz</booktitle>
+<pages>47--56</pages>
+<location>St. Louis, Missouri, USA,</location>
+<contexts>
+<context position="29011" citStr="[21]" startWordPosition="5015" endWordPosition="5015"> [20]. The sources used were: source code, versioning information, mailing lists, documentation. Eick et al. proposed multiple visualizations to show changes using colors to denote the developer and width to map the module size [7]. They also discuss different types of views (matrix, 3D, bar and pie charts, etc.) about their usability and use this views to show change metrics. These change metrics include change count by developer, severity and status of the change. Voinea et al. implemented a tool called CVSscan to analyze files from CVS repositories by showing all versions of the text lines [21]. They use colors to encode attributes like “author”, “construct”, and “line status” on each of these line versions. The novelty of our approach as compared to the above ones is that we focused on providing information on how the developers copy. 8 Conclusions The detection of clones have long been studied, and recently, their evolution has also attracted attention. However, 9 to our knowledge, no attempt has been made to relate the developer information into the study of clones. In this paper, we propose the usage of cvs annotate as a simple way of relating the developer and evolution informa</context>
+</contexts>
+<marker>[21]</marker>
+<rawString>L. Voinea, A. Telea, and J. J. van Wijk. CVSscan: visualization of code evolution. In Proceedings of 2005 ACM Symposium on Software Visualization (Softviz 2005), pages 47–56, St. Louis, Missouri, USA, May 2005.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R Wettel</author>
+</authors>
+<title>Automated detection of code duplication clusters.</title>
+<date>2004</date>
+<tech>Master’s thesis,</tech>
+<institution>Faculty of Automatics and Computer Science, ”Politehnica” University of Timisoara,</institution>
+<contexts>
+<context position="6284" citStr="[22, 23]" startWordPosition="1047" endWordPosition="1048">es from source 2 lines from source 1 exact chunk exact chunk line bias Figure 1. Detecting clones on the scatterplot. To find duplicated fragments of text using the scatterplot we need to look through the scatterplot for patterns of diagonal rows of dots. If such a row of dots can be found it means that the text represented by the rows is the same (or very simillar) to the text represented by the columns. For our analysis, we needed an automated approach. The approach is based on the quantification of the visual detection using thresholds. Three thresholds are used based on the work of Wettel [22, 23]: • Minimum clone length defines the minimum amount of lines present in a clone. In our experiments we used 7. • Maximum line bias defines the maximum amount of lines in between two exact chunks. In our experiments we used 2. • Minimum chunk size defines the minimum amount of lines of an exact chunk. In our experiments we used 3. The problem with the scatterplot approach is that once we find a diagonal pattern we are only looking at two pieces of text at once (i.e., a duplication). For some systems, the number of such duplications between two fragments of text can be up to several thousands. H</context>
+</contexts>
+<marker>[22]</marker>
+<rawString>R. Wettel. Automated detection of code duplication clusters. Master’s thesis, Faculty of Automatics and Computer Science, ”Politehnica” University of Timişoara, June 2004.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R Wettel</author>
+<author>R Marinescu</author>
+</authors>
+<title>Archeology of code duplication: Recovering duplication chains from small duplication fragments.</title>
+<date>2005</date>
+<booktitle>In Proceedings of the 7th International Symposium on Symbolic and Numeric Algorithms for Scientific Computing (SYNASC</booktitle>
+<pages>pages ??–??,</pages>
+<contexts>
+<context position="6284" citStr="[22, 23]" startWordPosition="1047" endWordPosition="1048">es from source 2 lines from source 1 exact chunk exact chunk line bias Figure 1. Detecting clones on the scatterplot. To find duplicated fragments of text using the scatterplot we need to look through the scatterplot for patterns of diagonal rows of dots. If such a row of dots can be found it means that the text represented by the rows is the same (or very simillar) to the text represented by the columns. For our analysis, we needed an automated approach. The approach is based on the quantification of the visual detection using thresholds. Three thresholds are used based on the work of Wettel [22, 23]: • Minimum clone length defines the minimum amount of lines present in a clone. In our experiments we used 7. • Maximum line bias defines the maximum amount of lines in between two exact chunks. In our experiments we used 2. • Minimum chunk size defines the minimum amount of lines of an exact chunk. In our experiments we used 3. The problem with the scatterplot approach is that once we find a diagonal pattern we are only looking at two pieces of text at once (i.e., a duplication). For some systems, the number of such duplications between two fragments of text can be up to several thousands. H</context>
+<context position="26174" citStr="[1, 23, 6]" startWordPosition="4531" endWordPosition="4533">ANGE. On the interactive nature of the implementation. We implemented the approach in our tool called SmallDude on top of the Moose reengineering environment [16]. The implementation consists in extending the meta-model with the notion of multiplication, in building the visualization and in defining the measurements. Due to the capabilities of Moose we can easily query the multiplication space. This allowed us to explore different detection variations. 7 Related Work There have been several implementations of text based approaches to detect clones. These approaches use either individual lines [1, 23, 6] or tokens as units for comparison [12]. Another way of finding duplications is by comparing the abstract syntax trees of methods (or parts of trees), this was implemented in a tool called CloneDR by Baxter et al. [2]. Mayrand et al. developed a tool for detecting duplication based on source code measurements [15]. They define a fingerprinting function which they then use to compare different entities from the source (e.g., classes, methods). Another related area is the use of visualization to display duplicated code. The most common way to visualize code clones is with a scatterplot [10, 12, </context>
+</contexts>
+<marker>[23]</marker>
+<rawString>R.Wettel and R.Marinescu. Archeology of code duplication: Recovering duplication chains from small duplication fragments. In Proceedings of the 7th International Symposium on Symbolic and Numeric Algorithms for Scientific Computing (SYNASC 2005), pages ??–??, 2005.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

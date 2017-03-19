@@ -1,0 +1,1249 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.000000">
+<title confidence="0.913792">
+Modeling Features at Runtime
+</title>
+<author confidence="0.810775">
+Marcus Denker1, Jorge Ressia2, Orla Greevy3, and Oscar Nierstrasz2
+</author>
+<footnote confidence="0.942845">
+1 INRIA Lille Nord Europe - CNRS UMR 8022 - University of Lille (USTL)
+http://rmod.lille.inria.fr
+2 Software Composition Group, University of Bern, Switzerland
+http://scg.unibe.ch
+3 Sw-eng. Software Engineering GmbH Berne, Switzerland
+http://www.sw-eng.ch
+Abstract. A feature represents a functional requirement fulfilled by a
+</footnote>
+<bodyText confidence="0.994574136363637">
+system. Since many maintenance tasks are expressed in terms of features,
+it is important to establish the correspondence between a feature and its
+implementation in source code. Traditional approaches to establish this
+correspondence exercise features to generate a trace of runtime events,
+which is then processed by post-mortem analysis. These approaches typ-
+ically generate large amounts of data to analyze. Due to their static na-
+ture, these approaches do not support incremental and interactive anal-
+ysis of features. We propose a radically different approach called live
+feature analysis, which provides a model at runtime of features. Our ap-
+proach analyzes features on a running system and also makes it possible
+to “grow” feature representations by exercising different scenarios of the
+same feature, and identifies execution elements even to the sub-method
+level.
+We describe how live feature analysis is implemented effectively by
+annotating structural representations of code based on abstract syntax
+trees. We illustrate our live analysis with a case study where we achieve a
+more complete feature representation by exercising and merging variants
+of feature behavior and demonstrate the efficiency or our technique with
+benchmarks.
+Keywords: models at runtime, behavioral reflection, feature annota-
+tions, dynamic analysis, feature analysis, software maintenance, feature
+growing.
+</bodyText>
+<sectionHeader confidence="0.9982" genericHeader="abstract">
+1 Introduction
+</sectionHeader>
+<bodyText confidence="0.972346256756757">
+Many researchers have recognized the importance of centering reverse engineer-
+ing activities around a system’s behavior, in particular, around features [8,15,22].
+Bugs and change requests are usually expressed in terms of a system’s features,
+thus knowledge of a system’s features is particularly useful for maintenance [17].
+This paper presents a novel technique to perform fine-grained feature analy-
+sis incrementally at runtime, while minimizing adverse effects to system perfor-
+mance. For an in-depth discussion about features and feature analysis in general,
+we refer the reader to our earlier publications [10, 11, 12].
+D.C. Petriu, N. Rouquette, Ø. Haugen (Eds.): MODELS 2010, Part II, LNCS 6395, pp. 138–152, 2010.
+© Springer-Verlag Berlin Heidelberg 2010
+Modeling Features at Runtime 139
+Features are abstract notions, normally not explicitly represented in source
+code or elsewhere in the system. Therefore, to leverage feature information,
+we need to perform feature analysis to establish which portions of source code
+implements a particular feature. Most existing feature analysis approaches [22,
+15] capture traces of method events that occur while exercising a feature and
+subsequently perform post-mortem analysis on the resulting feature traces.
+A post-mortem feature analysis implies a level of indirection from a running
+system. This makes it more difficult to correlate features and the relevant parts
+of a running system. We lose the advantage of interactive, immediate feedback
+which we would obtain by directly observing the effects of exercising a feature.
+Post-mortem analysis does not exploit the implicit knowledge of a user perform-
+ing acceptance testing. Certain subtleties are often only communicated to the
+system developer when the user experiences how the system works while exer-
+cising the features. Clearly, in this case, a model-at-runtime of features, with
+the added ability to “grow” the feature representation as the user exercises vari-
+ants of the same feature offers advantages of context and comprehension over a
+one-off capture of a feature representation and post-mortem analysis.
+We propose an approach which we call live feature analysis. Essentially, our
+technique is to annotate the structural representation of the source code based
+on Abstract Syntax Trees (ASTs). We build up a model of the features over time,
+as variants of feature behavior are being exercised. Our feature representation
+is thus immediately available for analysis in the context of the running system.
+The goal of this paper is to highlight the advantages of using a runtime model
+of feature over a static, post-mortem feature representation.
+Live feature analysis addresses various shortcomings of traditional post-mortem
+approaches:
+– Data volume. By tracking features in terms of structured objects rather than
+linear traces, the volume of data produced while exercising features is con-
+stant with respect to the number of source code entities. Data produced by
+traditional feature analysis approaches is proportional to the execution events
+of the source code entities, thus higher. Different strategies to deal with large
+amounts of data have been proposed, for example: (1) summarization through
+metrics [7], (2) filtering and clustering techniques [13, 26], (3) visualization
+[2,12] (4) selective instrumentation and (5) query-based approaches [19]. The
+net effect of applying these strategies however, is loss of information of a fea-
+ture’s behavior in the feature representation to be analyzed.
+– Feature growing. Variants of the same feature can be exercised iteratively and
+incrementally, thus allowing the analysis representation of a feature to “grow”
+within the development environment. The problems of tracing at sub-method
+granularity are performance and large amount of gathered data. Traditional
+approaches deliver a tree of execution events which are hard to manipulate.
+Our technique delivers a set of source code entities on top of which any
+logical operation can be applied.
+– Sub-method feature analysis. Many feature analysis techniques are restricted
+to the level of methods. Our technique allows us to dive into the structure
+140 M. Denker et al.
+of more complex methods to see which branches are dedicated to particular
+features. The fine-grained sub-method information is particularly relevant
+when “growing” features as it is typically at this level that variations in the
+execution paths occur.
+– Interactive feature analysis. Traditional feature analysis approaches perform
+a post-mortem analysis on the trace data gathered at runtime to correlate
+feature information with the relevant parts of the source code. Any changes
+in the source code will require the data gathering and the post-mortem
+analysis to be run again to refresh the feature data. The essential drawback
+of the post-mortem approach is due to its static, snapshot representation of
+a feature, limited to data captured during only one path of execution. Post-
+mortem analysis is incompatible with an interactive exploration of features
+as it is typically disconnected from the running application. With traditional
+feature analysis approaches the feature information only becomes available
+after the features of the application have been exercised and a post-mortem
+analysis has been performed.
+The key contributions of this paper are:
+</bodyText>
+<footnote confidence="0.766615">
+1. We describe our live feature analysis approach based on partial behavioral
+reflection and AST annotation;
+2. we show how this technique supports feature analysis at sub-method
+granularity;
+3. we describe how to iteratively and incrementally grow feature analysis using
+our technique; and
+4. we demonstrate the advantages of using a runtime model of features.
+</footnote>
+<bodyText confidence="0.995739357142857">
+We previously proposed the notion of using sub-method reflection in the context
+of feature tagging in a workshop paper [6]. In this paper, we expand on this idea
+to focus on its application to runtime feature analysis (live feature analysis).
+We present our working implementation and validate our technique by applying
+it to the analysis of the features of a content-management system, Pier, as a
+case-study.
+In the next section, we provide a brief overview of unanticipated partial be-
+havioral reflection, as it serves as a basis for our approach. We introduce our
+feature annotation mechanism and present the feature runtime model. Using
+the feature annotation and the runtime model we obtain the flexibility to grow
+feature representations incrementally. We validate our approach in Section 3 by
+means of a case study and detailed benchmarks. Section 4 outlines related work
+in the fields of dynamic analysis and feature identification. Finally, we conclude
+in Section 5 by outlining possible future work in this direction.
+</bodyText>
+<sectionHeader confidence="0.8042945" genericHeader="keywords">
+2 Live Feature Analysis with Partial Behavioral
+Reflection
+</sectionHeader>
+<bodyText confidence="0.994546255319149">
+To achieve live feature analysis, we need a means to directly access runtime
+information associated with features and at the same time minimize the neg-
+ative impact of slowing down the running application under investigation due
+Modeling Features at Runtime 141
+to instrumentation. In a previous work [5] we proposed that Partial Behavioral
+Reflection as pioneered by Reflex [23] is particularly well-suited for dynamic
+analysis as it supports a highly selective means to specify where and when to an-
+alyze the dynamics of a system. Before explaining Partial Behavioral Reflection
+in more detail, we present a brief review of Structural Reflection and Behavioral
+Reflection.
+Structural reflection models the static structure of the system. Classes and
+methods are represented as objects and can both be read and manipulated from
+within the running system. In today’s object-oriented systems, structural re-
+flection does not extend beyond the granularity of the method: a method is an
+object, but the operations the method contains, such as method invocations,
+variable reads and assignments, are not modeled as objects. To overcome this
+limitation we have extended Pharo Smalltalk1 to support sub-method structural
+reflection. More in-depth information about this system and its implementation
+can be found in the paper on sub-method reflection [4].
+Behavioral reflection provides a way to intercept and change the execution of a
+program. It is concerned with execution events, i.e., method execution, message
+sends, or variable assignments. We developed a framework called Reflectivity
+[3], which leverages an extended AST representation provided by our sub-method
+structural reflection extension to realize behavioral reflection. Prior to execution,
+the AST is compiled on demand to a low-level representation that is executable,
+for example to bytecodes executable by a virtual machine.
+Partial behavioral reflection offers an even more flexible approach than pure
+Behavioral Reflection. The key advantage is that it provides a means to selec-
+tively trigger reflection, only when specific, predefined events of interest occur.
+The core concept of the Reflex model of partial behavioral reflection is the link
+(see Figure 1). A link sends messages to a meta object upon occurrences of
+marked operations. The attributes of a link enable further control of the exact
+message to be sent to the meta-object. Furthermore, an activation condition
+can be defined for a link which determines whether or not the link is actually
+triggered.
+Links are associated with nodes from the AST. Subsequently, the system
+automatically generates new bytecode that takes the link into consideration the
+next time the method is executed.
+Reflectivity was conceived as an extension of the Reflex model of Partial
+Behavioral Reflection [23]. Reflex was originally realized with Java. Therefore,
+our approach can in be implemented in a more static mainstream language like
+Java. The reason for choosing Smalltalk and Reflectivity for this work is
+that it supports unanticipated use of reflection at runtime [3] and is integrated
+with an AST based reflective code model [4]. A Java solution would likely be
+more static in nature: links cannot be removed completely (as code cannot be
+changed at runtime) and the code model would not be as closely integrated with
+the runtime of the language.
+</bodyText>
+<figure confidence="0.864521">
+1 http://pharo-project.org/
+142 M. Denker et al.
+source code
+(AST)
+meta-object
+activation
+condition
+links
+</figure>
+<figureCaption confidence="0.997161">
+Fig. 1. The reflex model
+</figureCaption>
+<subsectionHeader confidence="0.921103">
+2.1 Dynamic Analysis with Reflectivity
+</subsectionHeader>
+<bodyText confidence="0.9872052">
+A trace-based feature analysis can be implemented easily using partial behavioral
+reflection. In a standard trace-based feature analysis approach, a tracer is the
+object responsible for recording a feature trace of method invocations. With our
+partial behavioral reflection approach, we define the tracer as the meta-object (as
+shown in Figure 2). We define a link to pass the desired information for feature
+representation (e.g., the name and class of the executed method) as a parameter
+to a meta-object. The link then is installed on the part of the system that we
+want to analyze. This means that the link is associated with the elements of the
+system that we are interested in. Subsequently, when we exercise a feature and
+our tracer meta-object will record a trace.
+</bodyText>
+<figure confidence="0.882243">
+source code
+(AST)
+tracer metaobject
+link
+</figure>
+<figureCaption confidence="0.995412">
+Fig. 2. A tracer realized with partial behavioral reflection
+</figureCaption>
+<bodyText confidence="0.995925333333333">
+The resulting system is similar to existing trace-based systems, but with one
+key advantage: the scope of tracing can now easily be extended to cover sub-
+method elements of the execution, if required.
+</bodyText>
+<subsectionHeader confidence="0.991231">
+2.2 Feature Annotation
+</subsectionHeader>
+<bodyText confidence="0.990745571428571">
+In contrast to typical dynamic feature analysis approaches, our reflection-based
+approach does not need to retain a large trace of executed data. This is be-
+cause our analysis is live rather than post-mortem. Our technique focuses on
+exploiting feature knowledge directly while the system is running. With the an-
+notatable representation provided by sub-method reflection, our analysis can
+annotate every statement that participates in the behavior of a feature. So in-
+stead of recording traces, the analysis tags with a feature annotation all the
+</bodyText>
+<figure confidence="0.919092222222222">
+Modeling Features at Runtime 143
+source code
+(AST)
+feature tagger
+metaobject
+link
+tags node with
+feature annotation
+on execution
+</figure>
+<figureCaption confidence="0.99939">
+Fig. 3. The nodes are tagged at runtime with feature information
+</figureCaption>
+<bodyText confidence="0.897376272727273">
+AST nodes that are executed as a result of invoking features at runtime. To
+achieve this, we define a link to call our FeatureTagger meta-object, as shown in
+Figure 3.
+Subsequently, we install this link on all the AST nodes of the system that
+we plan to analyze. When a feature is exercised, different AST nodes (method,
+instructions, assignments, etc.) linked to the FeatureTagger meta-object are exe-
+cuted. This meta-object is executed as well and each executed node is annotated
+stating that this node belongs to a specific feature. Due to tagging we no longer
+need to retain large traces. Thus our approach results in less data to be managed
+and analyzed (see Section 3). Information about multiple executions of the same
+methods or order of execution can be efficiently stored in the annotation.
+</bodyText>
+<subsectionHeader confidence="0.985028">
+2.3 Model-at-Runtime
+</subsectionHeader>
+<bodyText confidence="0.996674777777778">
+In Figure 4 we can see the runtime feature model on top of the structural repre-
+sentation of the language. The Feature abstraction is used for annotating which
+parts of the AST belongs to a feature. Multiple features can be attached to a
+single AST node providing a way of specifying that this node belongs to several
+features.
+Since the user or developer has the implicit feature knowledge, he must
+specify which feature is going to be exercised. The activeFeature in the class
+RuntimeFeatureAnalyzermodels this. This feature is used for annotating the AST
+nodes. If no feature is specified no annotation will occur.
+</bodyText>
+<figure confidence="0.983245166666667">
+activeFeature
+packages
+RuntimeFeatureAnalyzer
+Feature1 1
+1
+0..*
+Annotation
+1
+1
+ASTNode 1 0..*Class 1 0..*
+1
+0..*
+</figure>
+<figureCaption confidence="0.929929">
+Fig. 4. Feature runtime model
+144 M. Denker et al.
+</figureCaption>
+<bodyText confidence="0.998705882352941">
+The RuntimeFeatureAnalyzer is also responsible for adapting the AST nodes.
+The user has to specify over which nodes he would like to perform the feature
+analysis. At present we offer the possibility to specify which packages should
+be adapted, but any AST granularity could be used. All the classes, methods
+and AST nodes of the specified packages will be adapted. New nodes or pack-
+ages could be added at any point due to new development being carried out.
+The link installed in the AST nodes specifies that whenever the node is exe-
+cuted the same node has to be annotated with the activeFeature specified in
+the RuntimeFeatureAnalyzer. This information is immediately available for the
+different development tools, like the code browser or the debugger.
+Performance is a major consideration when performing dynamic analysis. To
+minimize adverse effects on performance, our goal is therefore to limit both
+where and when we apply behavioral reflection. The where can be controlled
+by installing the link only on those places in the system that we are interested
+in analyzing. For the when, we leverage the fact that we can directly uninstall
+links at runtime from the meta-object. The RuntimeFeatureAnalyzer takes care
+of removing the links when there is no active feature.
+</bodyText>
+<subsectionHeader confidence="0.993656">
+2.4 Growing Features
+</subsectionHeader>
+<bodyText confidence="0.981360636363636">
+Our feature annotation analysis can easily support many existing feature analysis
+techniques. For example, we could exercise a feature multiple times with different
+parameters to obtain multiple paths of execution. This can be important, as the
+number of traces obtained can be considerable depending on the input data.
+For trace-based approaches this results in multiple traces being recorded. One
+feature is represented by multiple traces and therefore it is needed to manage a
+many-to-one mapping between features and traces. Using our approach, if the
+execution path differs over multiple runs, newly executed instructions will be
+tagged in addition to those already tagged. Thus we can use our approach to
+iteratively build up the representation of a feature covering multiple paths of
+execution.
+</bodyText>
+<subsectionHeader confidence="0.993414">
+2.5 Towards Optional Tracing
+</subsectionHeader>
+<bodyText confidence="0.994492111111111">
+Instead of multiple runs resulting in one feature annotation, the feature anno-
+tations can be parameterized with the number of executions that are the result
+of exercising the feature. Our approach also accommodates capturing instance
+information or feature dependencies as described in the approaches of Salah et
+al. [22] and Lienhard et al. [16]. Naturally, the more information that is gath-
+ered at runtime, the more memory that is required. In the worst case, recording
+everything would result in recording the same amount of information as a com-
+plete trace of fine-grained behavioral information. The execution cost will also
+be higher due to the inserted code of the behavioral reflection technique.
+One major disadvantage when adopting filtering strategies to reduce the
+amount of data gathered at runtime is the loss of dynamic information that
+may have been relevant for the analysis. Thus it is crucial to define which infor-
+mation is necessary when performing a feature analysis. A change in a selection
+Modeling Features at Runtime 145
+strategy implies a need to exercise a feature again. In contrast to filtered traces,
+analysis approaches based on complete traces provide the flexibility to perform
+a variety of post-mortem analyses of feature traces, where each analysis focuses
+on a different level of detail. For example one analysis may choose to focus on
+the core application code and filtering out library code, whereas another analysis
+would choose to home in on the use of library code by a feature.
+With our approach we can extend feature annotation gradually. Instead of
+uninstalling the tagger meta-object after the first execution, we can use it to
+gather an invocation count. This approach would be useful for building so-called
+feature heat maps i.e., visualizations that show how often a part of the system
+(i.e., a specific node) takes part in a feature [21]. Even adding optional support
+for recording full traces can be interesting: the node can reference the trace events
+directly, providing an interesting data-structure for advanced trace analysis.
+</bodyText>
+<sectionHeader confidence="0.995661" genericHeader="background">
+3 Validation
+</sectionHeader>
+<bodyText confidence="0.999286111111111">
+We present the feature analysis experiment we performed to highlight the dif-
+ference between the amount of data gathered with a trace-based approach and
+the annotation based approach. Our experiment was performed using a medium-
+sized software system of approximately 200 classes, a content-management sys-
+tem (CMS) Pier, which also encompasses Wiki functionality [18] as a case-study.
+For our experiment we selected a set of Pier features similar to those chosen
+for a previous post-mortem experiment (login, edit page, remove page, save page)
+with the same case study [9] In this paper, we illustrate the application of our
+analysis technique on the login feature.
+</bodyText>
+<subsectionHeader confidence="0.991145">
+3.1 Case Study: The Pier CMS
+</subsectionHeader>
+<bodyText confidence="0.992044333333333">
+We apply our live feature analysis to show some empirical results on an example
+feature of the Pier CMS. We chose the login feature as it is easy to explain the
+concept of growing a feature as a result of exercising variants of feature behavior.
+When exercising a login feature, different behavior is invoked when a user enters
+a correct username and password, as opposed to when incorrect information is
+entered and an error message is displayed. Our first execution scenario of our
+experiment expresses when the username and password are entered correctly and
+the user successfully logs into the system. Variants of execution behaviors are:
+(i) no information is entered and the user presses login,
+(ii) only the username is entered,
+(iii) only the password is entered,
+(iv) an invalid username or password is entered.
+</bodyText>
+<subsectionHeader confidence="0.995823">
+3.2 Live Analysis
+</subsectionHeader>
+<bodyText confidence="0.991842">
+In the first column of Table 1 we can see the results of applying sub-method
+feature analysis to the login feature. For the different possible input combina-
+tions we obtain different numbers of annotated AST nodes. This reveals that
+</bodyText>
+<tableCaption confidence="0.8304225">
+146 M. Denker et al.
+Table 1. Number of annotations with features exercised individually, and with feature
+</tableCaption>
+<table confidence="0.3909735">
+growing
+Individual features Feature growing
+</table>
+<listItem confidence="0.97338475">
+(i) Empty username and password 1668 1668
+(ii) Only username 1749 1749
+(iii) Only password 1668 1749
+(iv) Valid username and password 2079 2126
+</listItem>
+<bodyText confidence="0.7014145">
+different parts of the code inside the methods, namely sub-method elements, are
+being executed. We can also see that when no username is provided, case (i)
+and case (iii), the number of nodes associated to the feature is the same. One
+possible explanation for this is that a validation is performed whether or not the
+username is valid before dealing with the password. We presented our results to
+the developer of the application who verified our findings.
+</bodyText>
+<subsectionHeader confidence="0.999476">
+3.3 Growing Features
+</subsectionHeader>
+<bodyText confidence="0.989521185185185">
+One of the key characteristics of our technique is the ability to grow feature rep-
+resentation over multiple executions, thus achieving a more complete analysis of
+the feature under consideration. By taking into account all possible execution
+paths of a particular feature from the user’s perspective, we increase the preci-
+sion of our dynamic analysis approach. It is possible to achieve the same feature
+coverage with a classical post-mortem feature analysis by gathering the data
+at the end of each run and then by merging this data into one representation
+of a feature. The advantage of our approach is that it exploits an exploratory
+analysis that is both iterative and interactive. It benefits from immediate feed-
+back and direct access to growing feature representation, as different scenarios
+are executed and different code fragments (i.e., methods, branches and variable
+accesses) are highlighted as belonging to the current feature under analysis.
+Considering the CMS login feature of our Pier case study, we grow our rep-
+resentation of our login feature without interrupting the dynamic session to
+perform offline, post-mortem analysis. We simply exercise different variants of
+behaviors, while our technique builds up the feature representation. In the sec-
+ond column of Table 1 we illustrate how our login feature grows. The different
+behavioral variants were tested in the same order as presented in the table. In
+case (iii) we see that in fact no new parts of the code were executed for this
+variant as case (iii) is in fact contained in case (i). And finally for case (iv) the
+number of annotations is higher than the regular analysis since we are keeping
+the annotations for the code of all possible paths. An important aspect of our
+technique is that the entire live feature analysis can be performed at runtime and
+that there is no need to interrupt a system under analysis to access the feature
+representation information. This is a key advantage over traditional techniques
+as it is not always possible to interrupt production systems to gather information
+about malfunctioning features.
+</bodyText>
+<subsectionHeader confidence="0.794079">
+Modeling Features at Runtime 147
+3.4 Benchmarks
+</subsectionHeader>
+<bodyText confidence="0.9395372">
+Performance is critical for the practical application of any runtime analysis tech-
+nique. A key characteristic of our live feature analysis approach is that we can
+uninstall the trace code (the links) at runtime as soon as possible to avoid a
+long term adverse effect on performance of the system under analysis. We have
+carried out a benchmark to test our hypothesis that uninstalling links at runtime
+actually improves performance. We take advantage of the extensive test-suite of
+Pier to generate a substantial amount of runtime data. We install our feature
+annotation system on all the Pier classes in the package Pier (179 classes, 1292
+methods, i.e., not considering library classes). Subsequently, we performed our
+live feature analysis with three different annotation scenarios:
+</bodyText>
+<listItem confidence="0.8253304">
+– No feature annotation. We execute the unit tests without feature anno-
+tation installed as the base case.
+– Feature annotation removed. Feature tagging is enabled and the link is
+removed immediately after setting the annotation on the node.
+– Feature annotation retained. To perform this scenario, we use a modified
+</listItem>
+<bodyText confidence="0.978857">
+version of our feature tagging code where the link is not removed.
+We ran the unit tests of Pier three times (see Table 2) for each of the scenarios
+(run1, run2 and run3 show the results for each run).2
+Our results demonstrate that uninstalling the link improves performance, de-
+spite the fact that in this case the bytecode needs to be regenerated for all the
+methods where links are removed. This is shown in the time difference between
+run2 and run3: the second time the code has to be recompiled without the link
+and the third time it is executed normally.
+</bodyText>
+<tableCaption confidence="0.99697">
+Table 2. Performance of annotation – three runs
+</tableCaption>
+<table confidence="0.97582075">
+run1 (msecs) run2 (msecs) run3 (msecs)
+No feature annotation 680 667 637
+Feature annotation removed 34115 2344 649
+Feature annotation retained 38584 13067 10920
+</table>
+<bodyText confidence="0.8926426">
+Removing feature tagging once the feature annotation has been performed
+delivers a zero penalty after the third execution due to dynamic recompilation
+of code. However, keeping the feature tagging enabled has a penalty of 16 times
+slower. But this negative impact is only perceived in the nodes that have been
+annotated. The rest of the system has no performance penalty.
+</bodyText>
+<subsectionHeader confidence="0.945241">
+3.5 Number of Events Generated
+</subsectionHeader>
+<bodyText confidence="0.9305145625">
+Our paper on sub-method reflection [4] discusses the memory properties of the
+AST model. In the context of live feature analysis, it is interesting to assess the
+2 The benchmarks were performed on a MacBook Pro Core2Duo 2.4Ghz.
+148 M. Denker et al.
+difference in space required to annotate static structures by live feature analysis
+as opposed to that required to record traces in a postmortem approach. We
+compare the number of events generated in each case. To measure the size of a
+trace, we install a counter mechanism that records method invocations that are
+activated while exercising our example features. When we annotate features, the
+result are annotations on the static structure. Therefore, we count the resulting
+annotations.
+Our benchmarking was performed once again on the Pier case study. We
+annotate the entire Pier package. Table 3 shows the numbers of events and the
+number of annotations required for different features. Our results show that the
+number of dynamic events that a Tracer records is far higher than the resulting
+entities annotated with feature annotation.
+</bodyText>
+<tableCaption confidence="0.99772">
+Table 3. Dynamic events compared to number of annotations
+</tableCaption>
+<table confidence="0.997821">
+Feature Number of events Number of annotations Factor
+Display Page 24792 1956 12.67
+Call Page Editor 28553 2348 12.16
+Save Page 41737 3195 13.06
+Page Settings 17709 1879 9.42
+</table>
+<bodyText confidence="0.790974">
+Depending on the feature exercised our approach generates up to 13 times less
+data for representing the same information compared to a traditional approach.
+</bodyText>
+<sectionHeader confidence="0.999428" genericHeader="related work">
+4 Related Work
+</sectionHeader>
+<bodyText confidence="0.997746122807017">
+We review dynamic analysis system comprehension and feature identification
+approaches and discuss the similarities and shortcomings of these approaches in
+the context of our live feature analysis technique.
+Many approaches to dynamic analysis focus on the problem of tackling the
+large volume of data. Many of these works propose compression and summa-
+rization techniques to support the extraction of high level views [10,14,26]. Our
+technique is in effect also a summarization technique in that the annotation
+does not need to be repeated for multiple executions of the same parts of the
+code. However, our annotation can easily encompass information about number
+of executions of a mode in the code representation and also order of execution,
+so that the dynamic information is efficiently saved in a compressed form and
+would be expandable without loss of information on demand.
+Dynamic analysis approaches to feature identification have typically involved
+executing the features of a system and analyzing the resulting execution trace
+[1,8,24,25]. Typically, the research effort of these works focuses on the underly-
+ing mechanisms used to locate features (e.g., static analysis, dynamic analysis,
+formal concept analysis, semantic analysis or approaches that combine two or
+more of these techniques).
+Modeling Features at Runtime 149
+Wilde and Scully pioneered the use of dynamic analysis to locate features [24].
+They named their technique Software Reconnaissance. Their goal was to support
+programmers when they modify or extend functionality of legacy systems.
+Eisenbarth et al. described a semi-automatic feature identification technique
+which used a combination of dynamic analysis, static analysis of dependency
+graphs, and formal concept analysis to identify which parts of source code con-
+tribute to feature behavior [8]. For the dynamic analysis part of their approach,
+they extended the Software Reconnaissance approach to consider a set of fea-
+tures rather than one feature. They applied formal concept analysis to derive a
+correspondence between features and code. They used the information gained by
+formal concept analysis to guide a static analysis technique to identify feature-
+specific computational units (i.e., units of source code).
+Wong et al. base their analysis on the Software Reconnaissance approach
+and complement the relevancy metric by defining three new metrics to quantify
+the relationship between a source artifact and a feature [25]. Their focus is on
+measuring the closeness between a feature and a program component.
+All of these feature identification approaches collect traces of method events
+and use this data to locate the parts of source code that implement a fea-
+ture. Feature identification analysis is thus based on manipulating and analyzing
+large traces. A key difference to our live feature analysis approach is that these
+dynamic analyses focus primarily on method execution, thus do not capture
+fine-grained details such as sub-method execution events such as conditional
+branching and variable access. This information may prove essential when fo-
+cusing on a malfunctioning feature or on boundary conditions. A main limiting
+factor of extracting this level of detail is the amount of trace data that would
+result. The key advantage of our approach is that we eliminate the need to retain
+execution traces for post-mortem analysis, as we perform a more focused, live
+analysis and discard the information when it is no longer needed. Thus there is
+no limitation to annotating all events (methods and sub-methods) involved in a
+feature’s behavior.
+Furthermore, a key focus of feature identification techniques is to define mea-
+surements to quantify the relevancy of a source entity to a feature and to use the
+results for further static exploration of the code. These approaches do not explic-
+itly express the relationship between behavioral data and source code entities.
+To extract high level views of dynamic data, we need to process the large traces.
+Other works [1,9] identify the need to extract a model of behavioral data in the
+context of structural data of the source code. Subsequently feature analysis is
+performed on the model rather than on the source code itself.
+</bodyText>
+<sectionHeader confidence="0.996778" genericHeader="conclusions">
+5 Conclusions and Future Work
+</sectionHeader>
+<bodyText confidence="0.99625485106383">
+In this paper we have proposed a live feature analysis approach based on Partial
+Behavioral Reflection to address some of the limitations of traditional trace-
+based feature analysis approaches. This technique relates features to the running
+code, thus opening up a number of possibilities to exploit feature information
+150 M. Denker et al.
+interactively and in context of the running system. While running the application
+to assess a reported problem a feature representation is built up at the same time,
+which is available for analysis in the context of the running system.
+Our implementation of live feature analysis is based on the Reflectivity
+framework. We presented the implementation and applied our approach to a
+case-study that illustrates the usefulness and practicality of the idea, in par-
+ticular from the point of view of growing features and obtaining fine-grained
+sub-method information in the feature representation.
+To summarize, we revisit the goals defined in Section 1:
+– Data volume reduction. Since feature information is recorded in live ob-
+ject structures, considerably less space is needed than with a post-mortem
+trace, which necessarily contains a great deal of redundant information. As
+an immediate side effect, the recorded information is easier to access and
+analyze.
+– Feature Growing. Variants of the same feature can be exercised iteratively
+and incrementally, thus allowing analysis of the feature to “grow” within the
+development environment.
+– Sub-method feature analysis. As shown in the validation section, feature
+analysis can be performed at sub-method level. This is of particular interest
+for long and complex methods.
+– Interactive feature analysis. Features are analyzed at runtime for selected
+parts of the application. Features can be analyzed on-demand, depending on
+the task at hand.
+The performance impact of our implementation is visible only at the first exe-
+cution as we have shown that certain techniques can be introduced to attenuate
+this impact.
+Having feature annotations represented in the system at the statement level
+opens up many possibilities for visualizing fine-grained feature behavior and
+interaction between different features. We plan to explore the idea of visualizing
+feature interaction at a sub-method level with microprints [20].
+Another interesting direction for future work is to experiment with advanced
+scoping mechanisms. We want to experiment with the idea of scoping dynamic
+analysis towards a feature instead of static entities like packages and classes.
+In addition, we plan to explore the notion of scoping feature analysis itself to-
+wards features, which leads to the notion of analyzing the dependencies between
+features.
+When analyzing which sub-method entity takes part in a feature, we up to
+now install the link very generously on all nodes of the AST. This is not needed
+as we only need to make sure that we put annotations at runtime on all nodes in
+the method where the control-flow diverges. In a second step, we can use static
+analysis to propagate the information down the tree. We plan to experiment
+with this scheme in the future.
+</bodyText>
+<reference confidence="0.626332">
+Acknowledgments. We gratefully acknowledge the financial support of the Swiss
+National Science Foundation for the projects “Bringing Models Closer to Code” (SNF
+Modeling Features at Runtime 151
+Project No. 200020-121594, Oct. 2008 - Sept. 2010) and “Biologically inspired Lan-
+guages for Eternal Systems” (SNF Project No. PBBEP2-125605, Apr. 2009 - Dec. 2009)
+and CHOOSE, the Swiss Group for Object-Oriented Systems and Environments. We
+also thank Nicolas Anquetil and Lukas Renggli for their detailed reviews of drafts of
+this paper.
+</reference>
+<sectionHeader confidence="0.708674" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.999696986842105">
+1. Antoniol, G., Guéhéneuc, Y.-G.: Feature identification: a novel approach and a case
+study. In: Proceedings of the IEEE International Conference on Software Mainte-
+nance (ICSM 2005), pp. 357–366. IEEE Computer Society Press, Los Alamitos
+(September 2005)
+2. Cornelissen, B., Holten, D., Zaidman, A., Moonen, L., van Wijk, J.J., van Deursen,
+A.: Understanding execution traces using massive sequence and circular bundle
+views. In: Proceedings of the 15th International Conference on Program Compre-
+hension (ICPC), pp. 49–58. IEEE Computer Society, Los Alamitos (2007)
+3. Denker, M.: Sub-method Structural and Behavioral Reflection. PhD thesis, Uni-
+versity of Bern (May 2008)
+4. Denker, M., Ducasse, S., Lienhard, A., Marschall, P.: Sub-method reflection. In:
+Journal of Object Technology, Special Issue. Proceedings of TOOLS Europe 2007,
+vol. 6(9), pp. 231–251. ETH (October 2007)
+5. Denker, M., Greevy, O., Lanza, M.: Higher abstractions for dynamic analysis. In:
+2nd International Workshop on Program Comprehension through Dynamic Anal-
+ysis (PCODA 2006), pp. 32–38 (2006)
+6. Denker, M., Greevy, O., Nierstrasz, O.: Supporting feature analysis with runtime
+annotations. In: Proceedings of the 3rd International Workshop on Program Com-
+prehension through Dynamic Analysis (PCODA 2007), pp. 29–33. Technische Uni-
+versiteit Delft (2007)
+7. Ducasse, S., Lanza, M., Bertuli, R.: High-level polymetric views of condensed run-
+time information. In: Proceedings of 8th European Conference on Software Main-
+tenance and Reengineering (CSMR 2004), pp. 309–318. IEEE Computer Society
+Press, Los Alamitos (2004)
+8. Eisenbarth, T., Koschke, R., Simon, D.: Locating features in source code. IEEE
+Computer 29(3), 210–224 (2003)
+9. Greevy, O.: Enriching Reverse Engineering with Feature Analysis. PhD thesis,
+University of Bern (May 2007)
+10. Greevy, O., Ducasse, S.: Correlating features and code using a compact two-sided
+trace analysis approach. In: Proceedings of 9th European Conference on Software
+Maintenance and Reengineering (CSMR 2005), pp. 314–323. IEEE Computer So-
+ciety, Los Alamitos (2005)
+11. Greevy, O., Ducasse, S., Gîrba, T.: Analyzing feature traces to incorporate the
+semantics of change in software evolution analysis. In: ICSM 2005, pp. 347–356.
+IEEE Computer Society, Los Alamitos (September 2005)
+12. Greevy, O., Ducasse, S., Gîrba, T.: Analyzing software evolution through feature
+views. Journal of Software Maintenance and Evolution: Research and Practice
+(JSME) 18(6), 425–456 (2006)
+13. Hamou-Lhadj, A., Lethbridge, T.: A survey of trace exploration tools and tech-
+niques. In: CASON 2004, Indianapolis IN, pp. 42–55. IBM Press (2004)
+152 M. Denker et al.
+14. Hamou-Lhadj, A., Lethbridge, T.: Summarizing the content of large traces to fa-
+cilitate the understanding of the behaviour of a software system. In: ICPC 2006,
+Washington, DC, USA, pp. 181–190. IEEE Computer Society, Los Alamitos (2006)
+15. Kothari, J., Denton, T., Mancoridis, S., Shokoufandeh, A.: On computing the
+canonical features of software systems. In: WCRE 2006 (October 2006)
+16. Lienhard, A., Greevy, O., Nierstrasz, O.: Tracking objects to detect feature de-
+pendencies. In: ICPC 2007, Washington, DC, USA, pp. 59–68. IEEE Computer
+Society, Los Alamitos (June 2007)
+17. Mehta, A., Heineman, G.: Evolving legacy systems features using regression test
+cases and components. In: Proceedings ACM International Workshop on Principles
+of Software Evolution, pp. 190–193. ACM Press, New York (2002)
+18. Renggli, L.: Magritte — meta-described web application development. Master’s
+thesis, University of Bern (June 2006)
+19. Richner, T., Ducasse, S.: Using dynamic information for the iterative recovery
+of collaborations and roles. In: ICSM 2002, p. 34. IEEE Computer Society, Los
+Alamitos (October 2002)
+20. Robbes, R., Ducasse, S., Lanza, M.: Microprints: A pixel-based semantically rich
+visualization of methods. In: Proceedings of 13th International Smalltalk Confer-
+ence, ISC 2005, pp. 131–157 (2005)
+21. Röthlisberger, D., Nierstrasz, O., Ducasse, S., Pollet, D., Robbes, R.: Supporting
+task-oriented navigation in IDEs with configurable HeatMaps. In: ICPC 2009, pp.
+253–257. IEEE Computer Society, Los Alamitos (2009)
+22. Salah, M., Mancoridis, S.: A hierarchy of dynamic software views: from object-
+interactions to feature-interacions. In: ICSM 2004, pp. 72–81. IEEE Computer
+Society Press, Los Alamitos (2004)
+23. Tanter, É., Noyé, J., Caromel, D., Cointe, P.: Partial behavioral reflection: Spatial
+and temporal selection of reification. In: OOPSLA 2003, pp. 27–46 (November
+2003)
+24. Wilde, N., Scully, M.: Software reconnaisance: Mapping program features to code.
+Journal on Software Maintenance: Research and Practice 7(1), 49–62 (1995)
+25. Wong, E., Gokhale, S., Horgan, J.: Quantifying the closeness between program
+components and features. Journal of Systems and Software 54(2), 87–98 (2000)
+26. Zaidman, A., Demeyer, S.: Managing trace data volume through a heuristical clus-
+tering process based on event execution frequency. In: CSMR 2004, pp. 329–338.
+IEEE Computer Society Press, Los Alamitos (March 2004)
+</reference>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.039516">
+<title confidence="0.999851">Modeling Features at Runtime</title>
+<author confidence="0.979656">Marcus Denker</author>
+<author confidence="0.979656">Jorge Ressia</author>
+<author confidence="0.979656">Orla Greevy</author>
+<author confidence="0.979656">Oscar Nierstrasz</author>
+<email confidence="0.31119">1INRIALilleNordEurope-CNRSUMR8022-UniversityofLille(USTL)</email>
+<web confidence="0.960595">http://rmod.lille.inria.fr</web>
+<address confidence="0.468539">2 Software Composition Group, University of Bern, Switzerland</address>
+<web confidence="0.989566">http://scg.unibe.ch</web>
+<address confidence="0.736262">3 Sw-eng. Software Engineering GmbH Berne, Switzerland</address>
+<web confidence="0.996419">http://www.sw-eng.ch</web>
+<abstract confidence="0.99992635">A feature represents a functional requirement fulfilled by a system. Since many maintenance tasks are expressed in terms of features, it is important to establish the correspondence between a feature and its implementation in source code. Traditional approaches to establish this correspondence exercise features to generate a trace of runtime events, which is then processed by post-mortem analysis. These approaches typically generate large amounts of data to analyze. Due to their static nature, these approaches do not support incremental and interactive analysis of features. We propose a radically different approach called live feature analysis, which provides a model at runtime of features. Our approach analyzes features on a running system and also makes it possible to “grow” feature representations by exercising different scenarios of the same feature, and identifies execution elements even to the sub-method level. We describe how live feature analysis is implemented effectively by annotating structural representations of code based on abstract syntax trees. We illustrate our live analysis with a case study where we achieve a more complete feature representation by exercising and merging variants of feature behavior and demonstrate the efficiency or our technique with benchmarks.</abstract>
+<keyword confidence="0.728287333333333">Keywords: models at runtime, behavioral reflection, feature annotations, dynamic analysis, feature analysis, software maintenance, feature growing.</keyword>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="false">
+<authors>
+<author>Acknowledgments</author>
+</authors>
+<title>We gratefully acknowledge the financial support of the Swiss National Science Foundation for the projects “Bringing Models Closer to Code” (SNF Modeling Features at Runtime</title>
+<date>2008</date>
+<tech>151 Project No. 200020-121594,</tech>
+<marker>Acknowledgments, 2008</marker>
+<rawString> Acknowledgments. We gratefully acknowledge the financial support of the Swiss National Science Foundation for the projects “Bringing Models Closer to Code” (SNF Modeling Features at Runtime 151 Project No. 200020-121594, Oct. 2008 - Sept. 2010) and “Biologically inspired Languages for Eternal Systems” (SNF Project No. PBBEP2-125605, Apr. 2009 - Dec. 2009) and CHOOSE, the Swiss Group for Object-Oriented Systems and Environments. We also thank Nicolas Anquetil and Lukas Renggli for their detailed reviews of drafts of this paper.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>G Antoniol</author>
+<author>Guéhéneuc</author>
+</authors>
+<title>Y.-G.: Feature identification: a novel approach and a case study. In:</title>
+<date>2005</date>
+<booktitle>Proceedings of the IEEE International Conference on Software Maintenance (ICSM</booktitle>
+<pages>357--366</pages>
+<publisher>IEEE Computer Society Press,</publisher>
+<location>Los Alamitos</location>
+<contexts>
+<context position="29320" citStr="[1,8,24,25]" startWordPosition="4591" endWordPosition="4591">ique is in effect also a summarization technique in that the annotation does not need to be repeated for multiple executions of the same parts of the code. However, our annotation can easily encompass information about number of executions of a mode in the code representation and also order of execution, so that the dynamic information is efficiently saved in a compressed form and would be expandable without loss of information on demand. Dynamic analysis approaches to feature identification have typically involved executing the features of a system and analyzing the resulting execution trace [1,8,24,25]. Typically, the research effort of these works focuses on the underlying mechanisms used to locate features (e.g., static analysis, dynamic analysis, formal concept analysis, semantic analysis or approaches that combine two or more of these techniques). Modeling Features at Runtime 149 Wilde and Scully pioneered the use of dynamic analysis to locate features [24]. They named their technique Software Reconnaissance. Their goal was to support programmers when they modify or extend functionality of legacy systems. Eisenbarth et al. described a semi-automatic feature identification technique whic</context>
+<context position="32285" citStr="[1,9]" startWordPosition="5051" endWordPosition="5051">ive analysis and discard the information when it is no longer needed. Thus there is no limitation to annotating all events (methods and sub-methods) involved in a feature’s behavior. Furthermore, a key focus of feature identification techniques is to define measurements to quantify the relevancy of a source entity to a feature and to use the results for further static exploration of the code. These approaches do not explicitly express the relationship between behavioral data and source code entities. To extract high level views of dynamic data, we need to process the large traces. Other works [1,9] identify the need to extract a model of behavioral data in the context of structural data of the source code. Subsequently feature analysis is performed on the model rather than on the source code itself. 5 Conclusions and Future Work In this paper we have proposed a live feature analysis approach based on Partial Behavioral Reflection to address some of the limitations of traditional tracebased feature analysis approaches. This technique relates features to the running code, thus opening up a number of possibilities to exploit feature information 150 M. Denker et al. interactively and in con</context>
+</contexts>
+<marker>1.</marker>
+<rawString>Antoniol, G., Guéhéneuc, Y.-G.: Feature identification: a novel approach and a case study. In: Proceedings of the IEEE International Conference on Software Maintenance (ICSM 2005), pp. 357–366. IEEE Computer Society Press, Los Alamitos (September 2005)</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>B Cornelissen</author>
+<author>D Holten</author>
+<author>A Zaidman</author>
+<author>L Moonen</author>
+<author>J J van Wijk</author>
+<author>A van Deursen</author>
+</authors>
+<title>Understanding execution traces using massive sequence and circular bundle views. In:</title>
+<date>2007</date>
+<booktitle>Proceedings of the 15th International Conference on Program Comprehension (ICPC),</booktitle>
+<pages>49--58</pages>
+<publisher>IEEE Computer Society,</publisher>
+<location>Los Alamitos</location>
+<contexts>
+<context position="5131" citStr="[2,12]" startWordPosition="753" endWordPosition="753"> shortcomings of traditional post-mortem approaches: – Data volume. By tracking features in terms of structured objects rather than linear traces, the volume of data produced while exercising features is constant with respect to the number of source code entities. Data produced by traditional feature analysis approaches is proportional to the execution events of the source code entities, thus higher. Different strategies to deal with large amounts of data have been proposed, for example: (1) summarization through metrics [7], (2) filtering and clustering techniques [13, 26], (3) visualization [2,12] (4) selective instrumentation and (5) query-based approaches [19]. The net effect of applying these strategies however, is loss of information of a feature’s behavior in the feature representation to be analyzed. – Feature growing. Variants of the same feature can be exercised iteratively and incrementally, thus allowing the analysis representation of a feature to “grow” within the development environment. The problems of tracing at sub-method granularity are performance and large amount of gathered data. Traditional approaches deliver a tree of execution events which are hard to manipulate. </context>
+</contexts>
+<marker>2.</marker>
+<rawString>Cornelissen, B., Holten, D., Zaidman, A., Moonen, L., van Wijk, J.J., van Deursen, A.: Understanding execution traces using massive sequence and circular bundle views. In: Proceedings of the 15th International Conference on Program Comprehension (ICPC), pp. 49–58. IEEE Computer Society, Los Alamitos (2007)</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Denker</author>
+</authors>
+<title>Sub-method Structural and Behavioral Reflection.</title>
+<date>2008</date>
+<tech>PhD thesis,</tech>
+<institution>University of Bern</institution>
+<contexts>
+<context position="10207" citStr="[3]" startWordPosition="1528" endWordPosition="1528">ect, but the operations the method contains, such as method invocations, variable reads and assignments, are not modeled as objects. To overcome this limitation we have extended Pharo Smalltalk1 to support sub-method structural reflection. More in-depth information about this system and its implementation can be found in the paper on sub-method reflection [4]. Behavioral reflection provides a way to intercept and change the execution of a program. It is concerned with execution events, i.e., method execution, message sends, or variable assignments. We developed a framework called Reflectivity [3], which leverages an extended AST representation provided by our sub-method structural reflection extension to realize behavioral reflection. Prior to execution, the AST is compiled on demand to a low-level representation that is executable, for example to bytecodes executable by a virtual machine. Partial behavioral reflection offers an even more flexible approach than pure Behavioral Reflection. The key advantage is that it provides a means to selectively trigger reflection, only when specific, predefined events of interest occur. The core concept of the Reflex model of partial behavioral re</context>
+<context position="11703" citStr="[3]" startWordPosition="1758" endWordPosition="1758">s whether or not the link is actually triggered. Links are associated with nodes from the AST. Subsequently, the system automatically generates new bytecode that takes the link into consideration the next time the method is executed. Reflectivity was conceived as an extension of the Reflex model of Partial Behavioral Reflection [23]. Reflex was originally realized with Java. Therefore, our approach can in be implemented in a more static mainstream language like Java. The reason for choosing Smalltalk and Reflectivity for this work is that it supports unanticipated use of reflection at runtime [3] and is integrated with an AST based reflective code model [4]. A Java solution would likely be more static in nature: links cannot be removed completely (as code cannot be changed at runtime) and the code model would not be as closely integrated with the runtime of the language. 1 http://pharo-project.org/ 142 M. Denker et al. source code (AST) meta-object activation condition links Fig. 1. The reflex model 2.1 Dynamic Analysis with Reflectivity A trace-based feature analysis can be implemented easily using partial behavioral reflection. In a standard trace-based feature analysis approach, a </context>
+</contexts>
+<marker>3.</marker>
+<rawString>Denker, M.: Sub-method Structural and Behavioral Reflection. PhD thesis, University of Bern (May 2008)</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Denker</author>
+<author>S Ducasse</author>
+<author>A Lienhard</author>
+<author>P Marschall</author>
+</authors>
+<title>Sub-method reflection. In:</title>
+<date>2007</date>
+<journal>Journal of Object Technology, Special Issue. Proceedings of TOOLS Europe</journal>
+<volume>6</volume>
+<issue>9</issue>
+<pages>231--251</pages>
+<contexts>
+<context position="9965" citStr="[4]" startWordPosition="1493" endWordPosition="1493">ses and methods are represented as objects and can both be read and manipulated from within the running system. In today’s object-oriented systems, structural reflection does not extend beyond the granularity of the method: a method is an object, but the operations the method contains, such as method invocations, variable reads and assignments, are not modeled as objects. To overcome this limitation we have extended Pharo Smalltalk1 to support sub-method structural reflection. More in-depth information about this system and its implementation can be found in the paper on sub-method reflection [4]. Behavioral reflection provides a way to intercept and change the execution of a program. It is concerned with execution events, i.e., method execution, message sends, or variable assignments. We developed a framework called Reflectivity [3], which leverages an extended AST representation provided by our sub-method structural reflection extension to realize behavioral reflection. Prior to execution, the AST is compiled on demand to a low-level representation that is executable, for example to bytecodes executable by a virtual machine. Partial behavioral reflection offers an even more flexible</context>
+<context position="11765" citStr="[4]" startWordPosition="1769" endWordPosition="1769">ociated with nodes from the AST. Subsequently, the system automatically generates new bytecode that takes the link into consideration the next time the method is executed. Reflectivity was conceived as an extension of the Reflex model of Partial Behavioral Reflection [23]. Reflex was originally realized with Java. Therefore, our approach can in be implemented in a more static mainstream language like Java. The reason for choosing Smalltalk and Reflectivity for this work is that it supports unanticipated use of reflection at runtime [3] and is integrated with an AST based reflective code model [4]. A Java solution would likely be more static in nature: links cannot be removed completely (as code cannot be changed at runtime) and the code model would not be as closely integrated with the runtime of the language. 1 http://pharo-project.org/ 142 M. Denker et al. source code (AST) meta-object activation condition links Fig. 1. The reflex model 2.1 Dynamic Analysis with Reflectivity A trace-based feature analysis can be implemented easily using partial behavioral reflection. In a standard trace-based feature analysis approach, a tracer is the object responsible for recording a feature trace</context>
+<context position="26813" citStr="[4]" startWordPosition="4197" endWordPosition="4197"> run1 (msecs) run2 (msecs) run3 (msecs) No feature annotation 680 667 637 Feature annotation removed 34115 2344 649 Feature annotation retained 38584 13067 10920 Removing feature tagging once the feature annotation has been performed delivers a zero penalty after the third execution due to dynamic recompilation of code. However, keeping the feature tagging enabled has a penalty of 16 times slower. But this negative impact is only perceived in the nodes that have been annotated. The rest of the system has no performance penalty. 3.5 Number of Events Generated Our paper on sub-method reflection [4] discusses the memory properties of the AST model. In the context of live feature analysis, it is interesting to assess the 2 The benchmarks were performed on a MacBook Pro Core2Duo 2.4Ghz. 148 M. Denker et al. difference in space required to annotate static structures by live feature analysis as opposed to that required to record traces in a postmortem approach. We compare the number of events generated in each case. To measure the size of a trace, we install a counter mechanism that records method invocations that are activated while exercising our example features. When we annotate features</context>
+</contexts>
+<marker>4.</marker>
+<rawString>Denker, M., Ducasse, S., Lienhard, A., Marschall, P.: Sub-method reflection. In: Journal of Object Technology, Special Issue. Proceedings of TOOLS Europe 2007, vol. 6(9), pp. 231–251. ETH (October 2007)</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Denker</author>
+<author>O Greevy</author>
+<author>M Lanza</author>
+</authors>
+<title>Higher abstractions for dynamic analysis. In:</title>
+<date>2006</date>
+<booktitle>2nd International Workshop on Program Comprehension through Dynamic Analysis (PCODA</booktitle>
+<pages>32--38</pages>
+<contexts>
+<context position="8923" citStr="[5]" startWordPosition="1336" endWordPosition="1336">Section 3 by means of a case study and detailed benchmarks. Section 4 outlines related work in the fields of dynamic analysis and feature identification. Finally, we conclude in Section 5 by outlining possible future work in this direction. 2 Live Feature Analysis with Partial Behavioral Reflection To achieve live feature analysis, we need a means to directly access runtime information associated with features and at the same time minimize the negative impact of slowing down the running application under investigation due Modeling Features at Runtime 141 to instrumentation. In a previous work [5] we proposed that Partial Behavioral Reflection as pioneered by Reflex [23] is particularly well-suited for dynamic analysis as it supports a highly selective means to specify where and when to analyze the dynamics of a system. Before explaining Partial Behavioral Reflection in more detail, we present a brief review of Structural Reflection and Behavioral Reflection. Structural reflection models the static structure of the system. Classes and methods are represented as objects and can both be read and manipulated from within the running system. In today’s object-oriented systems, structural re</context>
+</contexts>
+<marker>5.</marker>
+<rawString>Denker, M., Greevy, O., Lanza, M.: Higher abstractions for dynamic analysis. In: 2nd International Workshop on Program Comprehension through Dynamic Analysis (PCODA 2006), pp. 32–38 (2006)</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Denker</author>
+<author>O Greevy</author>
+<author>O Nierstrasz</author>
+</authors>
+<title>Supporting feature analysis with runtime annotations. In:</title>
+<date>2007</date>
+<booktitle>Proceedings of the 3rd International Workshop on Program Comprehension through Dynamic Analysis (PCODA</booktitle>
+<pages>29--33</pages>
+<institution>Technische Universiteit Delft</institution>
+<contexts>
+<context position="7656" citStr="[6]" startWordPosition="1137" endWordPosition="1137">pplication have been exercised and a post-mortem analysis has been performed. The key contributions of this paper are: 1. We describe our live feature analysis approach based on partial behavioral reflection and AST annotation; 2. we show how this technique supports feature analysis at sub-method granularity; 3. we describe how to iteratively and incrementally grow feature analysis using our technique; and 4. we demonstrate the advantages of using a runtime model of features. We previously proposed the notion of using sub-method reflection in the context of feature tagging in a workshop paper [6]. In this paper, we expand on this idea to focus on its application to runtime feature analysis (live feature analysis). We present our working implementation and validate our technique by applying it to the analysis of the features of a content-management system, Pier, as a case-study. In the next section, we provide a brief overview of unanticipated partial behavioral reflection, as it serves as a basis for our approach. We introduce our feature annotation mechanism and present the feature runtime model. Using the feature annotation and the runtime model we obtain the flexibility to grow fea</context>
+</contexts>
+<marker>6.</marker>
+<rawString>Denker, M., Greevy, O., Nierstrasz, O.: Supporting feature analysis with runtime annotations. In: Proceedings of the 3rd International Workshop on Program Comprehension through Dynamic Analysis (PCODA 2007), pp. 29–33. Technische Universiteit Delft (2007)</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Ducasse</author>
+<author>M Lanza</author>
+<author>R Bertuli</author>
+</authors>
+<title>High-level polymetric views of condensed runtime information. In:</title>
+<date>2004</date>
+<booktitle>Proceedings of 8th European Conference on Software Maintenance and Reengineering (CSMR 2004),</booktitle>
+<pages>309--318</pages>
+<publisher>IEEE Computer Society Press,</publisher>
+<location>Los Alamitos</location>
+<contexts>
+<context position="5055" citStr="[7]" startWordPosition="743" endWordPosition="743">st-mortem feature representation. Live feature analysis addresses various shortcomings of traditional post-mortem approaches: – Data volume. By tracking features in terms of structured objects rather than linear traces, the volume of data produced while exercising features is constant with respect to the number of source code entities. Data produced by traditional feature analysis approaches is proportional to the execution events of the source code entities, thus higher. Different strategies to deal with large amounts of data have been proposed, for example: (1) summarization through metrics [7], (2) filtering and clustering techniques [13, 26], (3) visualization [2,12] (4) selective instrumentation and (5) query-based approaches [19]. The net effect of applying these strategies however, is loss of information of a feature’s behavior in the feature representation to be analyzed. – Feature growing. Variants of the same feature can be exercised iteratively and incrementally, thus allowing the analysis representation of a feature to “grow” within the development environment. The problems of tracing at sub-method granularity are performance and large amount of gathered data. Traditional </context>
+</contexts>
+<marker>7.</marker>
+<rawString>Ducasse, S., Lanza, M., Bertuli, R.: High-level polymetric views of condensed runtime information. In: Proceedings of 8th European Conference on Software Maintenance and Reengineering (CSMR 2004), pp. 309–318. IEEE Computer Society Press, Los Alamitos (2004)</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>T Eisenbarth</author>
+<author>R Koschke</author>
+<author>D Simon</author>
+</authors>
+<title>Locating features in source code.</title>
+<date>2003</date>
+<journal>IEEE Computer</journal>
+<volume>29</volume>
+<issue>3</issue>
+<pages>210--224</pages>
+<contexts>
+<context position="1988" citStr="[8,15,22]" startWordPosition="279" endWordPosition="279">ral representations of code based on abstract syntax trees. We illustrate our live analysis with a case study where we achieve a more complete feature representation by exercising and merging variants of feature behavior and demonstrate the efficiency or our technique with benchmarks. Keywords: models at runtime, behavioral reflection, feature annotations, dynamic analysis, feature analysis, software maintenance, feature growing. 1 Introduction Many researchers have recognized the importance of centering reverse engineering activities around a system’s behavior, in particular, around features [8,15,22]. Bugs and change requests are usually expressed in terms of a system’s features, thus knowledge of a system’s features is particularly useful for maintenance [17]. This paper presents a novel technique to perform fine-grained feature analysis incrementally at runtime, while minimizing adverse effects to system performance. For an in-depth discussion about features and feature analysis in general, we refer the reader to our earlier publications [10, 11, 12]. D.C. Petriu, N. Rouquette, Ø. Haugen (Eds.): MODELS 2010, Part II, LNCS 6395, pp. 138–152, 2010. © Springer-Verlag Berlin Heidelberg 2010</context>
+<context position="29320" citStr="[1,8,24,25]" startWordPosition="4591" endWordPosition="4591">ique is in effect also a summarization technique in that the annotation does not need to be repeated for multiple executions of the same parts of the code. However, our annotation can easily encompass information about number of executions of a mode in the code representation and also order of execution, so that the dynamic information is efficiently saved in a compressed form and would be expandable without loss of information on demand. Dynamic analysis approaches to feature identification have typically involved executing the features of a system and analyzing the resulting execution trace [1,8,24,25]. Typically, the research effort of these works focuses on the underlying mechanisms used to locate features (e.g., static analysis, dynamic analysis, formal concept analysis, semantic analysis or approaches that combine two or more of these techniques). Modeling Features at Runtime 149 Wilde and Scully pioneered the use of dynamic analysis to locate features [24]. They named their technique Software Reconnaissance. Their goal was to support programmers when they modify or extend functionality of legacy systems. Eisenbarth et al. described a semi-automatic feature identification technique whic</context>
+</contexts>
+<marker>8.</marker>
+<rawString>Eisenbarth, T., Koschke, R., Simon, D.: Locating features in source code. IEEE Computer 29(3), 210–224 (2003)</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>O Greevy</author>
+</authors>
+<title>Enriching Reverse Engineering with Feature Analysis.</title>
+<date>2007</date>
+<tech>PhD thesis,</tech>
+<institution>University of Bern</institution>
+<contexts>
+<context position="20380" citStr="[9]" startWordPosition="3147" endWordPosition="3147">nced trace analysis. 3 Validation We present the feature analysis experiment we performed to highlight the difference between the amount of data gathered with a trace-based approach and the annotation based approach. Our experiment was performed using a mediumsized software system of approximately 200 classes, a content-management system (CMS) Pier, which also encompasses Wiki functionality [18] as a case-study. For our experiment we selected a set of Pier features similar to those chosen for a previous post-mortem experiment (login, edit page, remove page, save page) with the same case study [9] In this paper, we illustrate the application of our analysis technique on the login feature. 3.1 Case Study: The Pier CMS We apply our live feature analysis to show some empirical results on an example feature of the Pier CMS. We chose the login feature as it is easy to explain the concept of growing a feature as a result of exercising variants of feature behavior. When exercising a login feature, different behavior is invoked when a user enters a correct username and password, as opposed to when incorrect information is entered and an error message is displayed. Our first execution scenario </context>
+<context position="32285" citStr="[1,9]" startWordPosition="5051" endWordPosition="5051">ive analysis and discard the information when it is no longer needed. Thus there is no limitation to annotating all events (methods and sub-methods) involved in a feature’s behavior. Furthermore, a key focus of feature identification techniques is to define measurements to quantify the relevancy of a source entity to a feature and to use the results for further static exploration of the code. These approaches do not explicitly express the relationship between behavioral data and source code entities. To extract high level views of dynamic data, we need to process the large traces. Other works [1,9] identify the need to extract a model of behavioral data in the context of structural data of the source code. Subsequently feature analysis is performed on the model rather than on the source code itself. 5 Conclusions and Future Work In this paper we have proposed a live feature analysis approach based on Partial Behavioral Reflection to address some of the limitations of traditional tracebased feature analysis approaches. This technique relates features to the running code, thus opening up a number of possibilities to exploit feature information 150 M. Denker et al. interactively and in con</context>
+</contexts>
+<marker>9.</marker>
+<rawString>Greevy, O.: Enriching Reverse Engineering with Feature Analysis. PhD thesis, University of Bern (May 2007)</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>O Greevy</author>
+<author>S Ducasse</author>
+</authors>
+<title>Correlating features and code using a compact two-sided trace analysis approach. In:</title>
+<date>2005</date>
+<booktitle>Proceedings of 9th European Conference on Software Maintenance and Reengineering (CSMR</booktitle>
+<pages>314--323</pages>
+<publisher>IEEE Computer Society,</publisher>
+<location>Los Alamitos</location>
+<contexts>
+<context position="2449" citStr="[10, 11, 12]" startWordPosition="347" endWordPosition="349">archers have recognized the importance of centering reverse engineering activities around a system’s behavior, in particular, around features [8,15,22]. Bugs and change requests are usually expressed in terms of a system’s features, thus knowledge of a system’s features is particularly useful for maintenance [17]. This paper presents a novel technique to perform fine-grained feature analysis incrementally at runtime, while minimizing adverse effects to system performance. For an in-depth discussion about features and feature analysis in general, we refer the reader to our earlier publications [10, 11, 12]. D.C. Petriu, N. Rouquette, Ø. Haugen (Eds.): MODELS 2010, Part II, LNCS 6395, pp. 138–152, 2010. © Springer-Verlag Berlin Heidelberg 2010 Modeling Features at Runtime 139 Features are abstract notions, normally not explicitly represented in source code or elsewhere in the system. Therefore, to leverage feature information, we need to perform feature analysis to establish which portions of source code implements a particular feature. Most existing feature analysis approaches [22, 15] capture traces of method events that occur while exercising a feature and subsequently perform post-mortem ana</context>
+<context position="28698" citStr="[10,14,26]" startWordPosition="4495" endWordPosition="4495"> 1879 9.42 Depending on the feature exercised our approach generates up to 13 times less data for representing the same information compared to a traditional approach. 4 Related Work We review dynamic analysis system comprehension and feature identification approaches and discuss the similarities and shortcomings of these approaches in the context of our live feature analysis technique. Many approaches to dynamic analysis focus on the problem of tackling the large volume of data. Many of these works propose compression and summarization techniques to support the extraction of high level views [10,14,26]. Our technique is in effect also a summarization technique in that the annotation does not need to be repeated for multiple executions of the same parts of the code. However, our annotation can easily encompass information about number of executions of a mode in the code representation and also order of execution, so that the dynamic information is efficiently saved in a compressed form and would be expandable without loss of information on demand. Dynamic analysis approaches to feature identification have typically involved executing the features of a system and analyzing the resulting execu</context>
+</contexts>
+<marker>10.</marker>
+<rawString>Greevy, O., Ducasse, S.: Correlating features and code using a compact two-sided trace analysis approach. In: Proceedings of 9th European Conference on Software Maintenance and Reengineering (CSMR 2005), pp. 314–323. IEEE Computer Society, Los Alamitos (2005)</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>O Greevy</author>
+<author>S Ducasse</author>
+<author>T Gîrba</author>
+</authors>
+<title>Analyzing feature traces to incorporate the semantics of change in software evolution analysis.</title>
+<date>2005</date>
+<journal>In: ICSM</journal>
+<pages>347--356</pages>
+<publisher>IEEE Computer Society,</publisher>
+<location>Los Alamitos</location>
+<contexts>
+<context position="2449" citStr="[10, 11, 12]" startWordPosition="347" endWordPosition="349">archers have recognized the importance of centering reverse engineering activities around a system’s behavior, in particular, around features [8,15,22]. Bugs and change requests are usually expressed in terms of a system’s features, thus knowledge of a system’s features is particularly useful for maintenance [17]. This paper presents a novel technique to perform fine-grained feature analysis incrementally at runtime, while minimizing adverse effects to system performance. For an in-depth discussion about features and feature analysis in general, we refer the reader to our earlier publications [10, 11, 12]. D.C. Petriu, N. Rouquette, Ø. Haugen (Eds.): MODELS 2010, Part II, LNCS 6395, pp. 138–152, 2010. © Springer-Verlag Berlin Heidelberg 2010 Modeling Features at Runtime 139 Features are abstract notions, normally not explicitly represented in source code or elsewhere in the system. Therefore, to leverage feature information, we need to perform feature analysis to establish which portions of source code implements a particular feature. Most existing feature analysis approaches [22, 15] capture traces of method events that occur while exercising a feature and subsequently perform post-mortem ana</context>
+</contexts>
+<marker>11.</marker>
+<rawString>Greevy, O., Ducasse, S., Gîrba, T.: Analyzing feature traces to incorporate the semantics of change in software evolution analysis. In: ICSM 2005, pp. 347–356. IEEE Computer Society, Los Alamitos (September 2005)</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>O Greevy</author>
+<author>S Ducasse</author>
+<author>T Gîrba</author>
+</authors>
+<title>Analyzing software evolution through feature views.</title>
+<date>2006</date>
+<journal>Journal of Software Maintenance and Evolution: Research and Practice (JSME)</journal>
+<volume>18</volume>
+<issue>6</issue>
+<pages>425--456</pages>
+<contexts>
+<context position="2449" citStr="[10, 11, 12]" startWordPosition="347" endWordPosition="349">archers have recognized the importance of centering reverse engineering activities around a system’s behavior, in particular, around features [8,15,22]. Bugs and change requests are usually expressed in terms of a system’s features, thus knowledge of a system’s features is particularly useful for maintenance [17]. This paper presents a novel technique to perform fine-grained feature analysis incrementally at runtime, while minimizing adverse effects to system performance. For an in-depth discussion about features and feature analysis in general, we refer the reader to our earlier publications [10, 11, 12]. D.C. Petriu, N. Rouquette, Ø. Haugen (Eds.): MODELS 2010, Part II, LNCS 6395, pp. 138–152, 2010. © Springer-Verlag Berlin Heidelberg 2010 Modeling Features at Runtime 139 Features are abstract notions, normally not explicitly represented in source code or elsewhere in the system. Therefore, to leverage feature information, we need to perform feature analysis to establish which portions of source code implements a particular feature. Most existing feature analysis approaches [22, 15] capture traces of method events that occur while exercising a feature and subsequently perform post-mortem ana</context>
+<context position="5131" citStr="[2,12]" startWordPosition="753" endWordPosition="753"> shortcomings of traditional post-mortem approaches: – Data volume. By tracking features in terms of structured objects rather than linear traces, the volume of data produced while exercising features is constant with respect to the number of source code entities. Data produced by traditional feature analysis approaches is proportional to the execution events of the source code entities, thus higher. Different strategies to deal with large amounts of data have been proposed, for example: (1) summarization through metrics [7], (2) filtering and clustering techniques [13, 26], (3) visualization [2,12] (4) selective instrumentation and (5) query-based approaches [19]. The net effect of applying these strategies however, is loss of information of a feature’s behavior in the feature representation to be analyzed. – Feature growing. Variants of the same feature can be exercised iteratively and incrementally, thus allowing the analysis representation of a feature to “grow” within the development environment. The problems of tracing at sub-method granularity are performance and large amount of gathered data. Traditional approaches deliver a tree of execution events which are hard to manipulate. </context>
+</contexts>
+<marker>12.</marker>
+<rawString>Greevy, O., Ducasse, S., Gîrba, T.: Analyzing software evolution through feature views. Journal of Software Maintenance and Evolution: Research and Practice (JSME) 18(6), 425–456 (2006)</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Hamou-Lhadj</author>
+<author>Lethbridge</author>
+</authors>
+<title>T.: A survey of trace exploration tools and techniques. In:</title>
+<date>2004</date>
+<booktitle>CASON 2004, Indianapolis IN,</booktitle>
+<pages>42--55</pages>
+<publisher>IBM Press</publisher>
+<contexts>
+<context position="5105" citStr="[13, 26]" startWordPosition="749" endWordPosition="750">e analysis addresses various shortcomings of traditional post-mortem approaches: – Data volume. By tracking features in terms of structured objects rather than linear traces, the volume of data produced while exercising features is constant with respect to the number of source code entities. Data produced by traditional feature analysis approaches is proportional to the execution events of the source code entities, thus higher. Different strategies to deal with large amounts of data have been proposed, for example: (1) summarization through metrics [7], (2) filtering and clustering techniques [13, 26], (3) visualization [2,12] (4) selective instrumentation and (5) query-based approaches [19]. The net effect of applying these strategies however, is loss of information of a feature’s behavior in the feature representation to be analyzed. – Feature growing. Variants of the same feature can be exercised iteratively and incrementally, thus allowing the analysis representation of a feature to “grow” within the development environment. The problems of tracing at sub-method granularity are performance and large amount of gathered data. Traditional approaches deliver a tree of execution events whic</context>
+</contexts>
+<marker>13.</marker>
+<rawString>Hamou-Lhadj, A., Lethbridge, T.: A survey of trace exploration tools and techniques. In: CASON 2004, Indianapolis IN, pp. 42–55. IBM Press (2004) 152 M. Denker et al.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Hamou-Lhadj</author>
+<author>T Lethbridge</author>
+</authors>
+<title>Summarizing the content of large traces to facilitate the understanding of the behaviour of a software system. In:</title>
+<date>2006</date>
+<booktitle>ICPC 2006,</booktitle>
+<pages>181--190</pages>
+<publisher>IEEE Computer Society,</publisher>
+<location>Washington, DC, USA,</location>
+<contexts>
+<context position="28698" citStr="[10,14,26]" startWordPosition="4495" endWordPosition="4495"> 1879 9.42 Depending on the feature exercised our approach generates up to 13 times less data for representing the same information compared to a traditional approach. 4 Related Work We review dynamic analysis system comprehension and feature identification approaches and discuss the similarities and shortcomings of these approaches in the context of our live feature analysis technique. Many approaches to dynamic analysis focus on the problem of tackling the large volume of data. Many of these works propose compression and summarization techniques to support the extraction of high level views [10,14,26]. Our technique is in effect also a summarization technique in that the annotation does not need to be repeated for multiple executions of the same parts of the code. However, our annotation can easily encompass information about number of executions of a mode in the code representation and also order of execution, so that the dynamic information is efficiently saved in a compressed form and would be expandable without loss of information on demand. Dynamic analysis approaches to feature identification have typically involved executing the features of a system and analyzing the resulting execu</context>
+</contexts>
+<marker>14.</marker>
+<rawString>Hamou-Lhadj, A., Lethbridge, T.: Summarizing the content of large traces to facilitate the understanding of the behaviour of a software system. In: ICPC 2006, Washington, DC, USA, pp. 181–190. IEEE Computer Society, Los Alamitos (2006)</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Kothari</author>
+<author>T Denton</author>
+<author>S Mancoridis</author>
+<author>A Shokoufandeh</author>
+</authors>
+<title>On computing the canonical features of software systems.</title>
+<date>2006</date>
+<journal>In: WCRE</journal>
+<contexts>
+<context position="1988" citStr="[8,15,22]" startWordPosition="279" endWordPosition="279">ral representations of code based on abstract syntax trees. We illustrate our live analysis with a case study where we achieve a more complete feature representation by exercising and merging variants of feature behavior and demonstrate the efficiency or our technique with benchmarks. Keywords: models at runtime, behavioral reflection, feature annotations, dynamic analysis, feature analysis, software maintenance, feature growing. 1 Introduction Many researchers have recognized the importance of centering reverse engineering activities around a system’s behavior, in particular, around features [8,15,22]. Bugs and change requests are usually expressed in terms of a system’s features, thus knowledge of a system’s features is particularly useful for maintenance [17]. This paper presents a novel technique to perform fine-grained feature analysis incrementally at runtime, while minimizing adverse effects to system performance. For an in-depth discussion about features and feature analysis in general, we refer the reader to our earlier publications [10, 11, 12]. D.C. Petriu, N. Rouquette, Ø. Haugen (Eds.): MODELS 2010, Part II, LNCS 6395, pp. 138–152, 2010. © Springer-Verlag Berlin Heidelberg 2010</context>
+</contexts>
+<marker>15.</marker>
+<rawString>Kothari, J., Denton, T., Mancoridis, S., Shokoufandeh, A.: On computing the canonical features of software systems. In: WCRE 2006 (October 2006)</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Lienhard</author>
+<author>O Greevy</author>
+<author>O Nierstrasz</author>
+</authors>
+<title>Tracking objects to detect feature dependencies. In:</title>
+<date>2007</date>
+<booktitle>ICPC 2007,</booktitle>
+<pages>59--68</pages>
+<publisher>IEEE Computer Society,</publisher>
+<location>Washington, DC, USA,</location>
+<contexts>
+<context position="18063" citStr="[16]" startWordPosition="2778" endWordPosition="2778">ffers over multiple runs, newly executed instructions will be tagged in addition to those already tagged. Thus we can use our approach to iteratively build up the representation of a feature covering multiple paths of execution. 2.5 Towards Optional Tracing Instead of multiple runs resulting in one feature annotation, the feature annotations can be parameterized with the number of executions that are the result of exercising the feature. Our approach also accommodates capturing instance information or feature dependencies as described in the approaches of Salah et al. [22] and Lienhard et al. [16]. Naturally, the more information that is gathered at runtime, the more memory that is required. In the worst case, recording everything would result in recording the same amount of information as a complete trace of fine-grained behavioral information. The execution cost will also be higher due to the inserted code of the behavioral reflection technique. One major disadvantage when adopting filtering strategies to reduce the amount of data gathered at runtime is the loss of dynamic information that may have been relevant for the analysis. Thus it is crucial to define which information is nece</context>
+</contexts>
+<marker>16.</marker>
+<rawString>Lienhard, A., Greevy, O., Nierstrasz, O.: Tracking objects to detect feature dependencies. In: ICPC 2007, Washington, DC, USA, pp. 59–68. IEEE Computer Society, Los Alamitos (June 2007)</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Mehta</author>
+<author>G Heineman</author>
+</authors>
+<title>Evolving legacy systems features using regression test cases and components. In:</title>
+<date>2002</date>
+<booktitle>Proceedings ACM International Workshop on Principles of Software Evolution,</booktitle>
+<pages>190--193</pages>
+<publisher>ACM Press,</publisher>
+<location>New York</location>
+<contexts>
+<context position="2151" citStr="[17]" startWordPosition="304" endWordPosition="304"> exercising and merging variants of feature behavior and demonstrate the efficiency or our technique with benchmarks. Keywords: models at runtime, behavioral reflection, feature annotations, dynamic analysis, feature analysis, software maintenance, feature growing. 1 Introduction Many researchers have recognized the importance of centering reverse engineering activities around a system’s behavior, in particular, around features [8,15,22]. Bugs and change requests are usually expressed in terms of a system’s features, thus knowledge of a system’s features is particularly useful for maintenance [17]. This paper presents a novel technique to perform fine-grained feature analysis incrementally at runtime, while minimizing adverse effects to system performance. For an in-depth discussion about features and feature analysis in general, we refer the reader to our earlier publications [10, 11, 12]. D.C. Petriu, N. Rouquette, Ø. Haugen (Eds.): MODELS 2010, Part II, LNCS 6395, pp. 138–152, 2010. © Springer-Verlag Berlin Heidelberg 2010 Modeling Features at Runtime 139 Features are abstract notions, normally not explicitly represented in source code or elsewhere in the system. Therefore, to lever</context>
+</contexts>
+<marker>17.</marker>
+<rawString>Mehta, A., Heineman, G.: Evolving legacy systems features using regression test cases and components. In: Proceedings ACM International Workshop on Principles of Software Evolution, pp. 190–193. ACM Press, New York (2002)</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>L Renggli</author>
+</authors>
+<title>Magritte — meta-described web application development. Master’s thesis,</title>
+<date>2006</date>
+<institution>University of Bern</institution>
+<contexts>
+<context position="20175" citStr="[18]" startWordPosition="3112" endWordPosition="3112">e) takes part in a feature [21]. Even adding optional support for recording full traces can be interesting: the node can reference the trace events directly, providing an interesting data-structure for advanced trace analysis. 3 Validation We present the feature analysis experiment we performed to highlight the difference between the amount of data gathered with a trace-based approach and the annotation based approach. Our experiment was performed using a mediumsized software system of approximately 200 classes, a content-management system (CMS) Pier, which also encompasses Wiki functionality [18] as a case-study. For our experiment we selected a set of Pier features similar to those chosen for a previous post-mortem experiment (login, edit page, remove page, save page) with the same case study [9] In this paper, we illustrate the application of our analysis technique on the login feature. 3.1 Case Study: The Pier CMS We apply our live feature analysis to show some empirical results on an example feature of the Pier CMS. We chose the login feature as it is easy to explain the concept of growing a feature as a result of exercising variants of feature behavior. When exercising a login fe</context>
+</contexts>
+<marker>18.</marker>
+<rawString>Renggli, L.: Magritte — meta-described web application development. Master’s thesis, University of Bern (June 2006)</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>T Richner</author>
+<author>S Ducasse</author>
+</authors>
+<title>Using dynamic information for the iterative recovery of collaborations and roles. In:</title>
+<date>2002</date>
+<booktitle>ICSM</booktitle>
+<pages>34</pages>
+<publisher>IEEE Computer Society,</publisher>
+<location>Los Alamitos</location>
+<contexts>
+<context position="5197" citStr="[19]" startWordPosition="761" endWordPosition="761">By tracking features in terms of structured objects rather than linear traces, the volume of data produced while exercising features is constant with respect to the number of source code entities. Data produced by traditional feature analysis approaches is proportional to the execution events of the source code entities, thus higher. Different strategies to deal with large amounts of data have been proposed, for example: (1) summarization through metrics [7], (2) filtering and clustering techniques [13, 26], (3) visualization [2,12] (4) selective instrumentation and (5) query-based approaches [19]. The net effect of applying these strategies however, is loss of information of a feature’s behavior in the feature representation to be analyzed. – Feature growing. Variants of the same feature can be exercised iteratively and incrementally, thus allowing the analysis representation of a feature to “grow” within the development environment. The problems of tracing at sub-method granularity are performance and large amount of gathered data. Traditional approaches deliver a tree of execution events which are hard to manipulate. Our technique delivers a set of source code entities on top of whi</context>
+</contexts>
+<marker>19.</marker>
+<rawString>Richner, T., Ducasse, S.: Using dynamic information for the iterative recovery of collaborations and roles. In: ICSM 2002, p. 34. IEEE Computer Society, Los Alamitos (October 2002)</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R Robbes</author>
+<author>S Ducasse</author>
+<author>M Lanza</author>
+</authors>
+<title>Microprints: A pixel-based semantically rich visualization of methods. In:</title>
+<date>2005</date>
+<booktitle>Proceedings of 13th International Smalltalk Conference, ISC</booktitle>
+<pages>131--157</pages>
+<contexts>
+<context position="34822" citStr="[20]" startWordPosition="5442" endWordPosition="5442">ures are analyzed at runtime for selected parts of the application. Features can be analyzed on-demand, depending on the task at hand. The performance impact of our implementation is visible only at the first execution as we have shown that certain techniques can be introduced to attenuate this impact. Having feature annotations represented in the system at the statement level opens up many possibilities for visualizing fine-grained feature behavior and interaction between different features. We plan to explore the idea of visualizing feature interaction at a sub-method level with microprints [20]. Another interesting direction for future work is to experiment with advanced scoping mechanisms. We want to experiment with the idea of scoping dynamic analysis towards a feature instead of static entities like packages and classes. In addition, we plan to explore the notion of scoping feature analysis itself towards features, which leads to the notion of analyzing the dependencies between features. When analyzing which sub-method entity takes part in a feature, we up to now install the link very generously on all nodes of the AST. This is not needed as we only need to make sure that we put </context>
+</contexts>
+<marker>20.</marker>
+<rawString>Robbes, R., Ducasse, S., Lanza, M.: Microprints: A pixel-based semantically rich visualization of methods. In: Proceedings of 13th International Smalltalk Conference, ISC 2005, pp. 131–157 (2005)</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Röthlisberger</author>
+<author>O Nierstrasz</author>
+<author>S Ducasse</author>
+<author>D Pollet</author>
+<author>R Robbes</author>
+</authors>
+<title>Supporting task-oriented navigation in IDEs with configurable HeatMaps.</title>
+<date>2009</date>
+<pages>253--257</pages>
+<publisher>IEEE Computer Society,</publisher>
+<location>In: ICPC</location>
+<contexts>
+<context position="19602" citStr="[21]" startWordPosition="3029" endWordPosition="3029">s focuses on a different level of detail. For example one analysis may choose to focus on the core application code and filtering out library code, whereas another analysis would choose to home in on the use of library code by a feature. With our approach we can extend feature annotation gradually. Instead of uninstalling the tagger meta-object after the first execution, we can use it to gather an invocation count. This approach would be useful for building so-called feature heat maps i.e., visualizations that show how often a part of the system (i.e., a specific node) takes part in a feature [21]. Even adding optional support for recording full traces can be interesting: the node can reference the trace events directly, providing an interesting data-structure for advanced trace analysis. 3 Validation We present the feature analysis experiment we performed to highlight the difference between the amount of data gathered with a trace-based approach and the annotation based approach. Our experiment was performed using a mediumsized software system of approximately 200 classes, a content-management system (CMS) Pier, which also encompasses Wiki functionality [18] as a case-study. For our e</context>
+</contexts>
+<marker>21.</marker>
+<rawString>Röthlisberger, D., Nierstrasz, O., Ducasse, S., Pollet, D., Robbes, R.: Supporting task-oriented navigation in IDEs with configurable HeatMaps. In: ICPC 2009, pp. 253–257. IEEE Computer Society, Los Alamitos (2009)</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Salah</author>
+<author>S Mancoridis</author>
+</authors>
+<title>A hierarchy of dynamic software views: from objectinteractions to feature-interacions.</title>
+<date>2004</date>
+<journal>In: ICSM</journal>
+<pages>72--81</pages>
+<publisher>IEEE Computer Society Press,</publisher>
+<location>Los Alamitos</location>
+<contexts>
+<context position="1988" citStr="[8,15,22]" startWordPosition="279" endWordPosition="279">ral representations of code based on abstract syntax trees. We illustrate our live analysis with a case study where we achieve a more complete feature representation by exercising and merging variants of feature behavior and demonstrate the efficiency or our technique with benchmarks. Keywords: models at runtime, behavioral reflection, feature annotations, dynamic analysis, feature analysis, software maintenance, feature growing. 1 Introduction Many researchers have recognized the importance of centering reverse engineering activities around a system’s behavior, in particular, around features [8,15,22]. Bugs and change requests are usually expressed in terms of a system’s features, thus knowledge of a system’s features is particularly useful for maintenance [17]. This paper presents a novel technique to perform fine-grained feature analysis incrementally at runtime, while minimizing adverse effects to system performance. For an in-depth discussion about features and feature analysis in general, we refer the reader to our earlier publications [10, 11, 12]. D.C. Petriu, N. Rouquette, Ø. Haugen (Eds.): MODELS 2010, Part II, LNCS 6395, pp. 138–152, 2010. © Springer-Verlag Berlin Heidelberg 2010</context>
+<context position="18038" citStr="[22]" startWordPosition="2773" endWordPosition="2773"> if the execution path differs over multiple runs, newly executed instructions will be tagged in addition to those already tagged. Thus we can use our approach to iteratively build up the representation of a feature covering multiple paths of execution. 2.5 Towards Optional Tracing Instead of multiple runs resulting in one feature annotation, the feature annotations can be parameterized with the number of executions that are the result of exercising the feature. Our approach also accommodates capturing instance information or feature dependencies as described in the approaches of Salah et al. [22] and Lienhard et al. [16]. Naturally, the more information that is gathered at runtime, the more memory that is required. In the worst case, recording everything would result in recording the same amount of information as a complete trace of fine-grained behavioral information. The execution cost will also be higher due to the inserted code of the behavioral reflection technique. One major disadvantage when adopting filtering strategies to reduce the amount of data gathered at runtime is the loss of dynamic information that may have been relevant for the analysis. Thus it is crucial to define </context>
+</contexts>
+<marker>22.</marker>
+<rawString>Salah, M., Mancoridis, S.: A hierarchy of dynamic software views: from objectinteractions to feature-interacions. In: ICSM 2004, pp. 72–81. IEEE Computer Society Press, Los Alamitos (2004)</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>É Tanter</author>
+<author>J Noyé</author>
+<author>D Caromel</author>
+<author>P Cointe</author>
+</authors>
+<title>Partial behavioral reflection: Spatial and temporal selection of reification.</title>
+<date>2003</date>
+<journal>In: OOPSLA</journal>
+<pages>27--46</pages>
+<contexts>
+<context position="8998" citStr="[23]" startWordPosition="1347" endWordPosition="1347">ines related work in the fields of dynamic analysis and feature identification. Finally, we conclude in Section 5 by outlining possible future work in this direction. 2 Live Feature Analysis with Partial Behavioral Reflection To achieve live feature analysis, we need a means to directly access runtime information associated with features and at the same time minimize the negative impact of slowing down the running application under investigation due Modeling Features at Runtime 141 to instrumentation. In a previous work [5] we proposed that Partial Behavioral Reflection as pioneered by Reflex [23] is particularly well-suited for dynamic analysis as it supports a highly selective means to specify where and when to analyze the dynamics of a system. Before explaining Partial Behavioral Reflection in more detail, we present a brief review of Structural Reflection and Behavioral Reflection. Structural reflection models the static structure of the system. Classes and methods are represented as objects and can both be read and manipulated from within the running system. In today’s object-oriented systems, structural reflection does not extend beyond the granularity of the method: a method is </context>
+<context position="11434" citStr="[23]" startWordPosition="1716" endWordPosition="1716">ee Figure 1). A link sends messages to a meta object upon occurrences of marked operations. The attributes of a link enable further control of the exact message to be sent to the meta-object. Furthermore, an activation condition can be defined for a link which determines whether or not the link is actually triggered. Links are associated with nodes from the AST. Subsequently, the system automatically generates new bytecode that takes the link into consideration the next time the method is executed. Reflectivity was conceived as an extension of the Reflex model of Partial Behavioral Reflection [23]. Reflex was originally realized with Java. Therefore, our approach can in be implemented in a more static mainstream language like Java. The reason for choosing Smalltalk and Reflectivity for this work is that it supports unanticipated use of reflection at runtime [3] and is integrated with an AST based reflective code model [4]. A Java solution would likely be more static in nature: links cannot be removed completely (as code cannot be changed at runtime) and the code model would not be as closely integrated with the runtime of the language. 1 http://pharo-project.org/ 142 M. Denker et al. s</context>
+</contexts>
+<marker>23.</marker>
+<rawString>Tanter, É., Noyé, J., Caromel, D., Cointe, P.: Partial behavioral reflection: Spatial and temporal selection of reification. In: OOPSLA 2003, pp. 27–46 (November 2003)</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>N Wilde</author>
+<author>M Scully</author>
+</authors>
+<title>Software reconnaisance: Mapping program features to code.</title>
+<date>1995</date>
+<journal>Journal on Software Maintenance: Research and Practice</journal>
+<volume>7</volume>
+<issue>1</issue>
+<pages>49--62</pages>
+<contexts>
+<context position="29320" citStr="[1,8,24,25]" startWordPosition="4591" endWordPosition="4591">ique is in effect also a summarization technique in that the annotation does not need to be repeated for multiple executions of the same parts of the code. However, our annotation can easily encompass information about number of executions of a mode in the code representation and also order of execution, so that the dynamic information is efficiently saved in a compressed form and would be expandable without loss of information on demand. Dynamic analysis approaches to feature identification have typically involved executing the features of a system and analyzing the resulting execution trace [1,8,24,25]. Typically, the research effort of these works focuses on the underlying mechanisms used to locate features (e.g., static analysis, dynamic analysis, formal concept analysis, semantic analysis or approaches that combine two or more of these techniques). Modeling Features at Runtime 149 Wilde and Scully pioneered the use of dynamic analysis to locate features [24]. They named their technique Software Reconnaissance. Their goal was to support programmers when they modify or extend functionality of legacy systems. Eisenbarth et al. described a semi-automatic feature identification technique whic</context>
+</contexts>
+<marker>24.</marker>
+<rawString>Wilde, N., Scully, M.: Software reconnaisance: Mapping program features to code. Journal on Software Maintenance: Research and Practice 7(1), 49–62 (1995)</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>E Wong</author>
+<author>S Gokhale</author>
+<author>J Horgan</author>
+</authors>
+<title>Quantifying the closeness between program components and features.</title>
+<date>2000</date>
+<journal>Journal of Systems and Software</journal>
+<volume>54</volume>
+<issue>2</issue>
+<pages>87--98</pages>
+<contexts>
+<context position="29320" citStr="[1,8,24,25]" startWordPosition="4591" endWordPosition="4591">ique is in effect also a summarization technique in that the annotation does not need to be repeated for multiple executions of the same parts of the code. However, our annotation can easily encompass information about number of executions of a mode in the code representation and also order of execution, so that the dynamic information is efficiently saved in a compressed form and would be expandable without loss of information on demand. Dynamic analysis approaches to feature identification have typically involved executing the features of a system and analyzing the resulting execution trace [1,8,24,25]. Typically, the research effort of these works focuses on the underlying mechanisms used to locate features (e.g., static analysis, dynamic analysis, formal concept analysis, semantic analysis or approaches that combine two or more of these techniques). Modeling Features at Runtime 149 Wilde and Scully pioneered the use of dynamic analysis to locate features [24]. They named their technique Software Reconnaissance. Their goal was to support programmers when they modify or extend functionality of legacy systems. Eisenbarth et al. described a semi-automatic feature identification technique whic</context>
+<context position="30735" citStr="[25]" startWordPosition="4802" endWordPosition="4802">t of their approach, they extended the Software Reconnaissance approach to consider a set of features rather than one feature. They applied formal concept analysis to derive a correspondence between features and code. They used the information gained by formal concept analysis to guide a static analysis technique to identify featurespecific computational units (i.e., units of source code). Wong et al. base their analysis on the Software Reconnaissance approach and complement the relevancy metric by defining three new metrics to quantify the relationship between a source artifact and a feature [25]. Their focus is on measuring the closeness between a feature and a program component. All of these feature identification approaches collect traces of method events and use this data to locate the parts of source code that implement a feature. Feature identification analysis is thus based on manipulating and analyzing large traces. A key difference to our live feature analysis approach is that these dynamic analyses focus primarily on method execution, thus do not capture fine-grained details such as sub-method execution events such as conditional branching and variable access. This informati</context>
+</contexts>
+<marker>25.</marker>
+<rawString>Wong, E., Gokhale, S., Horgan, J.: Quantifying the closeness between program components and features. Journal of Systems and Software 54(2), 87–98 (2000)</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Zaidman</author>
+<author>S Demeyer</author>
+</authors>
+<title>Managing trace data volume through a heuristical clustering process based on event execution frequency.</title>
+<date>2004</date>
+<pages>329--338</pages>
+<publisher>IEEE Computer Society Press,</publisher>
+<location>In: CSMR</location>
+<contexts>
+<context position="5105" citStr="[13, 26]" startWordPosition="749" endWordPosition="750">e analysis addresses various shortcomings of traditional post-mortem approaches: – Data volume. By tracking features in terms of structured objects rather than linear traces, the volume of data produced while exercising features is constant with respect to the number of source code entities. Data produced by traditional feature analysis approaches is proportional to the execution events of the source code entities, thus higher. Different strategies to deal with large amounts of data have been proposed, for example: (1) summarization through metrics [7], (2) filtering and clustering techniques [13, 26], (3) visualization [2,12] (4) selective instrumentation and (5) query-based approaches [19]. The net effect of applying these strategies however, is loss of information of a feature’s behavior in the feature representation to be analyzed. – Feature growing. Variants of the same feature can be exercised iteratively and incrementally, thus allowing the analysis representation of a feature to “grow” within the development environment. The problems of tracing at sub-method granularity are performance and large amount of gathered data. Traditional approaches deliver a tree of execution events whic</context>
+<context position="28698" citStr="[10,14,26]" startWordPosition="4495" endWordPosition="4495"> 1879 9.42 Depending on the feature exercised our approach generates up to 13 times less data for representing the same information compared to a traditional approach. 4 Related Work We review dynamic analysis system comprehension and feature identification approaches and discuss the similarities and shortcomings of these approaches in the context of our live feature analysis technique. Many approaches to dynamic analysis focus on the problem of tackling the large volume of data. Many of these works propose compression and summarization techniques to support the extraction of high level views [10,14,26]. Our technique is in effect also a summarization technique in that the annotation does not need to be repeated for multiple executions of the same parts of the code. However, our annotation can easily encompass information about number of executions of a mode in the code representation and also order of execution, so that the dynamic information is efficiently saved in a compressed form and would be expandable without loss of information on demand. Dynamic analysis approaches to feature identification have typically involved executing the features of a system and analyzing the resulting execu</context>
+</contexts>
+<marker>26.</marker>
+<rawString>Zaidman, A., Demeyer, S.: Managing trace data volume through a heuristical clustering process based on event execution frequency. In: CSMR 2004, pp. 329–338. IEEE Computer Society Press, Los Alamitos (March 2004)</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

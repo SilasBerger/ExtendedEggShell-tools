@@ -1,0 +1,2359 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.000000">
+<title confidence="0.2644775">
+Moldable, Context-Aware Searching with SPOTTER
+(Preprint ∗)
+</title>
+<author confidence="0.7145325">
+Andrei Chiş1, Tudor Gı̂rba3, Juraj Kubelka2,
+Oscar Nierstrasz1, Stefan Reichhart4, and Aliaksei Syrel1
+</author>
+<affiliation confidence="0.955434">
+Software Composition Group, University of Bern, Switzerland, scg.unibe.ch1,
+PLEIAD Laboratory, University of Chile, Chile, pleiad.cl2,
+</affiliation>
+<email confidence="0.922495">
+feenk.com, Switzerland3, stefan.reichhart@gmail.com, Switzerland4
+</email>
+<sectionHeader confidence="0.989905" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.988770904761905">
+Software systems involve many different kinds of domain-
+specific and interrelated software entities. A common strat-
+egy employed by developers to deal with this reality is to
+perform exploratory investigations by means of searching.
+Nevertheless, most integrated development environments
+(IDEs) support searching through generic and disconnected
+search tools. This impedes search tasks over domain-specific
+entities, as considerable effort is wasted by developers locat-
+ing and linking data and concepts relevant to their applica-
+tion domains.
+To tackle this problem we propose SPOTTER, a mold-
+able framework for supporting contextual-aware searching
+in IDEs by enabling developers to easily create custom
+searches for domain objects. In this paper we motivate a set
+of requirements for SPOTTER and show, through usage sce-
+narios, that SPOTTER improves program comprehension by
+reducing the effort required to find and search through con-
+cepts from a wide range of domains. Furthermore, we show
+that by taking code into account, SPOTTER can provide a
+single entry point for embedding search support within an
+IDE.
+</bodyText>
+<sectionHeader confidence="0.967586" genericHeader="categories and subject descriptors">
+Categories and Subject Descriptors D.2.6 [Software engi-
+</sectionHeader>
+<bodyText confidence="0.413118">
+neering]: Programming Environments – Integrated environ-
+ments, Interactive environments
+Keywords search, navigation, IDEs, integration
+∗ In Proceedings of the 2016 ACM International Symposium on New Ideas,
+New Paradigms, and Reflections on Programming and Software (Onward!
+2016), November 2–4, 2016, Amsterdam, Netherlands.
+DOI: 10.1145/2986012.2986023
+[Copyright notice will appear here once ’preprint’ option is removed.]
+</bodyText>
+<sectionHeader confidence="0.97059" genericHeader="introduction">
+1. Introduction
+</sectionHeader>
+<bodyText confidence="0.994856">
+Program comprehension requires developers to reason about
+many kinds of interconnected software entities (e.g., code,
+annotations, packages/namespaces, documentation, config-
+uration files, resource files, bugs, change sets, run-time data
+structures) [25] often stored in different locations [7]. Deal-
+ing with this reality prompts developers to form and main-
+tain task contexts [14] by continuously searching for relevant
+entities and navigating their dependencies [9, 11, 21]. Cog-
+nitive tasks analyses describe this process as a foraging loop
+in which developers seek, understand, and relate informa-
+tion [18].
+Depending on the application domain, software entities
+are further assigned domain-specific concepts. This im-
+proves program comprehension as domain concepts play an
+important role in human knowledge and software develop-
+ment [13, 19]. For example, an event-based system can use
+run-time objects to model events, a server can rely on XML
+files to model descriptors for web services, and a parser can
+model grammars using methods.
+Hence, instead of reasoning just in generic and low-
+level terms (e.g., What files named web.xml contain within
+a &amp;lt;security-role&amp;gt; tag a &amp;lt;role-name&amp;gt; tag with the value
+“manager”?), developers commonly formulate their queries
+using concepts and abstractions from their application do-
+mains (e.g., What web applications use the security role
+“manager”?).
+Nevertheless, although searching is pervasive in software
+development and maintenance tasks, it is supported in IDEs
+mainly by means of disconnected and generic search tools.
+On the one hand, the lack of search tool integration forces
+developers to manually locate and construct domain abstrac-
+tions by piecing together information from various sources
+(e.g., What XML tags represent security roles? In what files
+are they defined?). On the other hand, it impedes discov-
+erability: one has to be aware of a domain abstraction to
+know what to look for. Nevertheless, given the size of to-
+day’s systems, awareness of all domain abstractions is not
+1 2016/8/26
+feasible [17]. Hence, a generic and disconnected approach of
+integrating searching into IDEs leads to information forag-
+ing loops where significant effort is wasted recovering con-
+cepts instead of directly reasoning in term of those concepts.
+To address this problem and improve program com-
+prehension during information foraging loops we propose
+that search tools directly enable developers to discover and
+search through domain concepts. This goal can be achieved
+if IDEs support developers in creating and managing custom
+ways to search through their domains. Towards this goal
+we propose SPOTTER, a moldable framework for enabling
+contextual domain-aware searching in IDEs by putting cus-
+tomization in the foreground and enabling developers to:
+(i) easily create custom searches for domain objects;
+(ii) automatically discover searches for domain objects.
+SPOTTER targets the foraging loop described by Beck et
+al. (i.e., Search and Filter, Read and Extract, Follow Re-
+lations) [2] and leverages a simple object-oriented model
+for expressing search tools by composing search processors.
+First, a search processor is a run-time object that expresses
+an individual search query. Second, every search processor
+is associated with a software entity from an application (i.e.,
+its target object). To achieve this, all software entities from
+an application that can have an associated search processor
+are modeled as run-time objects. On the one hand, this in-
+cludes domain objects. On the other hand, this also includes
+other software entities like packages, classes, methods, an-
+notations, files, source code, bug reports, documentation, ex-
+amples, repositories, configurations, etc. This way proces-
+sors can be uniformly attached to domain objects, source
+code entities and external resources, given that modern IDEs
+already provide an object-oriented model for representing
+code and project related data (e.g., JDT in Eclipse). A de-
+veloper creates new custom processors by configuring the
+following attributes of a processor object:
+Provider: extracts the data on which the processor oper-
+ates from the system (e.g., the productions from a parser,
+the shapes from a visualization).
+Preprocessor: alters, if needed, the user-supplied query
+(e.g., fixes typos, removes white spaces, compiles a reg-
+ular expression) or improves the query by following var-
+ious heuristics (e.g., based on natural language process-
+ing).
+Query engine: extracts a subset of elements from the data
+provider based on the preprocessed query (e.g., substring
+matching, regular expressions, similarity threshold).
+Sorter (optional): can reorder the filtered results (e.g.,
+based on the frequency of their usage [26]).
+Hence, a search processor is an object that knows how
+certain domain concepts related to its target object are re-
+flected in an application and can restrict textual searches
+to software entities appropriate for those domain concepts.
+However, a search processor models just an individual query.
+To model a complete foraging loop, SPOTTER relies on
+search steps and exploration sessions: a search step captures
+a step in a foraging loop; an exploration session consists of
+a series of connected search steps. Each step takes as input
+an object and loads all processors associated with that ob-
+ject. When a user opens a step or enters a textual query all
+loaded search processors are executed in parallel. For exam-
+ple, opening a search step on a web server loads processors
+for searching through exposed services and security roles
+in use. Search results are displayed using a user interface
+that follows the guidelines for improving search tools pro-
+posed by Starke et al.: (i) skimming through search results,
+(ii) ranking and grouping of results, and (iii) exploring result
+sets [27].
+To determine the extent to which SPOTTER can enable
+domain-aware searching we have implemented it in Pharo1,
+as part of the GToolkit project.2 Due to positive feedback
+from software developers using our prototype, we have con-
+tinuously improved it and integrated a stable version into the
+Pharo 4 release3. Currently SPOTTER supports more than
+100 different search processors for 30 different data types,
+created both by us and by the developers of several frame-
+works and libraries from the Pharo ecosystem. On average,
+extending Spotter with a new type of search requires 9 lines
+of code. We discuss these extensions as well as what kinds
+of search tools can be integrated in SPOTTER in Section 8.
+We further present a pilot user study exploring how develop-
+ers create extensions for SPOTTER (Section 6) and a survey
+looking into how developers perceive and use SPOTTER in
+practice (Section 7).
+Through usage scenarios we show that SPOTTER can
+address a wide range of domain-specific questions from
+various domains (e.g., parsing, GUIs, event-bases systems,
+profilers, compilers, HTTP servers). We also show that
+SPOTTER can be extended to also support generic searches
+through code, classes methods, bug reports, run-time ob-
+jects, etc. By doing this SPOTTER can provide a single entry
+point for embedding search support within IDEs.
+The contributions of this paper are as follows:
+</bodyText>
+<listItem confidence="0.950262444444444">
+• Extracting and motivating a set of requirements for en-
+abling domain-aware searching within an IDE;
+• Presenting and discussing SPOTTER, a model for inte-
+grating domain-aware searching within an IDE;
+• Discussing the practical applicability of SPOTTER in pro-
+viding domain-aware searching and improving foraging
+loops based on real-world examples;
+• An analysis investigating the cost of creating custom
+extensions for SPOTTER.
+</listItem>
+<figure confidence="0.621821">
+1 pharo.org
+2 gt.moosetechnology.org
+3 pharo.org/news/pharo-4.0-released
+2 2016/8/26
+</figure>
+<sectionHeader confidence="0.974179" genericHeader="method">
+2. Requirements
+</sectionHeader>
+<bodyText confidence="0.9996754">
+To illustrate how generic approaches lead to wasted effort
+during information foraging loops, we start with two moti-
+vating examples. We then propose and motivate a set of re-
+quirements for addressing this problem and discuss how they
+are currently supported in related approaches.
+</bodyText>
+<subsectionHeader confidence="0.99142">
+2.1 Motivating Scenarios
+</subsectionHeader>
+<subsubsectionHeader confidence="0.56656">
+2.1.1 Searching Through a Parser Grammar
+</subsubsectionHeader>
+<bodyText confidence="0.998417244897959">
+PetitParser is a framework for creating parsers that makes it
+easy to dynamically reuse, compose, transform and extend
+grammars [20]. Developers create parsers by specifying a
+set of grammar productions in a class or in a class hierarchy.
+To specify a grammar production a developer needs to: (i)
+create a method that constructs and returns a parser object
+for that part of the grammar; (ii) define, in the same class,
+an attribute having the same name as the method. Produc-
+tions are referred to in other productions by accessing object
+attributes. Developers can add other helper methods and at-
+tributes to a parser class.
+Finding a grammar production is a common task during
+the development of a parser. As grammar productions have
+associated methods, one way to find a production within a
+parser class is to use a generic search for methods. Never-
+theless, this approach will find methods defined in that class
+that are not productions; developers need to further check
+that an attribute with that exact name also exists. If the parser
+is organized in a class hierarchy, developers are required to
+browse through the superclass chain when a production is
+not found in the current class. Another task that often arises
+when working with grammars is to locate those productions
+that use a given production. A developer can use a generic
+approach and start browsing all method that access an at-
+tribute, however, as in the previous situation, she will have
+to check if the accessing methods are indeed grammar pro-
+ductions.
+These issues can be directly addressed with the help of
+two domain-specific searches that allow developers to dis-
+cover and search through productions in a parser and through
+productions using a given production. For example, a search
+through the productions of a PetitParser parser can be instan-
+tiated as follows using a search processor:
+Provider: extracts from a parser class those methods that
+are grammar productions (i.e., methods where there ex-
+ists an attribute with the same name as the method);
+Preprocessor: parses and compiles the query supplied by
+the user into a regular expression;
+Query engine: extracts those productions whose name
+matches the regular expression;
+Sorter: orders productions based on the frequency of their
+usage within the current grammar.
+The results of using this processor to search for produc-
+tions containing the string “hex” in a parser for Java code is
+displayed in Figure 1a. The presented scenario is not unique
+to PetitParser. Similar situations arise every time code ele-
+ments (e.g., methods, classes, annotations) have a domain
+specific semantic, since generic search tools cannot filter out
+unrelated entities.
+</bodyText>
+<subsubsectionHeader confidence="0.835874">
+2.1.2 Searching Through a Visualization
+</subsubsectionHeader>
+<bodyText confidence="0.995348459459459">
+Roassal is an engine for building visualizations defined in
+terms of objects and their relations [1]. Developers create a
+new visualization starting from a set of domain objects by
+(i) mapping different types of shapes and relations to those
+objects, (ii) choosing a layout algorithm, and (iii) specifying
+how properties of shapes and of the layout are computed
+from the domain objects.
+Reasoning about how model elements are rendered, a
+common task consists in locating those parts of a visual-
+ization responsible for rendering that model object. A vi-
+sualization in Roassal is a run-time object consisting of a
+composite (i.e., tree) of shape objects. Answering our ques-
+tion requires a developer to search through the composite
+and locate shapes that render that object. As a visualization
+is an object, one way to address this question is to navigate
+through object state using a generic object inspector. Nev-
+ertheless, Roassal visualizations are complex objects con-
+taining many other attributes, unrelated to the task at hand,
+leading to a significant effort just for navigating through the
+object graph.
+Providing a domain-specific search that enables develop-
+ers to directly determine what shapes render a domain object
+can reduce navigation overhead. This search can be instanti-
+ated using a search processor as follows:
+Provider: extracts all graphical objects that render the
+target object associated with the processor from a Roassal
+visualization;
+Preprocessor: parses and compiles the query supplied by
+the user into a regular expression;
+Query engine: extracts those graphical objects whose
+class name matches the regular expression;
+Sorter: orders graphical objects alphabetically based on
+their class name.
+Figure 3b shows an example for this search processor.
+Such types of searches are not limited to Roassal; they are
+common when domain objects of interest for a developer are
+spread across an object graph.
+</bodyText>
+<subsectionHeader confidence="0.99344">
+2.2 Requirements Discussion
+</subsectionHeader>
+<bodyText confidence="0.9998545">
+The scenarios presented in Section 2.1 cover different types
+of developer questions that can be efficiently addressed
+through custom domain-specific searches. For this approach
+to be possible, IDEs should enable developers to create and
+</bodyText>
+<page confidence="0.441719">
+3 2016/8/26
+</page>
+<bodyText confidence="0.9951568">
+work with domain-specific searches. Starting from the pre-
+sented scenarios we propose the following as a set of min-
+imum requirements towards this goal: inexpensive creation
+of search processors, support for multiple data sources and
+context-aware searches.
+</bodyText>
+<subsubsectionHeader confidence="0.772916">
+2.2.1 Inexpensive Creation of Search Processors
+</subsubsectionHeader>
+<bodyText confidence="0.971188388888889">
+(REQ1)
+Given the wide rage of development tasks and applications,
+foreseeing all usage contexts of a tool is not possible [25]. A
+fixed set of searches limits the applicability of a search tool.
+Enabling developers to create custom searches for their do-
+main entities addresses this problem. Nevertheless, the dif-
+ficulty of creating a custom search directly influences the
+usability of such an approach. On the one hand, a domain-
+specific language for creating custom searches can signifi-
+cantly reduce the cost for certain types of extensions. On the
+other hand, supporting custom searches through a general-
+purpose programming language allows for any type of exten-
+sion. To provide a quick entry point and not limit the types
+of possible extensions, an infrastructure for domain-specific
+searching should support inexpensive creation of common
+types of searches, while allowing developers to fall back to
+a general-purpose programming language when advanced
+extensions are needed.
+</bodyText>
+<subsubsectionHeader confidence="0.956015">
+2.2.2 Multiple Data-sources Support (REQ2)
+</subsubsectionHeader>
+<bodyText confidence="0.99982325">
+The two questions discussed in the previous section require
+information from two different data sources: source code and
+runtime. External data (e.g., files) is another form of data
+source also frequently encountered in developer questions.
+Giving the wide range of heterogenous data used in software
+application enabling successful domain-specific searching
+requires support that integrates and presents to developers
+data from multiple data sources.
+</bodyText>
+<subsubsectionHeader confidence="0.900232">
+2.2.3 Context-aware Searches (REQ3)
+</subsubsectionHeader>
+<bodyText confidence="0.999689923076923">
+The questions discussed in Section 2.1 are sometimes ad-
+dressed in IDEs through standalone search tools (e.g., tools
+for query-based debugging, dedicated tools for working with
+parsers). To take advantage of them, developers have to be
+aware of their presence and know when they are applicable.
+Modern IDEs, however, can contain hundreds if not thou-
+sands of tools and commands. Finding which are applica-
+ble to a given entity in a given context can be a challenging
+task [15]. An infrastructure encouraging developers to create
+and work with custom searches should address this issue by
+enabling developers to automatically find custom searches
+applicable for a domain entity, based on the entity, the task
+at hand, and the developer’s task context.
+</bodyText>
+<subsectionHeader confidence="0.998602">
+2.3 Current Approaches
+</subsectionHeader>
+<bodyText confidence="0.984617333333333">
+There exists a wide range of software tools focusing on im-
+proving program comprehension by combining and integrat-
+ing multiple search tools and techniques. In this section we
+</bodyText>
+<figure confidence="0.941106">
+Tool Data model Extension
+language
+Requirement
+1 2 3
+</figure>
+<bodyText confidence="0.723915222222222">
+JQuery logic database TyRuBa X* — X*
+SEXTANT XML database XQuery X* — X*
+Ferret sphere model algebra ? X X*
+Sando text-based files internal DSL X — —
+SPOOL OO model internal DSL X — —
+SPOTTER reuses the
+IDE model
+internal DSL X X X
+— no support, Xfull support, X* partial support, ? unknown
+</bodyText>
+<tableCaption confidence="0.786275">
+Table 1. Feature comparison.
+</tableCaption>
+<bodyText confidence="0.9869688">
+present and discuss several tools that support custom exten-
+sions for searching through a software system:
+a) JQuery is a code browsing tool that combines the ad-
+vantages of query-based and hierarchical browser tools [10].
+JQuery relies on a knowledge database generated dynami-
+cally using the Eclipse API and queried using TyRuBa, a
+logical programming language augmented with a library of
+helper predicates for searching through source code.
+b) SEXTANT is a software exploration tool that leverages
+a custom graph-based model [23]. In SEXTANT all sources
+of a project are transformed to XML, stored in a database
+and queried using XQuery.
+c) Ferret is a tool for answering conceptual queries that
+integrates different sources of information, referred to as
+spheres, into a queryable knowledge-base [5]. Each sphere
+performs its queries using a component/plugin of the Eclipse
+IDE (e.g., static Java searches are executed using JDT).
+d) Sando is code search tool and framework that embod-
+ies a general and extensible local code search model [24].
+Sando focuses on enabling researches to easily implement
+and compare approaches for local code search.
+e) SPOOL is a reverse engineering environment combin-
+ing searching and browsing. SPOOL has at its core a repos-
+itory that stores source code models and provides a query
+mechanism through which a user can query the model [22].
+</bodyText>
+<subsubsectionHeader confidence="0.406416">
+2.3.1 Customization
+</subsubsectionHeader>
+<bodyText confidence="0.99741025">
+JQuery and SEXTANT address customization by selecting
+a language that best fits the model they use to represent the
+queried data. Nevertheless, this requires developers to write
+queries for object-oriented programs using a language based
+on a different paradigm (i.e., logical programming, func-
+tional programming). The query language used in JQuery,
+while allowing for expressive queries, makes the creation of
+complex queries difficult even for advanced users. Sando and
+SPOOL use a different approach: developers create custom
+extensions by implementing a predefined interface and writ-
+ing code in the host language (i.e., Java, C#) leveraging a
+given API. This does not require developers to become fa-
+</bodyText>
+<figure confidence="0.972822">
+4 2016/8/26
+(a) Searching for productions within a grammar (b) Searching through the users of a production.
+</figure>
+<figureCaption confidence="0.980468">
+Figure 1. Exploring a PetitParser grammar for Java code.
+</figureCaption>
+<bodyText confidence="0.8591515">
+miliar with another language. Sando shows that with this ap-
+proach complex searches can be implemented in less than
+100 lines of code. We were unable to find a discussion re-
+garding the ease of creating conceptual queries for Ferret.
+</bodyText>
+<subsubsectionHeader confidence="0.769038">
+2.3.2 Data-sources
+</subsubsectionHeader>
+<bodyText confidence="0.998851461538462">
+Ferret is the only one of the five selected tools that fully ad-
+dresses REQ2 by taking source code, dynamic and historical
+data into account; SEXTANT, JQuery, Sando and SPOOL
+are targeted towards the analysis of source code artifacts and
+do not take the run-time into account. Apart from the dis-
+cussed tools, many other approaches from the area of feature
+location combine multiple types of information to improve
+their results but do not focus on customization. Dit et al.
+provide a comprehensive review [6]. Search tools from cur-
+rent IDEs also allow developers to search through multiple
+data. For example, Global Search in IntelliJ makes it possi-
+ble for developers to search through files, methods, prefer-
+ences, tools, menus, etc.
+</bodyText>
+<subsubsectionHeader confidence="0.918681">
+2.3.3 Context-aware Searches
+</subsubsectionHeader>
+<bodyText confidence="0.997053363636364">
+SPOOL only allows custom searches to be selected based on
+the type of an entity (e.g., method, file). SEXTANT, JQuery
+and Ferret go one step further and attach searches to soft-
+ware entities; applicable searches can than be dynamically
+selected based on various properties of those entities. They
+however do not attempt to model the developer’s context and
+select searches also by taking into account that context. A
+different approach is taken by recommender systems which
+aim to suggest developers useful tools by recording and min-
+ing usage histories of software tools [15]; this however re-
+quires usage history information.
+</bodyText>
+<subsubsectionHeader confidence="0.720719">
+2.3.4 Summary
+</subsubsectionHeader>
+<bodyText confidence="0.9307518">
+The requirements identified in Section 2.2 are addressed to
+various degrees in current approaches that focus on integrat-
+ing searches over multiple data types. This indicates a need
+for a search framework that focuses on unifying search sup-
+port within an IDE by addressing all three requirements.
+3. SPOTTER in a Nutshell
+In this section we show how SPOTTER addresses the forag-
+ing loop described by Beck et al., we introduce a user in-
+terface to support the presented model, and we discuss how
+SPOTTER models a search context.
+</bodyText>
+<subsectionHeader confidence="0.999892">
+3.1 Search Context
+</subsectionHeader>
+<bodyText confidence="0.996635774193549">
+As discussed in Section 2.2.3, developers need support for
+automatically selecting searches relevant for their current
+needs. In the context of domain-specific object inspection
+we introduced a solution for modeling a developer’s context
+based on the following operators: tags, sessions and activa-
+tion predicates [4]. We propose reusing the same approach
+for enabling SPOTTER to automatically select relevant pro-
+cessors. For completeness, we present these operators and
+show how they apply to SPOTTER.
+Tags identify and group together processors applicable
+for a development task or application domain. For example,
+the processors related to PetitParser have the parsing tag.
+Generic processors are grouped using the default tag. Only
+processors that have a tag currently present in the search con-
+text are made available to developers. A session stores the
+objects found by a developer using SPOTTER, together with
+the order in which they were searched for and the search
+processors used to find those objects. An activation pred-
+icate is a boolean condition associated with a search pro-
+cessor that is applied on the current search context before
+loading that processor. Hence, an activation predicate can
+filter searches based on the state of the current object as
+well as based on the entire session. For example, the search
+processor for searching through production in a parser class
+described in Section 2.1.1, should only be available if the
+developer opened SPOTTER on a class that represents a Pe-
+titParser parser; this processor needs an activation predicate
+that checks the type of the class.
+A search context consists in a set of tags and a session.
+Only processors whose activation predicate return true when
+applied on the current context are made available to devel-
+</bodyText>
+<listItem confidence="0.908139083333333">
+opers.
+5 2016/8/26
+(a) The developer starts by opening SPOTTER, search-
+ing for “spotter”, locating the Pragmas processor and
+selecting the first result.
+(b) She then dives into the selected annotation (spotterOrder:) by clicking on the arrow
+to the right of that annotation. This creates a new step allowing her to search through
+methods having that annotation and methods calling a method with that name.
+(c) Next she expands the Pragmas processor and
+filters results using the “items” query.
+(d) She finishes by opening a method in a new step which loads processors for searching
+through senders of that method, as well as other methods with that name (Implementors).
+</listItem>
+<figureCaption confidence="0.952908">
+Figure 2. Exploring callers of methods having the spotterOrder: annotation (in Pharo annotations are referred to as pragmas).
+</figureCaption>
+<subsectionHeader confidence="0.987488">
+3.2 Supporting an Information Foraging Loop
+</subsectionHeader>
+<bodyText confidence="0.9986774">
+Starting from the foraging loop for intelligence analysis pro-
+posed by Pirolli and Card [18], Beck et al. describe a forag-
+ing loop for feature location [2] having three main activities:
+search and filter, read and extract and follow relations. We
+show next how SPOTTER supports these activities.
+</bodyText>
+<subsubsectionHeader confidence="0.816361">
+3.2.1 Search and Filter
+</subsubsectionHeader>
+<bodyText confidence="0.99706304">
+To support this activity, SPOTTER uses search steps. A step
+encapsulates a search on an object in a given context. Each
+step takes as input a target object and loads all processors
+that apply to objects of that type in the current context. For
+example, a search step opened on a method (i.e., on a method
+object) can load processors for searching through both the
+callers and the callees of that method. A step opened on
+a class representing a PetitParser parser in a context that
+contains the parsing tag loads specific processors related to
+PetitParser (e.g., a search through grammar productions —
+Figure 1a). If the default tag is also in the current context,
+then generic processors related to classes are loaded (e.g.,
+searches through subclasses, superclasses or instances when
+the runtime is available).
+When a developer opens a step on an object all data
+providers from the loaded processors are executed and their
+results are presented to the user according to the order de-
+fined by the sorter. For example, when a developer enters
+the query ‘hex’ in Figure 1a, all loaded processors receive
+the query and update their results. This is the search phase
+of the foraging loop; developers do not have to select a priori
+what processors they want to execute. To implement the fil-
+ter phase, each time the developer provides a textual query,
+the query engines are used to filter the presented data in each
+processor.
+</bodyText>
+<subsubsectionHeader confidence="0.963737">
+3.2.2 Read and Extract
+</subsubsectionHeader>
+<bodyText confidence="0.998544153846154">
+Developers can extract initial informations by reading a
+short textual description of each element present in the re-
+sults list. As this only gives a limited amount of information,
+SPOTTER supports a contextual preview for each type of re-
+sult (e.g., source code for a method, graphical representation
+for a graphical object or a png file). Hence, developers can
+choose to view each element using the preview. For example
+when searching for a production in a parser (Figure 1a) the
+preview of each shape shows the source code of that pro-
+duction. If the preview is not enough, developer can open
+a result in another tool from the IDE; these tools are se-
+lected based on the type of the result entity: code editor for
+methods, object inspector for objects, etc.
+</bodyText>
+<subsubsectionHeader confidence="0.933336">
+3.2.3 Follow Relations
+</subsubsectionHeader>
+<bodyText confidence="0.935939">
+From a search step a developer can choose to continue nav-
+igation by selecting a search result. This adds the selected
+element to the search session and opens a new search step
+</bodyText>
+<page confidence="0.463316">
+6 2016/8/26
+</page>
+<bodyText confidence="0.998809">
+on the selected result. The creation of a new search step is
+exemplified in Figure 1: initially the developer searched for
+productions containing the text ‘hex’ and selected the pro-
+duction hexNumeral (Figure 1a). Then the developer dived
+into the hexNumeral production, creating a new search step
+(Figure 1b); in the new search step she can search for pro-
+ductions using the hexNumeral production. The search ses-
+sion preserves the navigation history through multiple search
+steps, and allows developers to reason about how they got
+to the current step, as well as to go back to previous steps
+and try alternative searches. Furthermore, processors in the
+current step can also be filtered based on objects from the
+previous search steps, not only based on the current object.
+</bodyText>
+<subsectionHeader confidence="0.99688">
+3.3 A User Interface for the SPOTTER Model
+</subsectionHeader>
+<bodyText confidence="0.9291219">
+While the SPOTTER model can express a wide range of
+searches, the user interface (UI) plays a crucial role in the
+usability of a search tool. Hence, in this section we intro-
+duce and discuss a UI design for SPOTTER based on the
+three guidelines proposed by Starke et al.: (i) group and rank
+results, (ii) support rapid skimming through result sets, and
+(iii) enable in-depth exploration of result sets [27]. To illus-
+trate the UI we use a running example in which a developer
+is interested in exploring callers of methods having a certain
+annotation.
+</bodyText>
+<subsubsectionHeader confidence="0.724518">
+3.3.1 Grouping and Ranking Results
+</subsubsectionHeader>
+<bodyText confidence="0.998820571428571">
+Running all search processors loaded in a step is at the core
+of the SPOTTER model. This raises the need of displaying
+multiple heterogenous result sets at once. We address this
+by displaying each result set using one level trees: the roots
+of the trees are the processors that return results and the
+children are the actual results; results are presented in the
+order retuned by the processor (Figure 2a).
+</bodyText>
+<subsubsectionHeader confidence="0.741448">
+3.3.2 Skimming Through Result Sets
+</subsubsectionHeader>
+<bodyText confidence="0.999858555555556">
+Given that processors can produce a large number of results,
+for each processor we display the first n results, where n
+is customizable per processor (Figure 2a); root nodes are
+expanded automatically. The label of each result set includes
+the number of displayed results and the total number of
+results from that result set. To help developers understand
+why a result is displayed, the querying engine can embed
+visual cues when displaying results (e.g., highlight the text
+matching the query).
+</bodyText>
+<subsubsectionHeader confidence="0.787323">
+3.3.3 Exploring Result Sets
+</subsubsectionHeader>
+<bodyText confidence="0.9359366">
+Once a developer has found one or more interesting entities
+she can investigate them in more detail. SPOTTER supports
+this through two mechanisms:
+Preview pane Developers can obtain more information
+about a result by opening the contextual preview associated
+with the current selected result in a pane to the right of the
+search pane (Figure 2b and Figure 2d).
+Navigation Navigation is supported using a simple visual
+language that consists of two main commands:
+• dive in: adds the selected object to the search session
+and creates a new step having that object as target entity.
+A developer can invoke this action after selecting an
+element using a keyboard shortcut or by pressing with the
+mouse the arrow to the right of the selected element ( ).
+For example, after selecting the annotation spotterOrder:
+in Figure 2a, the developer executes the dive in action
+by pressing the arrow; this creates a new search step
+(Figure 2b). The new search step has as target entity the
+selected annotation and allows the developer to search
+through methods having that annotation.
+</bodyText>
+<listItem confidence="0.879109">
+• expand: creates a new search step containing a single pro-
+</listItem>
+<bodyText confidence="0.989685">
+cessor for searching only through the selected result set.
+This processors shows the entire result set. A developer
+can invoke this action after selecting a result from a re-
+sult set using a keyboard shortcut or the arrow next to
+the label of a result set. For example, after diving into
+the spotterOrder: annotation (Figure 2b), the developer
+decides she is only interested in what methods have that
+annotation. Hence, she expands the result set returned by
+the Pragmas processor (Figure 2b). In the next search
+step (Figure 2c) she can see all methods having that anno-
+tation, explore them in more details and refine her search.
+Figure 2b illustrates the final step of the exploration. The
+developer created this step by diving in a method having the
+spotterOrder: annotation. In this step she can search through
+data related to that method, like callers or methods with the
+same name from other classes. To maintain orientation a
+breadcrumb shows previous steps.
+3.3.4 UIs for Feature Location and Exploration Tools
+For completeness, we present here a comparison with UIs
+used in other feature location and exploration tools.
+Apatite, a tool for searching and navigating through five
+levels of an API’s hierarchy (packages, classes, methods, ac-
+tions (methods containing verbs) and properties (getters and
+setters)) [8] relies on a similar interface for displaying the
+results of a search step: the first 5 results from each cat-
+egory are automatically presented and developers can see
+more results on demand. The same UI is also used by Global
+Search from IntelliJ. Nevertheless, Apatite relies on Miller
+columns to display a navigation session which takes consid-
+erably more scree-real estate that the UI used by SPOTTER;
+Global Search does not provide any navigation mechanism.
+Ferret relies on a tree view where users need to manually
+expand each node to see the actual result. JQuery and SEX-
+TANT allow users to discover available searches through a
+context menu and display the result in a tree or graph.
+UIs for feature location focus on allowing users to reason
+about why a result is displayed. For example, I3, a novel user
+interface for feature location supporting searches through
+</bodyText>
+<page confidence="0.276434">
+7 2016/8/26
+</page>
+<listItem confidence="0.752693">
+(a) A visualization has processors for searching through model elements
+(Model objects) and graphical components (Shapes).
+(b) Diving into a model object from a step opened on a visualization
+</listItem>
+<bodyText confidence="0.370769">
+shows what shapes use that object.
+</bodyText>
+<figureCaption confidence="0.990828">
+Figure 3. Exploring an object modeling a Roassal visualization.
+</figureCaption>
+<bodyText confidence="0.9776882">
+methods, highlights query terms in the code editor and uses
+visualizations to convey the similarity of a result with the
+query as well as show co-change patterns [2]. The SPOTTER
+UI highlights the text matching the query and uses a contex-
+tual preview to convey more information about a result.
+</bodyText>
+<sectionHeader confidence="0.863584" genericHeader="method">
+4. Improving Information Foraging Loops
+</sectionHeader>
+<bodyText confidence="0.99666745">
+SPOTTER aims at enabling direct searches through domain-
+specific concepts during information foraging loops. In this
+section we show that SPOTTER addresses this aspect by
+applying it to the motivating examples discussed in Sec-
+tion 2.1 and highlight how the presented model supports
+this goal. Generic code related searches are still an inte-
+gral part of an IDE (e.g., What method call this method?,
+What are the attributes of this class?). Not taking them into
+account would require developers to decide between SPOT-
+TER and a generic tool when they need to perform a search.
+To avoid this we also extended SPOTTER with support for
+generic searches (Table 2) based on previous literature, com-
+mon searches from IDEs and our own developer experience.
+An example was presented in Figure 2 where, to determine
+the senders of a method having a certain annotation, the de-
+veloper (i) started by searching for the desired annotation,
+(ii) continued by searching through methods having that an-
+notation, and (iii) finished by exploring the senders of one
+of those methods. This enables foraging loops that combine
+generic with domain specific searches (Section 4.4).
+</bodyText>
+<subsectionHeader confidence="0.998035">
+4.1 Starting SPOTTER
+</subsectionHeader>
+<bodyText confidence="0.7698278125">
+To perform a search the developer has to first open SPOTTER
+on a target object. When an explicit target object is missing,
+SPOTTER selects the current workspace as target object. This
+loads global processors for searching through software enti-
+ties within the current workspace, including processors for
+searching through classes, methods, pragmas, history, files,
+folders, etc. SPOTTER registers shortcuts and menu options
+for performing this action. For example, in Figure 2a the
+developer opened SPOTTER this way and entered the query
+text ‘spotter’. To allow developers to specify an explicit tar-
+get object, SPOTTER further registers shortcuts and menus
+with other tools from the IDE. For example, a developer can
+open SPOTTER on any object available in the debugger or the
+object inspector; this way SPOTTER gets access to run-time
+state. The code editor makes it possible to open SPOTTER on
+code entities (e.g., classes, annotations).
+</bodyText>
+<subsectionHeader confidence="0.884418">
+4.2 Finding Productions Within a Parser
+</subsectionHeader>
+<bodyText confidence="0.997929272727272">
+SPOTTER supports the two developer questions related to
+PetitParser discussed in Section 2.1.1 through two proces-
+sors. The first enables searches through the productions of
+a parser and has the structure described in Section 2.1.1.
+As PetitParser parsers are classes, this processor is associ-
+ated with classes, and has an activation predicate that checks
+whether the target class is a PetitParser parser (i.e., The class
+must have PPCompositeParser in the superclass chain). Fig-
+ure 1a shows a scenario in which a developer has opened
+SPOTTER on a PetitParser parser for Java code and searched
+for productions containing the word “hex” in their name.
+The preview gives direct access to the source code of the
+production.
+Searching through the uses of a production is achieved
+using a processor attached to methods and valid when the
+target method is a PetitParser production. Developers can
+use this processor by opening SPOTTER on a production or
+adding a production to the current search session. Figure 1b
+shows the latter situation where, after searching for a produc-
+tion, a developer uses the dive-in feature to add the selected
+production to the current search session; the preview pane
+shows the source code of a selected production.
+</bodyText>
+<subsectionHeader confidence="0.998785">
+4.3 Searching Within a Visualization
+</subsectionHeader>
+<bodyText confidence="0.992458">
+To improve the user experience when developing Roassal vi-
+sualizations, we created, together with the developers of the
+Roassal framework, two dedicated processors for searching
+through visualization objects (i.e., objects of type RTView).
+The first processor (Model objects, Figure 3a) enables a
+</bodyText>
+<listItem confidence="0.878930833333333">
+8 2016/8/26
+(a) Searching for a Roassal builder for sunburst visualizations. (b) Searching for examples showing how to visualize files using a
+sunburst visualization.
+(c) As model objects are files and folders the preview shows the
+content of the selected file or folder.
+(d) Selecting a graphical shape shows highlights it in the preview
+</listItem>
+<figureCaption confidence="0.756418">
+with red.
+Figure 4. Finding an example of how to use a sunburst visualization to display files and folders.
+</figureCaption>
+<bodyText confidence="0.991717368421053">
+search through model objects used by graphical elements;
+the preview pane shows the state of the model object. The
+second (Shapes, Figure 3a) targets the actual shape objects
+used in the visualization. As a concrete example, Figure 3
+shows SPOTTER opened on a visualization for comparing
+two metrics about population in several US states using a
+horizontal double bar chart.
+To determine what graphical shapes are used to render
+a model object a developer can dive in and add the model
+object to the search session. Doing this loads a processors
+showing the list of shapes used to render that object. This
+processor is attached to all objects and has an activation
+predicate that checks whether the previous object in a search
+session is a Roassal visualization; if so, the provider locates
+the shapes in that visualization that have the current object
+as a model. Hence, this processor would not be available
+when opening SPOTTER on the same object in isolation. In
+Figure 3b, a developer can see that there are three shapes that
+render the state Arizona: two RTBoxes and a RTLabel.
+</bodyText>
+<subsectionHeader confidence="0.994679">
+4.4 Finding Examples
+</subsectionHeader>
+<bodyText confidence="0.999384">
+Roassal comes with a large number of examples. They are
+organized in classes linked with the graphical classes for
+which they provide examples. Hence, for each graphical
+class, if it has an example class, we can provide a processor
+that displays and searches through its examples. A developer
+can find and execute an example by (i) opening SPOTTER on
+the current workspace and searching for the desired Roassal
+class and (ii) diving into the class and locating the Examples
+processor (Figure 4b). The preview of an example shows the
+source code of that example. To get to the actual visualiza-
+tion a develop can then execute the example and dive into
+the result. As this is a visualization object, the developer can
+continue her investigation using the custom processors pre-
+sented in Section 4.3 (Figure 4c).
+</bodyText>
+<subsectionHeader confidence="0.982935">
+4.5 Summary
+</subsectionHeader>
+<bodyText confidence="0.995562578947369">
+Apart from the presented examples we also added SPOTTER
+support to other applications from the Pharo ecosystem: GUI
+libraries (Glamour, Spec, Morphic), Opal compiler, Mon-
+goDB bindings for Pharo, Metacello package management
+system, Monticello versioning system, etc. We further added
+IDE related searches for preferences, menus, help topics,
+shortcuts, clipboard history, and files and folders.
+As we aim to support custom searches through domain
+concepts, providing an exhaustive list of searches is not
+feasible. Instead, SPOTTER enables domain-specific adapta-
+tions. This section showed that the proposed model can sup-
+port searches through relevant concepts from different do-
+mains that spawn over source code and run-time objects.
+By providing both domain-specific and generic searches
+SPOTTER offers a unified interface for embedding search
+support within an IDE: developers open SPOTTER on an se-
+lected entity and can immediately discover available searches.
+By using the search session they can further perform targeted
+explorations that build on previous search results.
+</bodyText>
+<listItem confidence="0.845674806451613">
+5. Implementation
+SPOTTER is part of the Pharo IDE since Pharo 4. We de-
+veloped the first version of SPOTTER over three months and
+9 2016/8/26
+Global
+1) What {method, class, annotation, package, project}
+names match a regular expression?
+2) What methods {call a method, access an attribute}whose
+name match a regular expression?
+3) What {files, folders} are in the {current working direc-
+tory, a selected file/folder}?
+Packages, classes and methods
+4) What packages have changes that need to be committed?
+5) What are this package’s {classes, extension methods,
+tags}?
+6) What are this class’ {methods, attributes, static method,
+static attributes, superclass methods, subclass methods}?
+7) What are this class’ siblings, super-classes, sub-classes?
+8) What classes implement a method with the same name?
+9) What attributes/fields does this method access?
+10) What methods does this method call?
+11) What methods call this method?
+12) What methods reference this class by name?
+13) What methods have this annotation?
+History
+14) What are the previous versions of this method, package?
+15) Who edited this method before?
+Run-time
+16) What are the fields of this object?
+17) What are the elements of this collection object?
+18) What are the keys of this dictionary object?
+</listItem>
+<tableCaption confidence="0.63762975">
+Table 2. Generic searches supported by SPOTTER
+integrated it in the alpha version of Pharo 4. We then contin-
+ued to develop SPOTTER based on developer feedback (Sec-
+tion 7) in one-month iterations4.
+</tableCaption>
+<figure confidence="0.8270482">
+1 spotterForProductionsFor: aStep
+2 &amp;lt;spotterOrder: 10&amp;gt;
+3 &amp;lt;spotterTag: #PetitParser&amp;gt;
+4 aStep listProcessor
+5 title: &apos;Productions&apos;;
+</figure>
+<listItem confidence="0.705571125">
+6 allCandidates: [ :aParserClass |
+7 aParserClass productionMethods ];
+8 candidatesLimit: 5;
+9 itemName: [:aProduction  |aProduction selector];
+10 filter: GTFilterRegex;
+11 itemFilterName: [:aProduction |aProduction selector];
+12 when: [ :aClass |
+13 aClass inheritsFrom: PPCompositeParser ];
+</listItem>
+<bodyText confidence="0.9295968">
+SPOTTER supports the creation of custom search proces-
+sors through an internal DSL (i.e., API). Developers can con-
+figure the predefined blocks of a processor (Section 2.1.1)
+using anonymous functions or provide a custom implemen-
+tation for the processor. When creating processors we started
+</bodyText>
+<sectionHeader confidence="0.53457" genericHeader="method">
+4 The version of SPOTTER discussed in this paper is available at the
+</sectionHeader>
+<bodyText confidence="0.989278695652174">
+following url: http://scg.unibe.ch/download/moldablespotter/
+spotteronward2016.zip
+by configuring the predefined blocks and switched to a cus-
+tom stream-based implementation when performance be-
+came an issue. For example, lines 4–13 show the code snip-
+pet for creating a search processor for PetitParser produc-
+tions. An activation predicate makes sure that this processor
+is only available to parsers (lines 12–13).
+Lines 6 and 7 configure the provider; this component of
+the search processor is expressed using an anonymous func-
+tion. Lines 10 and 11 configure the query engine (e.g., fil-
+ter productions based on their names using regular expres-
+sions). The query engine is responsible for filtering the el-
+ements returned by the provider based on the user supplied
+query. Query engines are modeled as classes that extend a
+predefined class (i.e., GTFilter). Currently SPOTTER pro-
+vides filters for matching elements with a user query based
+on: substrings matching, regular expressions, and approxi-
+mate matching using thresholds; currently these filters do
+not support indexing of search results. The filter includes the
+preprocessor.
+When the numbers of items that need to be filtered is
+large, separating the provider from the query engine can
+</bodyText>
+<listItem confidence="0.490112666666667">
+cause performance problems. To account for this, SPOT-
+TER also supports searches based on streams that combine
+the provider and the query engine. For example, lines 16–
+24 show the processor for searching through files, which
+uses the API method filter:item: that provides stream-based
+searching for a filter. Currently 13 processors use this opti-
+mization.
+14 spotterForFilesFor: aStep
+15 &amp;lt;spotterOrder: 40&amp;gt;
+16 aStep listProcessor
+17 title: &apos;Files&apos;;
+18 itemFilterName: [:aReference |aReference basename ];
+19 filter: GTFilterFileReference item: [ :filter :context |
+20 self
+21 fileReferencesBy: #files
+22 inContext: context
+23 usingFilter: filter ];
+24 when: [ :aReference  |aReference isDirectory ];
+</listItem>
+<bodyText confidence="0.995135866666667">
+A processor is attached to an object by defining in the
+class of the object a method constructing the processor that
+has the annotation spotterOrder (lines 2 and 15). The anno-
+tation parameter is used to sort processors in a search step.
+Processors are added to tags using the annotation spotterTag:
+(e.g., in line 3 the Productions processor is added to the tag
+PetitParser). As Pharo supports extension methods proces-
+sors can also be packaged and loaded separately.
+An exploration session is modeled as a linked list of step
+objects. The code of a processor can access the exploration
+session using the method parameter of its containing method
+(aStep, line 25). This parameter gives access to the current
+step object. Developers can use it to access previous steps.
+For example, Figure 3b contains a search processor named
+Shapes that is only available when the previous step contains
+</bodyText>
+<listItem confidence="0.67843748">
+a Roassal visualization. If this is the case the processor ex-
+10 2016/8/26
+tracts all graphical shapes from that visualization that render
+the object loaded in the current step. In Figure 3b we can
+see that three graphical shapes render the current object. To
+check if the previous object is a Roassal visualization the
+processor uses an activation predicate (lines 36-38): using
+the current step object the activation predicate can access
+the previous step, if present. The provider can also access
+the previous objects (i.e., the Roassal visualization) to ex-
+tract the relevant graphical shapes.
+25 spotterForRenderingShapesFor: aStep
+26 &amp;lt;spotterOrder: 5&amp;gt;
+28 aStep listProcessor
+29 title: &apos;Shapes&apos;;
+30 candidatesLimit: 5;
+31 allCandidates: [ aStep previousStep origin
+32 elements select: [ :each  |each model = self ] ];
+33 itemName: [ :each  |each gtDisplayString ];
+34 filter: GTFilterSubstring;
+35 wantsToDisplayOnEmptyQuery: true ];
+36 when: [
+37 aStep hasPreviousStep and: [
+38 aStep previousStep origin isKindOf: RTView ] ]
+6. The Cost of Custom Search Processors
+</listItem>
+<bodyText confidence="0.9480878">
+SPOTTER enables developers to improve information forag-
+ing loops through domain-specific searches. Nevertheless,
+this approach comes with a price as custom searches need
+to be created by application or framework developers rather
+than by tool providers. This can make considerable economi-
+cal sense especially for long-lived, widely-used libraries that
+may have a large amount of user code programmed against
+them. This activity can also make sense for application de-
+velopers that want to address recurring problems and im-
+prove that way they navigate through their particular sys-
+tems. For both views to be practical, the cost associated with
+creating custom searches should be small. To investigate the
+cost of creating a custom search we start by analyzing the
+current extensions from the Pharo IDE and perform a user
+study with software developers and PhD students.
+</bodyText>
+<subsectionHeader confidence="0.999929">
+6.1 Analyzing Existing Extensions
+</subsectionHeader>
+<bodyText confidence="0.9880165">
+Based on 124 search processors currently present in the
+Pharo IDE, the cost of creating a processor in lines of code is
+9.2± 4.2(M ±SD). This includes the entire source code of
+the method defining a processor, as well as the source code
+of helper methods created together with the processor; this
+does not include methods called from within the processor
+that existed in the target class before adding the processor.
+As it can be seen in Figure 5, a large number of extensions
+require 7 or 8 lines of code. These extensions follow the
+same pattern as the one from lines 4–13, where the class
+already provides a way to get the required data and the
+extension just uses available methods and overrides default
+values from the processor. When this is not the case, the size
+of an extension is significantly larger.
+</bodyText>
+<figureCaption confidence="0.7759475">
+Figure 5. Size distribution in lines of code (LOC) for 124
+search processors.
+</figureCaption>
+<bodyText confidence="0.993380714285714">
+While lines of code do not indicate the effort needed to
+write those lines, they give a good indication of the small
+size of these extensions. This shows that even when the
+object model does not provides methods to access relevant
+data, creating a custom search processor is an affordable ac-
+tivity. The low cost of creating a search processor addresses
+the first requirement discussed in Section 2.1.
+</bodyText>
+<subsectionHeader confidence="0.999706">
+6.2 User Study Design
+</subsectionHeader>
+<bodyText confidence="0.99937703125">
+To investigate the creation of custom searches for SPOT-
+TER in more details, we designed and performed a pilot user
+study. Our main goal was to test the extension mechanism
+and not the knowledge of a particular application domain or
+the usability of SPOTTER. Towards this goal we decided to
+focus on simple domain models. In doing this we assume
+that developers working on an application know their do-
+main model well. Through the evaluation of this study we
+aimed to better understand how developers behave when cre-
+ating custom searches. Hence, we structured the evaluation
+based on the following research questions:
+RQ1 How much time does it take to create a custom ex-
+tension for developers that did not extend SPOTTER before?
+RQ2 Does previous experience in extending SPOTTER
+reduces the effort required to create a new extension?
+RQ3 How do developers approach the task of creating
+a custom extension for SPOTTER?
+The user study consisted in implementing two custom
+searches for SPOTTER detailed below. We selected these
+searches as, while covering small domain models, they give
+a chance for the creation of relevant search extensions.
+Task 1 – Help Topics Extend Spotter with a custom
+global extension for searching through all help topics from
+the system by their title using a textual search. Searches
+through documentation and other textual data are common
+tasks during development. With this task we aimed to see if
+developers can create such searches using SPOTTER. We se-
+lected the Pharo help as a data source for the search, given
+that it is a familiar data source for Pharo developers. While
+searches through help topics are not themselves novel, as
+they are a common presence in IDEs, they are well under-
+stood and provide a good baseline for testing if developers
+</bodyText>
+<page confidence="0.635961">
+11 2016/8/26
+</page>
+<table confidence="0.961350157894737">
+Extension implementation Model understanding Task clarification Total time Extension size
+P1
+Task 1 12m30s (89%) 1m30s (11%) 0 (0%) 14m00s 6 LOC
+Task 2 7m30s (63%) 4m30s (37%) 0 12m00s 7 LOC
+P2
+Task 1 22m30s (94%) 0 1m30s (6%) 24m00s 6 LOC
+Task 2 5m00s (59%) 3m30s (41%) 0 8m30s 6 LOC
+P3
+Task 1 17m00s (83%) 3m:00s (14%) 0m30s (3%) 21m00s 11 LOC
+Task 2 6m00s (80%) 1m30s (20%) 0 7m30s 10 LOC
+P4
+Task 1 16m00s (86%) 1m30s (5%) 1m00s (9%) 18m30s 11 LOC
+Task 2 11m30s (70%) 4m00s (24%) 1m00s (6%) 16m30s 12 LOC
+P5
+Task 1 8m00s (66%) 4m00s (34%) 0 12m00s 9 LOC
+Task 2 2m30s (62%) 1m30s (38%) 0 4m00s 7 LOC
+P6
+Task 1 8m00s (88%) 1m00s (12%) 0 9m00s 9 LOC
+Task 2 7m00s (82%) 1m30s (18%) 0 8m30s 10 LOC
+</table>
+<tableCaption confidence="0.976994">
+Table 3. User study results for each participant and task.
+</tableCaption>
+<figureCaption confidence="0.950352">
+Figure 6. Searching for help topics related to regular ex-
+</figureCaption>
+<bodyText confidence="0.918859727272727">
+pressions using a custom processor for searching through
+help topics. Each HelpTopic object has a custom preview
+showing its content.
+understand the extension mechanism from SPOTTER. In the
+case of Pharo the entire help is organized as a tree of Help-
+Topic objects. A HelpTopic has a title, a content and a list of
+children topics. Participants needed to create a global search
+extension that extracted all available help topics, filter them
+using one of the available filters based on their title and open
+a selected help topic in the Pharo Help Browser. Our de-
+fault implementation of this extension is presented in lines
+</bodyText>
+<figureCaption confidence="0.665687">
+39–49. A real-world search using this extension is shown in
+Figure 6.
+</figureCaption>
+<table confidence="0.629247">
+39 spotterForHelpTopicFor: aStep
+40 &amp;lt;spotterOrder: 200&amp;gt;
+41 aStep listProcessor
+42 title: &apos;Help topics&apos;;
+43 allCandidates: [ SystemHelp asHelpTopic allSubtopics ];
+44 candidatesLimit: 5;
+45 itemName: [:helpTopic  |helpTopic title ];
+46 itemIcon: [:helpTopic  |helpTopic topicIcon ];
+47 actLogic: [:helpTopic  |HelpBrowser openOn: helpTopic];
+48 filter: GTFilterSubstring;
+49 wantsToDisplayOnEmptyQuery: true
+Task 2 - Morph Shortcuts Extend Spotter with a cus-
+</table>
+<bodyText confidence="0.997595235294118">
+tom textual search for searching through the shortcuts of
+a morph. Morphs are the main graphical components from
+Pharo. A morph object uses a dispatcher object to store its
+shortcuts. The dispatcher object is stored in a dictionary to-
+gether with other properties of a morph. A dispatcher ob-
+ject stores shortcuts as a set of keymap objects. Participants
+needed to create an extension that extracted all shortcuts
+from the dispatcher and supported a search based on the text
+of the shortcut (e.g., ‘ctrl+shift+s’). Unlike the previous ex-
+tension, this is a specialized one that, to our knowledge, is
+not present in other development tools and IDEs. What we
+find in other IDEs are global searches through documenta-
+tion that also take shortcuts into account. We selected this
+extension to observe how developers apply SPOTTER in a
+domain-specific context. Lines 50–58 illustrate our default
+implementation of this extension. Figure 7 shows a search
+involving this extension.
+</bodyText>
+<figure confidence="0.461488">
+50 spotterForKeysFor: aStep
+51 &amp;lt;spotterOrder: 15&amp;gt;
+52 aStep listProcessor
+53 title: &apos;Keys&apos;;
+54 allCandidates: [ self kmDispatcher
+55 allKeymaps asOrderedCollection ];
+56 candidatesLimit: 5;
+57 itemName:[:aKeymap |aKeymap shortcut printString];
+58 filter: GTFilterSubstrings
+</figure>
+<bodyText confidence="0.978420916666667">
+The study had three parts. In the first part we gave par-
+ticipants a short introduction about how to use SPOTTER.
+The second part consisted in solving the two tasks and the
+third part in a survey for collecting impressions about the
+study and background data. During the introduction phase
+we only showed participants how to attach a custom search
+to a domain object. We did not go into any other details
+about how to extend SPOTTER. Instead we pointed par-
+ticipants to three places where they could get more data:
+(i) the SPOTTER documentation available in Pharo explain-
+ing SPOTTER the extension process in details; (ii) the class
+GTSpotterCandidatesListProcessor containing the main
+</bodyText>
+<figure confidence="0.5911625">
+API for creating custom search processors; (iii) a tool for
+12 2016/8/26
+</figure>
+<figureCaption confidence="0.981892">
+Figure 7. Processor for searching through the key bindings
+</figureCaption>
+<bodyText confidence="0.991407925925926">
+of a morph object. In this example the morph objects is a
+text editor for Pharo code, and the developer is searching for
+key bindings that use the Ctrl key. Each key binding has a
+custom preview that shows the code that will be executed
+when the key binding is pressed.
+exploring all SPOTTER extensions available in the Pharo
+IDE.
+During the second phase we captured both screen and au-
+dio recordings and asked participants to use a think-aloud
+strategy as they coded. For each tasks we provided partici-
+pants with a description of the domain model presenting the
+main classes and methods. We provided these data to reduce
+the time needed for participants to learn the domain model.
+Participants first read the description of the task and of the
+domain and only afterwards started the coding phase. We
+only take the coding phase into account in our analysis. We
+did not impose any time limit for reading the provided mate-
+rial and implementing the task. A task was considered com-
+pleted when the participant decided that it was good enough.
+The two tasks followed in immediate succession.
+Six participants took part in this pilot user study. Three
+PhD students, having between 2 and 4 years of experience
+with Pharo and three software developers, having between 1
+and 3 years of experience with Pharo. All knew how to use
+SPOTTER, however, they had no knowledge of its extension
+mechanism. Two developers reported interacting briefly with
+the domain model used in the second task in the past.
+</bodyText>
+<subsectionHeader confidence="0.999731">
+6.3 User Study Results
+</subsectionHeader>
+<bodyText confidence="0.998933742857143">
+We first determined the correctness of the extensions. All
+but one participant created extensions that correctly imple-
+mented the given tasks. One participant (P2) did not add the
+functionality for opening the help topics and the shortcut ob-
+jects in the required tools. In the third phase he reported that
+he forgot about that part of the task. We also included this
+participant in our analysis as the implemented parts of the
+extensions were correct. In analyzing the coding phase of
+the study we distinguished between three types of activities:
+(i) understanding and implementing a SPOTTER extension;
+(ii) understanding the domain model; (iii) clarifying the task.
+We splitted each coding session into 30 seconds intervals
+and assigned them to one of the aforementioned categories;
+we inferred the category of an interval based on what code
+or object the participant was looking at and the think-aloud
+data.
+RQ1 – Effort for creating the first extension Partici-
+pants took, on average, 16 minutes to implement the first
+task (Table 3 – Total time). Participants spend most of their
+time during this task (84%) on learning how to implement
+a SPOTTER extension. Participant P5 was the exception: he
+decided to implement a different solution for obtaining all
+help topics than the one presented during the first phase.
+There was a large difference between participants in the
+completion time: participant P2 took 24 minutes while par-
+ticipant P6 took only 9 minutes. Regarding the size of an
+extension we obtained similar results to the discussion from
+Section 6.1: on average, the size of extension was 8.6 LOC
+(Table 3 – Extension size). Differences in size were due
+to extra features added by participants (e.g., Participant P3
+added shortcuts and icons to each extension) and different
+ways to extract the required data. Given that this was the very
+first extension implemented by our participants, we consider
+the cost and the time to be low.
+RQ2 – Effort for creating the second extension We ex-
+plored our second research question by asking participants
+to create a second extension immediately after the first one
+for a more complex domain model. We noticed two changes
+from the first task. On the one hand, participants spend more
+time understanding the domain model (30% of the total time
+as opposed to 13% for the first task). One the other hand,
+the total time for solving this task improved on average by
+37%; if we take only the extension implementation time into
+account the average individual improvement is 48%. There
+were nevertheless significant differences between individual
+participants: participant P2 improved by 15 minutes 30 sec-
+onds while participant P6 only by 30 seconds. In terms of
+lines of code, participants were consistent with the first ex-
+tension. Based on this evidence we conclude that previous
+experience in extending SPOTTER reduces the time needed
+for creating new extensions.
+RQ3 – Approaching the creation of extensions To un-
+derstand the differences observed between participants and
+tasks we analyzed the strategies used by participants to im-
+plementing the given tasks. The first observation that holds
+for all participants is that they started to implement the re-
+quired extensions by modifying an already existing exten-
+sion. In the first part of the coding session (first 2-3 minutes)
+all participants looked through existing examples to under-
+stand the extension mechanism and selected an extension
+that they later modified. No participant started by reading
+documentation however later in the task if they got stuck,
+participants decided to either read documentation (P2, P4),
+browse SPOTTER classes (P3) or look at more examples (all
+participants did this to different extents).
+The factor that contributed the most to high reduction
+in completion times between the first and the second task
+(participants P2 and P3) was the example selected as a
+starting point in the first task. To exemplify, participant P2
+selected to start by modifying the global search for methods
+</bodyText>
+<page confidence="0.737257">
+13 2016/8/26
+</page>
+<bodyText confidence="0.995624794117647">
+available in Pharo. Currently this search is an optimized
+search using streams that combine the provider and the query
+engine. As discussed in Section 5, SPOTTER currently does
+not optimize the rapid creation of these kinds of searches.
+After having problems with the extension, participant P2
+chose to look at three more examples which happen to also
+also be searches based on streams. In the end participant
+P2 moved to reading documentation and found a different
+way to create an extension (using the API from lines 4–13).
+At the opposite end participant P6 started with an example
+very similar with the solution required for the first task. He
+adapted this example to the first task with ease.
+This study revealed that the examples used by participants
+to learn how to extend SPOTTER had an impact on their
+efficiency. For this study we used all extensions currently
+available in the Pharo IDE as examples. These examples had
+no associated documentation giving insight into why they
+are implemented that way. These made participants chose
+to start from examples that were not necessarily suited for
+their requirements. We consider addressing these aspect by
+providing a collection of curated extensions, better search
+for examples and better documentation for extensions.
+Threats to validity During the coding phase participants
+needed to think-aloud and were also observed by the per-
+son conducting the study; five participants knew the person
+conducting the study. We cannot exclude that this may have
+caused changes in the way they approached the tasks. The
+task also focused on simple domain models that many not
+reflect the reality of complex software applications.
+7. Spotter in Practice
+Section 6 explored the cost of extending SPOTTER. This
+gives no insight into how developer use SPOTTER in prac-
+tice. To address this we collected and analyzed usage data
+and mailing-list discussions and performed an online survey.
+</bodyText>
+<subsectionHeader confidence="0.999967">
+7.1 Usage Data and Mailing-list Discussions
+</subsectionHeader>
+<bodyText confidence="0.999782769230769">
+SPOTTER was integrated into the alpha version of Pharo 4 in
+December 2014. Six months after the initial integration we
+analyzed usage data recorded over a period of two months
+(April 2014 - May 2015) using a visual language [12]. To
+summarize, we noticed that developers did not discover and
+use the navigation features of SPOTTER to their fullest po-
+tential. For example, only half of the recorded developers
+used the dive-in feature at least once. Regarding search data,
+although we observed developers using 51 search proces-
+sors, more than 74% of the time developers only used SPOT-
+TER to search through classes and implementors of methods.
+One explanation for this observation is that SPOTTER ex-
+poses information that is not apparent and users need to be
+explicitly informed about this. We are now gathering usage
+data over a longer period of time to determine if developers
+change their behavior as they are using SPOTTER.
+In the same period we also gathered feedback from dis-
+cussion on several Pharo mailing-lists. Most feedback gath-
+ered from mailing-lists is related to the discoverability of
+features in the UI, as SPOTTER proposes a UI different from
+other tools in the Pharo IDE. Based on this feedback we
+added the possibility to select processors directly from the
+query (e.g., entering the “spotter #pragma” in Figure 2c
+only shows the Pragmas processor; # filters processors by
+name) and selection of common processors using keyboard
+shortcuts.
+</bodyText>
+<subsectionHeader confidence="0.988385">
+7.2 Survey
+</subsectionHeader>
+<bodyText confidence="0.999609813953488">
+To further explore how developers perceive and use SPOT-
+TER, one year the release of Pharo 4, we performed an
+online survey during March 2016. We advertised the sur-
+vey on Pharo related mailing-lists and collected 35 an-
+swers from software developers (17 responses – 48.6%),
+software researches (12 responses – 34.3%), students (5
+responses – 14.3%) and others (1 response – 2.8%). Re-
+garding their programming experience with object-oriented
+languages, 5 respondents (14.3%) reported between 1 and 3
+years, 10 respondents (28.6%) between 4 and 10 years and
+20 respondents (57.1%) more than 10 years. Respondents
+used SPOTTER until the survey during different lengths of
+time: 5 respondents (14.3%) less than 3 months, 20 respon-
+dents (57.1%) between 4 and 12 months and 10 respondents
+(28.6%) more than 12 months. When asked how often they
+used SPOTTER 25 respondents (71.4%) answered that dur-
+ing development they use SPOTTER at least several times a
+day; 9 respondents (25.7%) only used SPOTTER sometimes;
+one respondent stopped using SPOTTER. Out of the 35 re-
+spondents, 8 (22.9%) also extended SPOTTER with a custom
+search until the survey.
+Next, respondents were asked to rate how useful they find
+SPOTTER as well as four individual features using a six point
+scale ranging from very useful to very irrelevant. The four
+features were: dive-in a search result (FT1), show all re-
+sults (FT2), filter search processor using # (FT3) and pre-
+view for the selected element (FT4). For each individual fea-
+ture, respondents could also indicate that they do not knew
+about that feature. Table 4 shows an overview of the results.
+The vast majority of respondents found SPOTTER to be at
+least sometimes useful: 40% very useful, 34.3% useful and
+22.9% sometimes useful. Regarding the individual features,
+for each there were respondents that did not know about that
+feature. Most respondents did not know about FT2, FT3 and
+FT4. This indicates the need to further improve the user in-
+terface of SPOTTER to help users discover features. Answers
+for the individual features followed a similar pattern: most
+participants found them to be at least sometimes useful, with
+a few finding them irrelevant.
+We also asked respondents to rate the following state-
+ments on a 5-point Likert scale:
+Spotter reduced the number of tools I used for search-
+ing in the Pharo IDE. This statement received the follow-
+</bodyText>
+<table confidence="0.949674857142857">
+14 2016/8/26
+Very useful Useful Sometimes useful Sometimes irrelevant Irrelevant Very irrelevant Unknown feature
+FT1 7 (20%) 7 (20%) 13 (37.2%) 2 (5.7%) 1 (2.8%) 1 (2.8%) 4 (11.4%)
+FT2 9 (25.7%) 9 (25.7%) 5 (14.3%) 3 (8.6%) 0 (0%) 1 (2.8%) 8 (22.9%)
+FT3 8 (22.9%) 8 (22.9%) 5 (14.3%) 2 (5.7%) 0 (0%) 3 (8.6%) 9 (25.7%)
+FT4 7 (20%) 6 (17.4%) 9 (25.7%) 0 (0%) 1 (2.8%) 1 (2.8%) 11 (31.4%)
+SPOTTER 14 (40%) 12 (34.3%) 8 (22.9%) 0 (0%) 0 (0%) 1 (2.8%) —
+</table>
+<tableCaption confidence="0.998252">
+Table 4. Survey results related to how respondents perceive SPOTTER and its features.
+</tableCaption>
+<bodyText confidence="0.987136736842105">
+ing responses: 2 (5.7%) strongly agree, 13 (37.2%) agree, 7
+(20%) neutral, 11 (31.4%) disagree, 2 (5.7%) strongly dis-
+agree. This indicates that some respondents use SPOTTER
+alongside the other search tools from the IDE.
+Spotter reduced the time I need to perform searches in the
+Pharo IDE. This statement received the following responses:
+10 (28.6%) strongly agree, 12 (34.3%) agree, 8 (22.9%)
+neutral, 3 (8.6%) disagree, 2 (5.7%) strongly disagree. We
+observe that more respondents agree than in the case of the
+previous statement. This suggests that respondents perform
+queries faster using SPOTTER than with other search tools
+from the Pharo IDE. This aspect still needs to be further
+investigated.
+Threats to validity This survey is prone to both internal
+and external threads to validity. Respondents could chose
+to remain anonymous; 17 respondents (48.6%) did so by
+choosing to not provide an email address; this was observed
+mostly in respondents giving negative feedback. The survey
+also had a modest number of respondents.
+</bodyText>
+<sectionHeader confidence="0.741741" genericHeader="method">
+8. Discussion
+</sectionHeader>
+<subsectionHeader confidence="0.968904">
+8.1 A Taxonomy of SPOTTER Searches
+</subsectionHeader>
+<bodyText confidence="0.999570735294118">
+In Table 5 we classify all 124 search processors whose costs
+were analyzed in Section 6.1, based on the type of searched
+data. Search processors in the Global category correspond to
+global searches through code entities and files/folders men-
+tioned in Table 2. Search processors from the category Code
+entities address developers questions from the Packages,
+classes and methods group from Table 2. Methods (contain-
+ment) groups searches through methods contained by a class
+(e.g., instance methods, class/static methods, methods from
+subclasses); Methods (relations) covers searches involving
+relations between methods (e.g., callers/callees). Code cri-
+tiques are warnings about code returned by the Quality As-
+sistant tool from Pharo. The IDE category contains searches
+though data more related to the IDE like: settings, help top-
+ics, plug-ins or external projects that can be loaded into the
+IDE, and URLs to repositories. Search processors in the
+Project category cover searches for the Metacello package
+management system and the Monticello versioning system.
+Domain objects groups searches through specific objects
+like graphical widgets, parsers, XML documents, files, etc.
+Dynamic in the Other category covers searches where the
+results are generated from the query string; this includes a
+calculator for arithmetic expressions and a processor that
+given an URL pointing to a Shared Workspace5 loads the
+code stored in that workspace. Extensions offer developers
+the possibility of searching through all SPOTTER processors
+as well as domain-specific extensions for other tools.
+As indicated in Section 5, developers attach extensions to
+an object’s class. 64 extensions are attached to objects that
+represent code entities or to the object that models the cur-
+rent workspace (e.g., all global processors). The remaining
+60 extensions are attached to 32 different types of objects.
+On average an object has 1.85 ± 1.5(M ± ST ) search pro-
+cessors.
+</bodyText>
+<subsectionHeader confidence="0.979565">
+8.2 Spotter in Other Languages
+</subsectionHeader>
+<bodyText confidence="0.999503411764706">
+Currently SPOTTER is developed in Pharo for the Pharo IDE
+and uses several querying facilities present in the Pharo IDE
+related to code and objects. This includes the ability to di-
+rectly query code objects for relations (e.g., ask for the meth-
+ods of a class or for the subclasses of a class) and any object
+for its attributes. While this simplifies the implementation of
+SPOTTER there is no conceptual limitation that ties Spotter
+to Pharo and prevents its implementation in other IDEs for
+object-oriented languages. For example, to integrate SPOT-
+TER within IntelliJ, one can start from the Global Search
+tool that already provides the possibility to execute multiple
+searches in parallel and extend it with the notion of search
+context and search session. The AST model can then be used
+to implement queries over code entities. The lack of exten-
+sion methods in Java would require a different mechanism
+for associating processors with an object’s class, such as as-
+pects.
+</bodyText>
+<subsectionHeader confidence="0.987782">
+8.3 Open Questions
+</subsectionHeader>
+<bodyText confidence="0.997422">
+While initial feedback from software developers indicates
+that SPOTTER offers an improvement over existing search
+tools, empirical evidence to support this claim is missing.
+This aspect can be address by pursuing the following re-
+search question: Does an IDE providing search support
+based on SPOTTER increase the efficiency of developers
+when performing development and maintenance tasks? Fur-
+thermore, there already exists a wide range of exploration
+tools focusing on allowing developers to navigate and extract
+information from source code targeting various parts of the
+development process. Better understanding how SPOTTER
+</bodyText>
+<figure confidence="0.998675619047619">
+5 http://ws.stfx.eu/
+15 2016/8/26
+Category Data Count
+Global
+Packages 1
+Classes 1
+Annotations 1
+Methods 5
+Global variables 1
+Files/folders 2
+Code entities
+Packages 5
+Classes 10
+Traits 4
+Annotations 1
+Methods (containment) 9
+Methods (relations) 7
+Attributes/variables 8
+Code critiques (QA) 3
+IDE
+Settings 2
+Help 2
+Menus 3
+Plug-ins/Projects (Catalog) 1
+Repositories 3
+Project
+Configurations (Metacello) 6
+Versioning (Monticello) 7
+Domain objects
+Collection objects 3
+Graphical objects 5
+XML objects 2
+Examples 6
+Parser objects 3
+Bytecode 1
+Moose models [16] 6
+Files 5
+Other
+Code/text 3
+Extensions 2
+History 4
+Dynamic 2
+</figure>
+<tableCaption confidence="0.914931">
+Table 5. Search processors grouped based on the type of
+</tableCaption>
+<bodyText confidence="0.95222725">
+searched data. Count indicates the number of search proces-
+sors for a data type.
+compares to them and for what kind of tasks is SPOTTER
+better suited is also a track we are actively pursuing.
+</bodyText>
+<sectionHeader confidence="0.996868" genericHeader="conclusions">
+9. Conclusions
+</sectionHeader>
+<bodyText confidence="0.997695571428572">
+Domain concepts play an important role in program compre-
+hension. Relying only on generic search tools during infor-
+mation foraging loops requires developers to focus on locat-
+ing domain concepts instead of reasoning in terms of those
+concepts. This can be addressed if search tools enable devel-
+opers to directly search through domain concepts. To support
+this, we proposed SPOTTER, a moldable framework that al-
+lows developers to inexpensively incorporate domain con-
+cepts in the search process as well as discover searches ap-
+plicable for their own contexts. Our current prototype, devel-
+oped for the Pharo IDE, shows that this approach is feasible
+by relying on a uniform object-oriented model and an inter-
+nal DSL for expressing searches. A pilot user study shows
+that indeed that cost of creating custom extension is small.
+SPOTTER is part of our ongoing effort into making cus-
+tomization of IDEs an inexpensive and practical process. We
+previously showed that through inexpensive customizations
+developers can improve that way they debug [3] and visu-
+alize objects [4]. With SPOTTER we have showed that the
+search process in an IDE can also be improved if the search
+framework puts customization into the foreground.
+</bodyText>
+<sectionHeader confidence="0.856501" genericHeader="acknowledgments">
+Acknowledgment
+</sectionHeader>
+<bodyText confidence="0.403766">
+We gratefully acknowledge the financial support of the
+Swiss National Science Foundation for the project “Ag-
+ile Software Analysis” (SNSF project No. 200020-162352,
+Jan 1, 2016 - Dec. 30, 2018). Juraj Kubelka is supported
+by a Ph.D. scholarship from CONICYT, Chile. CONICYT-
+PCHA/Doctorado Nacional/2013-63130188.
+</bodyText>
+<sectionHeader confidence="0.671576" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.999193068376068">
+[1] V. P. Araya, A. Bergel, D. Cassou, S. Ducasse, and J. Laval.
+Agile visualization with Roassal. In Deep Into Pharo, pages
+209–239. Square Bracket Associates, Sept. 2013.
+[2] F. Beck, B. Dit, J. Velasco-Madden, D. Weiskopf, and
+D. Poshyvanyk. Rethinking user interfaces for feature loca-
+tion. In Proceedings of the 2015 IEEE 23rd International
+Conference on Program Comprehension, ICPC ’15, pages
+151–162, Piscataway, NJ, USA, 2015. IEEE Press.
+[3] A. Chiş, M. Denker, T. Gı̂rba, and O. Nierstrasz. Practi-
+cal domain-specific debuggers using the Moldable Debugger
+framework. Computer Languages, Systems &amp; Structures, 44,
+Part A:89–113, 2015. Special issue on the 6th and 7th Inter-
+national Conference on Software Language Engineering (SLE
+2013 and SLE 2014).
+[4] A. Chiş, T. Gı̂rba, O. Nierstrasz, and A. Syrel. The Moldable
+Inspector. In Proceedings of the 2015 ACM International
+Symposium on New Ideas, New Paradigms, and Reflections
+on Programming and Software, Onward! 2015, pages 44–60,
+New York, NY, USA, 2015. ACM.
+[5] B. de Alwis and G. C. Murphy. Answering conceptual queries
+with Ferret. In Proceedings of the 30th International Con-
+ference on Software Engineering (ICSE), pages 21–30, New
+York, NY, USA, 2008. ACM.
+[6] B. Dit, M. Revelle, M. Gethers, and D. Poshyvanyk. Feature
+location in source code: a taxonomy and survey. Journal of
+Software: Evolution and Process, pages n/a–n/a, 2012.
+[7] M. Eichberg and T. Schäfer. Xirc: Cross-artifact informa-
+tion retrieval [gpce]. In Companion to the 19th Annual ACM
+SIGPLAN Conference on Object-oriented Programming Sys-
+tems, Languages, and Applications, OOPSLA ’04, pages 43–
+44, New York, NY, USA, 2004. ACM.
+[8] D. S. Eisenberg, J. Stylos, and B. A. Myers. Apatite: A new
+interface for exploring APIs. In Proceedings of the SIGCHI
+16 2016/8/26
+Conference on Human Factors in Computing Systems, CHI
+’10, pages 1331–1334, New York, NY, USA, 2010. ACM.
+[9] T. Fritz, D. C. Shepherd, K. Kevic, W. Snipes, and C. Bräun-
+lich. Developers’ code context models for change tasks. In
+Proceedings of the 22Nd ACM SIGSOFT International Sym-
+posium on Foundations of Software Engineering, FSE 2014,
+pages 7–18, New York, NY, USA, 2014. ACM.
+[10] D. Janzen and K. de Volder. Navigating and querying code
+without getting lost. In AOSD’03: Proceedings of the 2nd
+International Conference on Aspect-oriented Software Devel-
+opment, pages 178–187, New York, NY, USA, 2003. ACM.
+[11] A. Ko, B. Myers, M. Coblenz, and H. Aung. An exploratory
+study of how developers seek, relate, and collect relevant
+information during software maintenance tasks. Software
+Engineering, IEEE Transactions on, 32(12):971 –987, Dec.
+2006.
+[12] J. Kubelka, A. Bergel, A. Chiş, T. Gı̂rba, S. Reichhart,
+R. Robbes, and A. Syrel. On understanding how develop-
+ers use the Spotter search tool. In Proceedings of 3rd IEEE
+Working Conference on Software Visualization - New Ideas
+and Emerging Results, VISSOFT-NIER’15, pages 145–149.
+IEEE, Sept. 2015.
+[13] D. C. Littman, J. Pinto, S. Letovsky, and E. Soloway. Mental
+models and software maintenance. J. Syst. Softw., 7(4):341–
+355, Dec. 1987.
+[14] G. C. Murphy, M. Kersten, M. P. Robillard, and D. Čubranić.
+The emergent structure of development tasks. In Proceed-
+ings of the 19th European Conference on Object-Oriented
+Programming, ECOOP’05, pages 33–48, Berlin, Heidelberg,
+2005. Springer-Verlag.
+[15] E. Murphy-Hill, R. Jiresal, and G. C. Murphy. Improving
+software developers’ fluency by recommending development
+environment commands. In Proceedings of the ACM SIG-
+SOFT 20th International Symposium on the Foundations of
+Software Engineering, FSE ’12, pages 42:1–42:11, New York,
+NY, USA, 2012. ACM.
+[16] O. Nierstrasz, S. Ducasse, and T. Gı̂rba. The story of Moose:
+an agile reengineering environment. In Proceedings of the
+European Software Engineering Conference (ESEC/FSE’05),
+pages 1–10, New York, NY, USA, Sept. 2005. ACM Press.
+Invited paper.
+[17] M. Petrenko, V. Rajlich, and R. Vanciu. Partial domain com-
+prehension in software evolution and maintenance. In The
+16th IEEE Int’l Conf. on Program Comprehension, pages 13–
+22. IEEE, June 2008.
+[18] P. Pirolli and S. Card. The sensemaking process and leverage
+points for analyst technology as identified through cognitive
+task analysis. In Proceedings of International Conference on
+Intelligence Analysis, pages 2–4, 2005.
+[19] V. Rajlich and N. Wilde. The role of concepts in program com-
+prehension. In Proceedings of the 10th International Work-
+shop on Program Comprehension, IWPC ’02, pages 271–,
+Washington, DC, USA, 2002. IEEE Computer Society.
+[20] L. Renggli, S. Ducasse, T. Gı̂rba, and O. Nierstrasz. Practical
+dynamic grammars for dynamic languages. In 4th Workshop
+on Dynamic Languages and Applications (DYLA 2010), pages
+1–4, Malaga, Spain, June 2010.
+[21] M. P. Robillard, W. Coelho, and G. C. Murphy. How effec-
+tive developers investigate source code: An exploratory study.
+IEEE Trans. Softw. Eng., 30(12):889–903, Dec. 2004.
+[22] S. Robitaille, R. Schauer, and R. Keller. Bridging program
+comprehension tools by design navigation. In Software Main-
+tenance, 2000. Proceedings. International Conference on,
+pages 22–32, 2000.
+[23] T. Schafer, M. Eichberg, M. Haupt, and M. Mezini. The
+SEXTANT software exploration tool. IEEE Trans. Softw.
+Eng., 32(9):753–768, Sept. 2006.
+[24] D. Shepherd, K. Damevski, B. Ropski, and T. Fritz. Sando:
+An extensible local code search framework. In Proceedings
+of the ACM SIGSOFT 20th International Symposium on the
+Foundations of Software Engineering, FSE ’12, pages 15:1–
+15:2, New York, NY, USA, 2012. ACM.
+[25] J. Sillito, G. C. Murphy, and K. De Volder. Asking and an-
+swering questions during a programming change task. IEEE
+Trans. Softw. Eng., 34:434–451, July 2008.
+[26] B. Spasojević, M. Lungu, and O. Nierstrasz. Overthrowing the
+tyranny of alphabetical ordering in documentation systems.
+In 2014 IEEE International Conference on Software Mainte-
+nance and Evolution (ERA Track), pages 511–515, Sept. 2014.
+[27] J. Starke, C. Luce, and J. Sillito. Searching and skimming:
+An exploratory study. In Software Maintenance, 2009. ICSM
+2009. IEEE International Conference on, pages 157–166,
+Sept. 2009.
+</reference>
+<page confidence="0.758852">
+17 2016/8/26
+</page>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.006629">
+<title confidence="0.886125">Moldable, Context-Aware Searching with SPOTTER (Preprint ∗)</title>
+<author confidence="0.764725">Andrei Chiş</author>
+<author confidence="0.764725">Tudor Gı̂rba</author>
+<author confidence="0.764725">Juraj Kubelka</author>
+<note confidence="0.6029655">Oscar Nierstrasz1, Stefan Reichhart4, and Aliaksei Syrel1 Software Composition Group, University of Bern, Switzerland, scg.unibe.ch1, PLEIAD Laboratory, University of Chile, Chile, pleiad.cl2, feenk.com, Switzerland3, stefan.reichhart@gmail.com, Switzerland4</note>
+<abstract confidence="0.93751792">Software systems involve many different kinds of domainspecific and interrelated software entities. A common strategy employed by developers to deal with this reality is to perform exploratory investigations by means of searching. Nevertheless, most integrated development environments (IDEs) support searching through generic and disconnected search tools. This impedes search tasks over domain-specific entities, as considerable effort is wasted by developers locating and linking data and concepts relevant to their application domains. To tackle this problem we propose SPOTTER, a moldable framework for supporting contextual-aware searching in IDEs by enabling developers to easily create custom searches for domain objects. In this paper we motivate a set of requirements for SPOTTER and show, through usage scenarios, that SPOTTER improves program comprehension by reducing the effort required to find and search through concepts from a wide range of domains. Furthermore, we show that by taking code into account, SPOTTER can provide a single entry point for embedding search support within an IDE. Categories and Subject Descriptors D.2.6 [Software engineering]: Programming Environments – Integrated environments, Interactive environments</abstract>
+<keyword confidence="0.974155">Keywords search, navigation, IDEs, integration</keyword>
+<author confidence="0.400081">In Proceedings of the ACM International Symposium on New Ideas</author>
+<affiliation confidence="0.707164">New Paradigms, and Reflections on Programming and Software (Onward!</affiliation>
+<address confidence="0.75644">2016), November 2–4, 2016, Amsterdam, Netherlands. DOI: 10.1145/2986012.2986023</address>
+<intro confidence="0.355956">[Copyright notice will appear here once ’preprint’ option is removed.]</intro>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>V P Araya</author>
+<author>A Bergel</author>
+<author>D Cassou</author>
+<author>S Ducasse</author>
+<author>J Laval</author>
+</authors>
+<title>Agile visualization with Roassal.</title>
+<date>2013</date>
+<booktitle>In Deep Into Pharo,</booktitle>
+<pages>209--239</pages>
+<contexts>
+<context position="12846" citStr="[1]" startWordPosition="1955" endWordPosition="1955">rs productions based on the frequency of their usage within the current grammar. The results of using this processor to search for productions containing the string “hex” in a parser for Java code is displayed in Figure 1a. The presented scenario is not unique to PetitParser. Similar situations arise every time code elements (e.g., methods, classes, annotations) have a domain specific semantic, since generic search tools cannot filter out unrelated entities. 2.1.2 Searching Through a Visualization Roassal is an engine for building visualizations defined in terms of objects and their relations [1]. Developers create a new visualization starting from a set of domain objects by (i) mapping different types of shapes and relations to those objects, (ii) choosing a layout algorithm, and (iii) specifying how properties of shapes and of the layout are computed from the domain objects. Reasoning about how model elements are rendered, a common task consists in locating those parts of a visualization responsible for rendering that model object. A visualization in Roassal is a run-time object consisting of a composite (i.e., tree) of shape objects. Answering our question requires a developer to s</context>
+</contexts>
+<marker>[1]</marker>
+<rawString>V. P. Araya, A. Bergel, D. Cassou, S. Ducasse, and J. Laval. Agile visualization with Roassal. In Deep Into Pharo, pages 209–239. Square Bracket Associates, Sept. 2013.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>F Beck</author>
+<author>B Dit</author>
+<author>J Velasco-Madden</author>
+<author>D Weiskopf</author>
+<author>D Poshyvanyk</author>
+</authors>
+<title>Rethinking user interfaces for feature location.</title>
+<date>2015</date>
+<booktitle>In Proceedings of the 2015 IEEE 23rd International Conference on Program Comprehension, ICPC ’15,</booktitle>
+<pages>151--162</pages>
+<publisher>IEEE Press.</publisher>
+<location>Piscataway, NJ, USA,</location>
+<contexts>
+<context position="4996" citStr="[2]" startWordPosition="721" endWordPosition="721"> developers to discover and search through domain concepts. This goal can be achieved if IDEs support developers in creating and managing custom ways to search through their domains. Towards this goal we propose SPOTTER, a moldable framework for enabling contextual domain-aware searching in IDEs by putting customization in the foreground and enabling developers to: (i) easily create custom searches for domain objects; (ii) automatically discover searches for domain objects. SPOTTER targets the foraging loop described by Beck et al. (i.e., Search and Filter, Read and Extract, Follow Relations) [2] and leverages a simple object-oriented model for expressing search tools by composing search processors. First, a search processor is a run-time object that expresses an individual search query. Second, every search processor is associated with a software entity from an application (i.e., its target object). To achieve this, all software entities from an application that can have an associated search processor are modeled as run-time objects. On the one hand, this includes domain objects. On the other hand, this also includes other software entities like packages, classes, methods, annotation</context>
+<context position="25301" citStr="[2]" startWordPosition="3919" endWordPosition="3919">ith that name. (c) Next she expands the Pragmas processor and filters results using the “items” query. (d) She finishes by opening a method in a new step which loads processors for searching through senders of that method, as well as other methods with that name (Implementors). Figure 2. Exploring callers of methods having the spotterOrder: annotation (in Pharo annotations are referred to as pragmas). 3.2 Supporting an Information Foraging Loop Starting from the foraging loop for intelligence analysis proposed by Pirolli and Card [18], Beck et al. describe a foraging loop for feature location [2] having three main activities: search and filter, read and extract and follow relations. We show next how SPOTTER supports these activities. 3.2.1 Search and Filter To support this activity, SPOTTER uses search steps. A step encapsulates a search on an object in a given context. Each step takes as input a target object and loads all processors that apply to objects of that type in the current context. For example, a search step opened on a method (i.e., on a method object) can load processors for searching through both the callers and the callees of that method. A step opened on a class repres</context>
+<context position="34032" citStr="[2]" startWordPosition="5376" endWordPosition="5376">rs to reason about why a result is displayed. For example, I3, a novel user interface for feature location supporting searches through 7 2016/8/26 (a) A visualization has processors for searching through model elements (Model objects) and graphical components (Shapes). (b) Diving into a model object from a step opened on a visualization shows what shapes use that object. Figure 3. Exploring an object modeling a Roassal visualization. methods, highlights query terms in the code editor and uses visualizations to convey the similarity of a result with the query as well as show co-change patterns [2]. The SPOTTER UI highlights the text matching the query and uses a contextual preview to convey more information about a result. 4. Improving Information Foraging Loops SPOTTER aims at enabling direct searches through domainspecific concepts during information foraging loops. In this section we show that SPOTTER addresses this aspect by applying it to the motivating examples discussed in Section 2.1 and highlight how the presented model supports this goal. Generic code related searches are still an integral part of an IDE (e.g., What method call this method?, What are the attributes of this cl</context>
+</contexts>
+<marker>[2]</marker>
+<rawString>F. Beck, B. Dit, J. Velasco-Madden, D. Weiskopf, and D. Poshyvanyk. Rethinking user interfaces for feature location. In Proceedings of the 2015 IEEE 23rd International Conference on Program Comprehension, ICPC ’15, pages 151–162, Piscataway, NJ, USA, 2015. IEEE Press.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Chis</author>
+<author>M Denker</author>
+<author>T Gırba</author>
+<author>O Nierstrasz</author>
+</authors>
+<title>Practical domain-specific debuggers using the Moldable Debugger framework.</title>
+<date>2014</date>
+<booktitle>Computer Languages, Systems &amp; Structures, 44, Part A:89–113, 2015. Special issue on the 6th and 7th International Conference on Software Language Engineering (SLE 2013 and SLE</booktitle>
+<marker>[3]</marker>
+<rawString>A. Chiş, M. Denker, T. Gı̂rba, and O. Nierstrasz. Practical domain-specific debuggers using the Moldable Debugger framework. Computer Languages, Systems &amp; Structures, 44, Part A:89–113, 2015. Special issue on the 6th and 7th International Conference on Software Language Engineering (SLE 2013 and SLE 2014).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Chis</author>
+<author>T Gırba</author>
+<author>O Nierstrasz</author>
+<author>A Syrel</author>
+</authors>
+<title>The Moldable Inspector.</title>
+<date>2015</date>
+<booktitle>In Proceedings of the 2015 ACM International Symposium on New Ideas, New Paradigms, and Reflections on Programming and Software, Onward!</booktitle>
+<pages>44--60</pages>
+<publisher>ACM.</publisher>
+<location>New York, NY, USA,</location>
+<contexts>
+<context position="22847" citStr="[4]" startWordPosition="3523" endWordPosition="3523"> by addressing all three requirements. 3. SPOTTER in a Nutshell In this section we show how SPOTTER addresses the foraging loop described by Beck et al., we introduce a user interface to support the presented model, and we discuss how SPOTTER models a search context. 3.1 Search Context As discussed in Section 2.2.3, developers need support for automatically selecting searches relevant for their current needs. In the context of domain-specific object inspection we introduced a solution for modeling a developer’s context based on the following operators: tags, sessions and activation predicates [4]. We propose reusing the same approach for enabling SPOTTER to automatically select relevant processors. For completeness, we present these operators and show how they apply to SPOTTER. Tags identify and group together processors applicable for a development task or application domain. For example, the processors related to PetitParser have the parsing tag. Generic processors are grouped using the default tag. Only processors that have a tag currently present in the search context are made available to developers. A session stores the objects found by a developer using SPOTTER, together with t</context>
+</contexts>
+<marker>[4]</marker>
+<rawString>A. Chiş, T. Gı̂rba, O. Nierstrasz, and A. Syrel. The Moldable Inspector. In Proceedings of the 2015 ACM International Symposium on New Ideas, New Paradigms, and Reflections on Programming and Software, Onward! 2015, pages 44–60, New York, NY, USA, 2015. ACM.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>B de Alwis</author>
+<author>G C Murphy</author>
+</authors>
+<title>Answering conceptual queries with Ferret.</title>
+<date>2008</date>
+<booktitle>In Proceedings of the 30th International Conference on Software Engineering (ICSE),</booktitle>
+<pages>21--30</pages>
+<publisher>ACM.</publisher>
+<location>New York, NY, USA,</location>
+<contexts>
+<context position="18876" citStr="[5]" startWordPosition="2890" endWordPosition="2890">cal browser tools [10]. JQuery relies on a knowledge database generated dynamically using the Eclipse API and queried using TyRuBa, a logical programming language augmented with a library of helper predicates for searching through source code. b) SEXTANT is a software exploration tool that leverages a custom graph-based model [23]. In SEXTANT all sources of a project are transformed to XML, stored in a database and queried using XQuery. c) Ferret is a tool for answering conceptual queries that integrates different sources of information, referred to as spheres, into a queryable knowledge-base [5]. Each sphere performs its queries using a component/plugin of the Eclipse IDE (e.g., static Java searches are executed using JDT). d) Sando is code search tool and framework that embodies a general and extensible local code search model [24]. Sando focuses on enabling researches to easily implement and compare approaches for local code search. e) SPOOL is a reverse engineering environment combining searching and browsing. SPOOL has at its core a repository that stores source code models and provides a query mechanism through which a user can query the model [22]. 2.3.1 Customization JQuery an</context>
+</contexts>
+<marker>[5]</marker>
+<rawString>B. de Alwis and G. C. Murphy. Answering conceptual queries with Ferret. In Proceedings of the 30th International Conference on Software Engineering (ICSE), pages 21–30, New York, NY, USA, 2008. ACM.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>B Dit</author>
+<author>M Revelle</author>
+<author>M Gethers</author>
+<author>D Poshyvanyk</author>
+</authors>
+<title>Feature location in source code: a taxonomy and survey.</title>
+<date>2012</date>
+<booktitle>Journal of Software: Evolution and Process,</booktitle>
+<pages>pages n/a–n/a,</pages>
+<contexts>
+<context position="21093" citStr="[6]" startWordPosition="3245" endWordPosition="3245">d a discussion regarding the ease of creating conceptual queries for Ferret. 2.3.2 Data-sources Ferret is the only one of the five selected tools that fully addresses REQ2 by taking source code, dynamic and historical data into account; SEXTANT, JQuery, Sando and SPOOL are targeted towards the analysis of source code artifacts and do not take the run-time into account. Apart from the discussed tools, many other approaches from the area of feature location combine multiple types of information to improve their results but do not focus on customization. Dit et al. provide a comprehensive review [6]. Search tools from current IDEs also allow developers to search through multiple data. For example, Global Search in IntelliJ makes it possible for developers to search through files, methods, preferences, tools, menus, etc. 2.3.3 Context-aware Searches SPOOL only allows custom searches to be selected based on the type of an entity (e.g., method, file). SEXTANT, JQuery and Ferret go one step further and attach searches to software entities; applicable searches can than be dynamically selected based on various properties of those entities. They however do not attempt to model the developer’s c</context>
+</contexts>
+<marker>[6]</marker>
+<rawString>B. Dit, M. Revelle, M. Gethers, and D. Poshyvanyk. Feature location in source code: a taxonomy and survey. Journal of Software: Evolution and Process, pages n/a–n/a, 2012.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Eichberg</author>
+<author>T Schafer</author>
+</authors>
+<title>Xirc: Cross-artifact information retrieval [gpce].</title>
+<date>2004</date>
+<booktitle>In Companion to the 19th Annual ACM SIGPLAN Conference on Object-oriented Programming Systems, Languages, and Applications, OOPSLA ’04,</booktitle>
+<pages>43--44</pages>
+<publisher>ACM.</publisher>
+<location>New York, NY, USA,</location>
+<contexts>
+<context position="2269" citStr="[7]" startWordPosition="303" endWordPosition="303">ion ∗ In Proceedings of the 2016 ACM International Symposium on New Ideas, New Paradigms, and Reflections on Programming and Software (Onward! 2016), November 2–4, 2016, Amsterdam, Netherlands. DOI: 10.1145/2986012.2986023 [Copyright notice will appear here once ’preprint’ option is removed.] 1. Introduction Program comprehension requires developers to reason about many kinds of interconnected software entities (e.g., code, annotations, packages/namespaces, documentation, configuration files, resource files, bugs, change sets, run-time data structures) [25] often stored in different locations [7]. Dealing with this reality prompts developers to form and maintain task contexts [14] by continuously searching for relevant entities and navigating their dependencies [9, 11, 21]. Cognitive tasks analyses describe this process as a foraging loop in which developers seek, understand, and relate information [18]. Depending on the application domain, software entities are further assigned domain-specific concepts. This improves program comprehension as domain concepts play an important role in human knowledge and software development [13, 19]. For example, an event-based system can use run-time</context>
+</contexts>
+<marker>[7]</marker>
+<rawString>M. Eichberg and T. Schäfer. Xirc: Cross-artifact information retrieval [gpce]. In Companion to the 19th Annual ACM SIGPLAN Conference on Object-oriented Programming Systems, Languages, and Applications, OOPSLA ’04, pages 43– 44, New York, NY, USA, 2004. ACM.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D S Eisenberg</author>
+<author>J Stylos</author>
+<author>B A Myers</author>
+</authors>
+<title>Apatite: A new interface for exploring APIs.</title>
+<date>2010</date>
+<booktitle>In Proceedings of the SIGCHI 16 2016/8/26 Conference on Human Factors in Computing Systems, CHI ’10,</booktitle>
+<pages>1331--1334</pages>
+<publisher>ACM.</publisher>
+<location>New York, NY, USA,</location>
+<contexts>
+<context position="32694" citStr="[8]" startWordPosition="5156" endWordPosition="5156">p by diving in a method having the spotterOrder: annotation. In this step she can search through data related to that method, like callers or methods with the same name from other classes. To maintain orientation a breadcrumb shows previous steps. 3.3.4 UIs for Feature Location and Exploration Tools For completeness, we present here a comparison with UIs used in other feature location and exploration tools. Apatite, a tool for searching and navigating through five levels of an API’s hierarchy (packages, classes, methods, actions (methods containing verbs) and properties (getters and setters)) [8] relies on a similar interface for displaying the results of a search step: the first 5 results from each category are automatically presented and developers can see more results on demand. The same UI is also used by Global Search from IntelliJ. Nevertheless, Apatite relies on Miller columns to display a navigation session which takes considerably more scree-real estate that the UI used by SPOTTER; Global Search does not provide any navigation mechanism. Ferret relies on a tree view where users need to manually expand each node to see the actual result. JQuery and SEXTANT allow users to disco</context>
+</contexts>
+<marker>[8]</marker>
+<rawString>D. S. Eisenberg, J. Stylos, and B. A. Myers. Apatite: A new interface for exploring APIs. In Proceedings of the SIGCHI 16 2016/8/26 Conference on Human Factors in Computing Systems, CHI ’10, pages 1331–1334, New York, NY, USA, 2010. ACM.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>T Fritz</author>
+<author>D C Shepherd</author>
+<author>K Kevic</author>
+<author>W Snipes</author>
+<author>C Braunlich</author>
+</authors>
+<title>Developers’ code context models for change tasks.</title>
+<date>2014</date>
+<booktitle>In Proceedings of the 22Nd ACM SIGSOFT International Symposium on Foundations of Software Engineering, FSE 2014,</booktitle>
+<pages>7--18</pages>
+<publisher>ACM.</publisher>
+<location>New York, NY, USA,</location>
+<contexts>
+<context position="2449" citStr="[9, 11, 21]" startWordPosition="329" endWordPosition="331">sterdam, Netherlands. DOI: 10.1145/2986012.2986023 [Copyright notice will appear here once ’preprint’ option is removed.] 1. Introduction Program comprehension requires developers to reason about many kinds of interconnected software entities (e.g., code, annotations, packages/namespaces, documentation, configuration files, resource files, bugs, change sets, run-time data structures) [25] often stored in different locations [7]. Dealing with this reality prompts developers to form and maintain task contexts [14] by continuously searching for relevant entities and navigating their dependencies [9, 11, 21]. Cognitive tasks analyses describe this process as a foraging loop in which developers seek, understand, and relate information [18]. Depending on the application domain, software entities are further assigned domain-specific concepts. This improves program comprehension as domain concepts play an important role in human knowledge and software development [13, 19]. For example, an event-based system can use run-time objects to model events, a server can rely on XML files to model descriptors for web services, and a parser can model grammars using methods. Hence, instead of reasoning just in g</context>
+</contexts>
+<marker>[9]</marker>
+<rawString>T. Fritz, D. C. Shepherd, K. Kevic, W. Snipes, and C. Bräunlich. Developers’ code context models for change tasks. In Proceedings of the 22Nd ACM SIGSOFT International Symposium on Foundations of Software Engineering, FSE 2014, pages 7–18, New York, NY, USA, 2014. ACM.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Janzen</author>
+<author>K de Volder</author>
+</authors>
+<title>Navigating and querying code without getting lost.</title>
+<date>2003</date>
+<booktitle>In AOSD’03: Proceedings of the 2nd International Conference on Aspect-oriented Software Development,</booktitle>
+<pages>178--187</pages>
+<publisher>ACM.</publisher>
+<location>New York, NY, USA,</location>
+<contexts>
+<context position="18295" citStr="[10]" startWordPosition="2800" endWordPosition="2800"> section we Tool Data model Extension language Requirement 1 2 3 JQuery logic database TyRuBa X* — X* SEXTANT XML database XQuery X* — X* Ferret sphere model algebra ? X X* Sando text-based files internal DSL X — — SPOOL OO model internal DSL X — — SPOTTER reuses the IDE model internal DSL X X X — no support, Xfull support, X* partial support, ? unknown Table 1. Feature comparison. present and discuss several tools that support custom extensions for searching through a software system: a) JQuery is a code browsing tool that combines the advantages of query-based and hierarchical browser tools [10]. JQuery relies on a knowledge database generated dynamically using the Eclipse API and queried using TyRuBa, a logical programming language augmented with a library of helper predicates for searching through source code. b) SEXTANT is a software exploration tool that leverages a custom graph-based model [23]. In SEXTANT all sources of a project are transformed to XML, stored in a database and queried using XQuery. c) Ferret is a tool for answering conceptual queries that integrates different sources of information, referred to as spheres, into a queryable knowledge-base [5]. Each sphere perfo</context>
+</contexts>
+<marker>[10]</marker>
+<rawString>D. Janzen and K. de Volder. Navigating and querying code without getting lost. In AOSD’03: Proceedings of the 2nd International Conference on Aspect-oriented Software Development, pages 178–187, New York, NY, USA, 2003. ACM.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Ko</author>
+<author>B Myers</author>
+<author>M Coblenz</author>
+<author>H Aung</author>
+</authors>
+<title>An exploratory study of how developers seek, relate, and collect relevant information during software maintenance tasks. Software Engineering,</title>
+<date>2006</date>
+<journal>IEEE Transactions on,</journal>
+<volume>32</volume>
+<issue>12</issue>
+<pages>987</pages>
+<contexts>
+<context position="2449" citStr="[9, 11, 21]" startWordPosition="329" endWordPosition="331">sterdam, Netherlands. DOI: 10.1145/2986012.2986023 [Copyright notice will appear here once ’preprint’ option is removed.] 1. Introduction Program comprehension requires developers to reason about many kinds of interconnected software entities (e.g., code, annotations, packages/namespaces, documentation, configuration files, resource files, bugs, change sets, run-time data structures) [25] often stored in different locations [7]. Dealing with this reality prompts developers to form and maintain task contexts [14] by continuously searching for relevant entities and navigating their dependencies [9, 11, 21]. Cognitive tasks analyses describe this process as a foraging loop in which developers seek, understand, and relate information [18]. Depending on the application domain, software entities are further assigned domain-specific concepts. This improves program comprehension as domain concepts play an important role in human knowledge and software development [13, 19]. For example, an event-based system can use run-time objects to model events, a server can rely on XML files to model descriptors for web services, and a parser can model grammars using methods. Hence, instead of reasoning just in g</context>
+</contexts>
+<marker>[11]</marker>
+<rawString>A. Ko, B. Myers, M. Coblenz, and H. Aung. An exploratory study of how developers seek, relate, and collect relevant information during software maintenance tasks. Software Engineering, IEEE Transactions on, 32(12):971 –987, Dec. 2006.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Kubelka</author>
+<author>A Bergel</author>
+<author>A Chis</author>
+<author>T Gırba</author>
+<author>S Reichhart</author>
+<author>R Robbes</author>
+<author>A Syrel</author>
+</authors>
+<title>On understanding how developers use the Spotter search tool.</title>
+<date>2015</date>
+<booktitle>In Proceedings of 3rd IEEE Working Conference on Software Visualization - New Ideas and Emerging Results, VISSOFT-NIER’15,</booktitle>
+<pages>145--149</pages>
+<publisher>IEEE,</publisher>
+<contexts>
+<context position="63270" citStr="[12]" startWordPosition="10075" endWordPosition="10075">ain models that many not reflect the reality of complex software applications. 7. Spotter in Practice Section 6 explored the cost of extending SPOTTER. This gives no insight into how developer use SPOTTER in practice. To address this we collected and analyzed usage data and mailing-list discussions and performed an online survey. 7.1 Usage Data and Mailing-list Discussions SPOTTER was integrated into the alpha version of Pharo 4 in December 2014. Six months after the initial integration we analyzed usage data recorded over a period of two months (April 2014 - May 2015) using a visual language [12]. To summarize, we noticed that developers did not discover and use the navigation features of SPOTTER to their fullest potential. For example, only half of the recorded developers used the dive-in feature at least once. Regarding search data, although we observed developers using 51 search processors, more than 74% of the time developers only used SPOTTER to search through classes and implementors of methods. One explanation for this observation is that SPOTTER exposes information that is not apparent and users need to be explicitly informed about this. We are now gathering usage data over a </context>
+</contexts>
+<marker>[12]</marker>
+<rawString>J. Kubelka, A. Bergel, A. Chiş, T. Gı̂rba, S. Reichhart, R. Robbes, and A. Syrel. On understanding how developers use the Spotter search tool. In Proceedings of 3rd IEEE Working Conference on Software Visualization - New Ideas and Emerging Results, VISSOFT-NIER’15, pages 145–149. IEEE, Sept. 2015.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D C Littman</author>
+<author>J Pinto</author>
+<author>S Letovsky</author>
+<author>E Soloway</author>
+</authors>
+<title>Mental models and software maintenance.</title>
+<date>1987</date>
+<journal>J. Syst. Softw.,</journal>
+<volume>7</volume>
+<issue>4</issue>
+<pages>355</pages>
+<contexts>
+<context position="2816" citStr="[13, 19]" startWordPosition="384" endWordPosition="385">data structures) [25] often stored in different locations [7]. Dealing with this reality prompts developers to form and maintain task contexts [14] by continuously searching for relevant entities and navigating their dependencies [9, 11, 21]. Cognitive tasks analyses describe this process as a foraging loop in which developers seek, understand, and relate information [18]. Depending on the application domain, software entities are further assigned domain-specific concepts. This improves program comprehension as domain concepts play an important role in human knowledge and software development [13, 19]. For example, an event-based system can use run-time objects to model events, a server can rely on XML files to model descriptors for web services, and a parser can model grammars using methods. Hence, instead of reasoning just in generic and lowlevel terms (e.g., What files named web.xml contain within a &amp;lt;security-role&amp;gt; tag a &amp;lt;role-name&amp;gt; tag with the value “manager”?), developers commonly formulate their queries using concepts and abstractions from their application domains (e.g., What web applications use the security role “manager”?). Nevertheless, although searching is pervasive in softwa</context>
+</contexts>
+<marker>[13]</marker>
+<rawString>D. C. Littman, J. Pinto, S. Letovsky, and E. Soloway. Mental models and software maintenance. J. Syst. Softw., 7(4):341– 355, Dec. 1987.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>G C Murphy</author>
+<author>M Kersten</author>
+<author>M P Robillard</author>
+<author>D Cubranic</author>
+</authors>
+<title>The emergent structure of development tasks.</title>
+<date>2005</date>
+<booktitle>In Proceedings of the 19th European Conference on Object-Oriented Programming, ECOOP’05,</booktitle>
+<pages>33--48</pages>
+<publisher>Springer-Verlag.</publisher>
+<location>Berlin, Heidelberg,</location>
+<contexts>
+<context position="2355" citStr="[14]" startWordPosition="318" endWordPosition="318">gms, and Reflections on Programming and Software (Onward! 2016), November 2–4, 2016, Amsterdam, Netherlands. DOI: 10.1145/2986012.2986023 [Copyright notice will appear here once ’preprint’ option is removed.] 1. Introduction Program comprehension requires developers to reason about many kinds of interconnected software entities (e.g., code, annotations, packages/namespaces, documentation, configuration files, resource files, bugs, change sets, run-time data structures) [25] often stored in different locations [7]. Dealing with this reality prompts developers to form and maintain task contexts [14] by continuously searching for relevant entities and navigating their dependencies [9, 11, 21]. Cognitive tasks analyses describe this process as a foraging loop in which developers seek, understand, and relate information [18]. Depending on the application domain, software entities are further assigned domain-specific concepts. This improves program comprehension as domain concepts play an important role in human knowledge and software development [13, 19]. For example, an event-based system can use run-time objects to model events, a server can rely on XML files to model descriptors for web </context>
+</contexts>
+<marker>[14]</marker>
+<rawString>G. C. Murphy, M. Kersten, M. P. Robillard, and D. Čubranić. The emergent structure of development tasks. In Proceedings of the 19th European Conference on Object-Oriented Programming, ECOOP’05, pages 33–48, Berlin, Heidelberg, 2005. Springer-Verlag.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>E Murphy-Hill</author>
+<author>R Jiresal</author>
+<author>G C Murphy</author>
+</authors>
+<title>Improving software developers’ fluency by recommending development environment commands.</title>
+<date>2012</date>
+<booktitle>In Proceedings of the ACM SIGSOFT 20th International Symposium on the Foundations of Software Engineering, FSE ’12,</booktitle>
+<pages>42--1</pages>
+<publisher>ACM.</publisher>
+<location>New York, NY, USA,</location>
+<contexts>
+<context position="17231" citStr="[15]" startWordPosition="2623" endWordPosition="2623">g requires support that integrates and presents to developers data from multiple data sources. 2.2.3 Context-aware Searches (REQ3) The questions discussed in Section 2.1 are sometimes addressed in IDEs through standalone search tools (e.g., tools for query-based debugging, dedicated tools for working with parsers). To take advantage of them, developers have to be aware of their presence and know when they are applicable. Modern IDEs, however, can contain hundreds if not thousands of tools and commands. Finding which are applicable to a given entity in a given context can be a challenging task [15]. An infrastructure encouraging developers to create and work with custom searches should address this issue by enabling developers to automatically find custom searches applicable for a domain entity, based on the entity, the task at hand, and the developer’s task context. 2.3 Current Approaches There exists a wide range of software tools focusing on improving program comprehension by combining and integrating multiple search tools and techniques. In this section we Tool Data model Extension language Requirement 1 2 3 JQuery logic database TyRuBa X* — X* SEXTANT XML database XQuery X* — X* Fe</context>
+<context position="21922" citStr="[15]" startWordPosition="3377" endWordPosition="3377"> 2.3.3 Context-aware Searches SPOOL only allows custom searches to be selected based on the type of an entity (e.g., method, file). SEXTANT, JQuery and Ferret go one step further and attach searches to software entities; applicable searches can than be dynamically selected based on various properties of those entities. They however do not attempt to model the developer’s context and select searches also by taking into account that context. A different approach is taken by recommender systems which aim to suggest developers useful tools by recording and mining usage histories of software tools [15]; this however requires usage history information. 2.3.4 Summary The requirements identified in Section 2.2 are addressed to various degrees in current approaches that focus on integrating searches over multiple data types. This indicates a need for a search framework that focuses on unifying search support within an IDE by addressing all three requirements. 3. SPOTTER in a Nutshell In this section we show how SPOTTER addresses the foraging loop described by Beck et al., we introduce a user interface to support the presented model, and we discuss how SPOTTER models a search context. 3.1 Search</context>
+</contexts>
+<marker>[15]</marker>
+<rawString>E. Murphy-Hill, R. Jiresal, and G. C. Murphy. Improving software developers’ fluency by recommending development environment commands. In Proceedings of the ACM SIGSOFT 20th International Symposium on the Foundations of Software Engineering, FSE ’12, pages 42:1–42:11, New York, NY, USA, 2012. ACM.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>O Nierstrasz</author>
+<author>S Ducasse</author>
+<author>T Gırba</author>
+</authors>
+<title>The story of Moose: an agile reengineering environment.</title>
+<date>2005</date>
+<booktitle>In Proceedings of the European Software Engineering Conference (ESEC/FSE’05),</booktitle>
+<pages>1--10</pages>
+<publisher>ACM Press.</publisher>
+<location>New York, NY, USA,</location>
+<note>Invited paper.</note>
+<contexts>
+<context position="72654" citStr="[16]" startWordPosition="11582" endWordPosition="11582">opment process. Better understanding how SPOTTER 5 http://ws.stfx.eu/ 15 2016/8/26 Category Data Count Global Packages 1 Classes 1 Annotations 1 Methods 5 Global variables 1 Files/folders 2 Code entities Packages 5 Classes 10 Traits 4 Annotations 1 Methods (containment) 9 Methods (relations) 7 Attributes/variables 8 Code critiques (QA) 3 IDE Settings 2 Help 2 Menus 3 Plug-ins/Projects (Catalog) 1 Repositories 3 Project Configurations (Metacello) 6 Versioning (Monticello) 7 Domain objects Collection objects 3 Graphical objects 5 XML objects 2 Examples 6 Parser objects 3 Bytecode 1 Moose models [16] 6 Files 5 Other Code/text 3 Extensions 2 History 4 Dynamic 2 Table 5. Search processors grouped based on the type of searched data. Count indicates the number of search processors for a data type. compares to them and for what kind of tasks is SPOTTER better suited is also a track we are actively pursuing. 9. Conclusions Domain concepts play an important role in program comprehension. Relying only on generic search tools during information foraging loops requires developers to focus on locating domain concepts instead of reasoning in terms of those concepts. This can be addressed if search to</context>
+</contexts>
+<marker>[16]</marker>
+<rawString>O. Nierstrasz, S. Ducasse, and T. Gı̂rba. The story of Moose: an agile reengineering environment. In Proceedings of the European Software Engineering Conference (ESEC/FSE’05), pages 1–10, New York, NY, USA, Sept. 2005. ACM Press. Invited paper.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Petrenko</author>
+<author>V Rajlich</author>
+<author>R Vanciu</author>
+</authors>
+<title>Partial domain comprehension in software evolution and maintenance.</title>
+<date>2008</date>
+<booktitle>In The 16th IEEE Int’l Conf. on Program Comprehension,</booktitle>
+<pages>13--22</pages>
+<publisher>IEEE,</publisher>
+<contexts>
+<context position="4029" citStr="[17]" startWordPosition="576" endWordPosition="576">pment and maintenance tasks, it is supported in IDEs mainly by means of disconnected and generic search tools. On the one hand, the lack of search tool integration forces developers to manually locate and construct domain abstractions by piecing together information from various sources (e.g., What XML tags represent security roles? In what files are they defined?). On the other hand, it impedes discoverability: one has to be aware of a domain abstraction to know what to look for. Nevertheless, given the size of today’s systems, awareness of all domain abstractions is not 1 2016/8/26 feasible [17]. Hence, a generic and disconnected approach of integrating searching into IDEs leads to information foraging loops where significant effort is wasted recovering concepts instead of directly reasoning in term of those concepts. To address this problem and improve program comprehension during information foraging loops we propose that search tools directly enable developers to discover and search through domain concepts. This goal can be achieved if IDEs support developers in creating and managing custom ways to search through their domains. Towards this goal we propose SPOTTER, a moldable fram</context>
+</contexts>
+<marker>[17]</marker>
+<rawString>M. Petrenko, V. Rajlich, and R. Vanciu. Partial domain comprehension in software evolution and maintenance. In The 16th IEEE Int’l Conf. on Program Comprehension, pages 13– 22. IEEE, June 2008.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>P Pirolli</author>
+<author>S Card</author>
+</authors>
+<title>The sensemaking process and leverage points for analyst technology as identified through cognitive task analysis.</title>
+<date>2005</date>
+<booktitle>In Proceedings of International Conference on Intelligence Analysis,</booktitle>
+<pages>2--4</pages>
+<contexts>
+<context position="2582" citStr="[18]" startWordPosition="352" endWordPosition="352">ogram comprehension requires developers to reason about many kinds of interconnected software entities (e.g., code, annotations, packages/namespaces, documentation, configuration files, resource files, bugs, change sets, run-time data structures) [25] often stored in different locations [7]. Dealing with this reality prompts developers to form and maintain task contexts [14] by continuously searching for relevant entities and navigating their dependencies [9, 11, 21]. Cognitive tasks analyses describe this process as a foraging loop in which developers seek, understand, and relate information [18]. Depending on the application domain, software entities are further assigned domain-specific concepts. This improves program comprehension as domain concepts play an important role in human knowledge and software development [13, 19]. For example, an event-based system can use run-time objects to model events, a server can rely on XML files to model descriptors for web services, and a parser can model grammars using methods. Hence, instead of reasoning just in generic and lowlevel terms (e.g., What files named web.xml contain within a &amp;lt;security-role&amp;gt; tag a &amp;lt;role-name&amp;gt; tag with the value “mana</context>
+<context position="25238" citStr="[18]" startWordPosition="3907" endWordPosition="3907">gh methods having that annotation and methods calling a method with that name. (c) Next she expands the Pragmas processor and filters results using the “items” query. (d) She finishes by opening a method in a new step which loads processors for searching through senders of that method, as well as other methods with that name (Implementors). Figure 2. Exploring callers of methods having the spotterOrder: annotation (in Pharo annotations are referred to as pragmas). 3.2 Supporting an Information Foraging Loop Starting from the foraging loop for intelligence analysis proposed by Pirolli and Card [18], Beck et al. describe a foraging loop for feature location [2] having three main activities: search and filter, read and extract and follow relations. We show next how SPOTTER supports these activities. 3.2.1 Search and Filter To support this activity, SPOTTER uses search steps. A step encapsulates a search on an object in a given context. Each step takes as input a target object and loads all processors that apply to objects of that type in the current context. For example, a search step opened on a method (i.e., on a method object) can load processors for searching through both the callers </context>
+</contexts>
+<marker>[18]</marker>
+<rawString>P. Pirolli and S. Card. The sensemaking process and leverage points for analyst technology as identified through cognitive task analysis. In Proceedings of International Conference on Intelligence Analysis, pages 2–4, 2005.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>V Rajlich</author>
+<author>N Wilde</author>
+</authors>
+<title>The role of concepts in program comprehension.</title>
+<date>2002</date>
+<booktitle>In Proceedings of the 10th International Workshop on Program Comprehension, IWPC ’02,</booktitle>
+<pages>271</pages>
+<publisher>IEEE Computer Society.</publisher>
+<location>Washington, DC, USA,</location>
+<contexts>
+<context position="2816" citStr="[13, 19]" startWordPosition="384" endWordPosition="385">data structures) [25] often stored in different locations [7]. Dealing with this reality prompts developers to form and maintain task contexts [14] by continuously searching for relevant entities and navigating their dependencies [9, 11, 21]. Cognitive tasks analyses describe this process as a foraging loop in which developers seek, understand, and relate information [18]. Depending on the application domain, software entities are further assigned domain-specific concepts. This improves program comprehension as domain concepts play an important role in human knowledge and software development [13, 19]. For example, an event-based system can use run-time objects to model events, a server can rely on XML files to model descriptors for web services, and a parser can model grammars using methods. Hence, instead of reasoning just in generic and lowlevel terms (e.g., What files named web.xml contain within a &amp;lt;security-role&amp;gt; tag a &amp;lt;role-name&amp;gt; tag with the value “manager”?), developers commonly formulate their queries using concepts and abstractions from their application domains (e.g., What web applications use the security role “manager”?). Nevertheless, although searching is pervasive in softwa</context>
+</contexts>
+<marker>[19]</marker>
+<rawString>V. Rajlich and N. Wilde. The role of concepts in program comprehension. In Proceedings of the 10th International Workshop on Program Comprehension, IWPC ’02, pages 271–, Washington, DC, USA, 2002. IEEE Computer Society.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>L Renggli</author>
+<author>S Ducasse</author>
+<author>T Gırba</author>
+<author>O Nierstrasz</author>
+</authors>
+<title>Practical dynamic grammars for dynamic languages.</title>
+<date>2010</date>
+<booktitle>In 4th Workshop on Dynamic Languages and Applications (DYLA 2010),</booktitle>
+<pages>1--4</pages>
+<location>Malaga, Spain,</location>
+<contexts>
+<context position="10164" citStr="[20]" startWordPosition="1519" endWordPosition="1519"> extensions for SPOTTER. 1 pharo.org 2 gt.moosetechnology.org 3 pharo.org/news/pharo-4.0-released 2 2016/8/26 2. Requirements To illustrate how generic approaches lead to wasted effort during information foraging loops, we start with two motivating examples. We then propose and motivate a set of requirements for addressing this problem and discuss how they are currently supported in related approaches. 2.1 Motivating Scenarios 2.1.1 Searching Through a Parser Grammar PetitParser is a framework for creating parsers that makes it easy to dynamically reuse, compose, transform and extend grammars [20]. Developers create parsers by specifying a set of grammar productions in a class or in a class hierarchy. To specify a grammar production a developer needs to: (i) create a method that constructs and returns a parser object for that part of the grammar; (ii) define, in the same class, an attribute having the same name as the method. Productions are referred to in other productions by accessing object attributes. Developers can add other helper methods and attributes to a parser class. Finding a grammar production is a common task during the development of a parser. As grammar productions have</context>
+</contexts>
+<marker>[20]</marker>
+<rawString>L. Renggli, S. Ducasse, T. Gı̂rba, and O. Nierstrasz. Practical dynamic grammars for dynamic languages. In 4th Workshop on Dynamic Languages and Applications (DYLA 2010), pages 1–4, Malaga, Spain, June 2010.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M P Robillard</author>
+<author>W Coelho</author>
+<author>G C Murphy</author>
+</authors>
+<title>How effective developers investigate source code: An exploratory study.</title>
+<date>2004</date>
+<journal>IEEE Trans. Softw. Eng.,</journal>
+<volume>30</volume>
+<issue>12</issue>
+<contexts>
+<context position="2449" citStr="[9, 11, 21]" startWordPosition="329" endWordPosition="331">sterdam, Netherlands. DOI: 10.1145/2986012.2986023 [Copyright notice will appear here once ’preprint’ option is removed.] 1. Introduction Program comprehension requires developers to reason about many kinds of interconnected software entities (e.g., code, annotations, packages/namespaces, documentation, configuration files, resource files, bugs, change sets, run-time data structures) [25] often stored in different locations [7]. Dealing with this reality prompts developers to form and maintain task contexts [14] by continuously searching for relevant entities and navigating their dependencies [9, 11, 21]. Cognitive tasks analyses describe this process as a foraging loop in which developers seek, understand, and relate information [18]. Depending on the application domain, software entities are further assigned domain-specific concepts. This improves program comprehension as domain concepts play an important role in human knowledge and software development [13, 19]. For example, an event-based system can use run-time objects to model events, a server can rely on XML files to model descriptors for web services, and a parser can model grammars using methods. Hence, instead of reasoning just in g</context>
+</contexts>
+<marker>[21]</marker>
+<rawString>M. P. Robillard, W. Coelho, and G. C. Murphy. How effective developers investigate source code: An exploratory study. IEEE Trans. Softw. Eng., 30(12):889–903, Dec. 2004.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Robitaille</author>
+<author>R Schauer</author>
+<author>R Keller</author>
+</authors>
+<title>Bridging program comprehension tools by design navigation.</title>
+<date>2000</date>
+<booktitle>In Software Maintenance,</booktitle>
+<pages>22--32</pages>
+<contexts>
+<context position="19445" citStr="[22]" startWordPosition="2984" endWordPosition="2984">into a queryable knowledge-base [5]. Each sphere performs its queries using a component/plugin of the Eclipse IDE (e.g., static Java searches are executed using JDT). d) Sando is code search tool and framework that embodies a general and extensible local code search model [24]. Sando focuses on enabling researches to easily implement and compare approaches for local code search. e) SPOOL is a reverse engineering environment combining searching and browsing. SPOOL has at its core a repository that stores source code models and provides a query mechanism through which a user can query the model [22]. 2.3.1 Customization JQuery and SEXTANT address customization by selecting a language that best fits the model they use to represent the queried data. Nevertheless, this requires developers to write queries for object-oriented programs using a language based on a different paradigm (i.e., logical programming, functional programming). The query language used in JQuery, while allowing for expressive queries, makes the creation of complex queries difficult even for advanced users. Sando and SPOOL use a different approach: developers create custom extensions by implementing a predefined interface</context>
+</contexts>
+<marker>[22]</marker>
+<rawString>S. Robitaille, R. Schauer, and R. Keller. Bridging program comprehension tools by design navigation. In Software Maintenance, 2000. Proceedings. International Conference on, pages 22–32, 2000.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>T Schafer</author>
+<author>M Eichberg</author>
+<author>M Haupt</author>
+<author>M Mezini</author>
+</authors>
+<title>The SEXTANT software exploration tool.</title>
+<date>2006</date>
+<journal>IEEE Trans. Softw. Eng.,</journal>
+<volume>32</volume>
+<issue>9</issue>
+<contexts>
+<context position="18605" citStr="[23]" startWordPosition="2847" endWordPosition="2847"> Xfull support, X* partial support, ? unknown Table 1. Feature comparison. present and discuss several tools that support custom extensions for searching through a software system: a) JQuery is a code browsing tool that combines the advantages of query-based and hierarchical browser tools [10]. JQuery relies on a knowledge database generated dynamically using the Eclipse API and queried using TyRuBa, a logical programming language augmented with a library of helper predicates for searching through source code. b) SEXTANT is a software exploration tool that leverages a custom graph-based model [23]. In SEXTANT all sources of a project are transformed to XML, stored in a database and queried using XQuery. c) Ferret is a tool for answering conceptual queries that integrates different sources of information, referred to as spheres, into a queryable knowledge-base [5]. Each sphere performs its queries using a component/plugin of the Eclipse IDE (e.g., static Java searches are executed using JDT). d) Sando is code search tool and framework that embodies a general and extensible local code search model [24]. Sando focuses on enabling researches to easily implement and compare approaches for l</context>
+</contexts>
+<marker>[23]</marker>
+<rawString>T. Schafer, M. Eichberg, M. Haupt, and M. Mezini. The SEXTANT software exploration tool. IEEE Trans. Softw. Eng., 32(9):753–768, Sept. 2006.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Shepherd</author>
+<author>K Damevski</author>
+<author>B Ropski</author>
+<author>T Fritz</author>
+</authors>
+<title>Sando: An extensible local code search framework.</title>
+<date>2012</date>
+<booktitle>In Proceedings of the ACM SIGSOFT 20th International Symposium on the Foundations of Software Engineering, FSE ’12,</booktitle>
+<pages>15--1</pages>
+<publisher>ACM.</publisher>
+<location>New York, NY, USA,</location>
+<contexts>
+<context position="19118" citStr="[24]" startWordPosition="2930" endWordPosition="2930">e. b) SEXTANT is a software exploration tool that leverages a custom graph-based model [23]. In SEXTANT all sources of a project are transformed to XML, stored in a database and queried using XQuery. c) Ferret is a tool for answering conceptual queries that integrates different sources of information, referred to as spheres, into a queryable knowledge-base [5]. Each sphere performs its queries using a component/plugin of the Eclipse IDE (e.g., static Java searches are executed using JDT). d) Sando is code search tool and framework that embodies a general and extensible local code search model [24]. Sando focuses on enabling researches to easily implement and compare approaches for local code search. e) SPOOL is a reverse engineering environment combining searching and browsing. SPOOL has at its core a repository that stores source code models and provides a query mechanism through which a user can query the model [22]. 2.3.1 Customization JQuery and SEXTANT address customization by selecting a language that best fits the model they use to represent the queried data. Nevertheless, this requires developers to write queries for object-oriented programs using a language based on a differen</context>
+</contexts>
+<marker>[24]</marker>
+<rawString>D. Shepherd, K. Damevski, B. Ropski, and T. Fritz. Sando: An extensible local code search framework. In Proceedings of the ACM SIGSOFT 20th International Symposium on the Foundations of Software Engineering, FSE ’12, pages 15:1– 15:2, New York, NY, USA, 2012. ACM.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Sillito</author>
+<author>G C Murphy</author>
+<author>K De Volder</author>
+</authors>
+<title>Asking and answering questions during a programming change task.</title>
+<date>2008</date>
+<journal>IEEE Trans. Softw. Eng.,</journal>
+<pages>34--434</pages>
+<contexts>
+<context position="2229" citStr="[25]" startWordPosition="297" endWordPosition="297">ywords search, navigation, IDEs, integration ∗ In Proceedings of the 2016 ACM International Symposium on New Ideas, New Paradigms, and Reflections on Programming and Software (Onward! 2016), November 2–4, 2016, Amsterdam, Netherlands. DOI: 10.1145/2986012.2986023 [Copyright notice will appear here once ’preprint’ option is removed.] 1. Introduction Program comprehension requires developers to reason about many kinds of interconnected software entities (e.g., code, annotations, packages/namespaces, documentation, configuration files, resource files, bugs, change sets, run-time data structures) [25] often stored in different locations [7]. Dealing with this reality prompts developers to form and maintain task contexts [14] by continuously searching for relevant entities and navigating their dependencies [9, 11, 21]. Cognitive tasks analyses describe this process as a foraging loop in which developers seek, understand, and relate information [18]. Depending on the application domain, software entities are further assigned domain-specific concepts. This improves program comprehension as domain concepts play an important role in human knowledge and software development [13, 19]. For example</context>
+<context position="15375" citStr="[25]" startWordPosition="2342" endWordPosition="2342">uestions that can be efficiently addressed through custom domain-specific searches. For this approach to be possible, IDEs should enable developers to create and 3 2016/8/26 work with domain-specific searches. Starting from the presented scenarios we propose the following as a set of minimum requirements towards this goal: inexpensive creation of search processors, support for multiple data sources and context-aware searches. 2.2.1 Inexpensive Creation of Search Processors (REQ1) Given the wide rage of development tasks and applications, foreseeing all usage contexts of a tool is not possible [25]. A fixed set of searches limits the applicability of a search tool. Enabling developers to create custom searches for their domain entities addresses this problem. Nevertheless, the difficulty of creating a custom search directly influences the usability of such an approach. On the one hand, a domainspecific language for creating custom searches can significantly reduce the cost for certain types of extensions. On the other hand, supporting custom searches through a generalpurpose programming language allows for any type of extension. To provide a quick entry point and not limit the types of </context>
+</contexts>
+<marker>[25]</marker>
+<rawString>J. Sillito, G. C. Murphy, and K. De Volder. Asking and answering questions during a programming change task. IEEE Trans. Softw. Eng., 34:434–451, July 2008.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>B Spasojevic</author>
+<author>M Lungu</author>
+<author>O Nierstrasz</author>
+</authors>
+<title>Overthrowing the tyranny of alphabetical ordering in documentation systems.</title>
+<date>2014</date>
+<booktitle>In 2014 IEEE International Conference on Software Maintenance and Evolution (ERA Track),</booktitle>
+<pages>511--515</pages>
+<contexts>
+<context position="6691" citStr="[26]" startWordPosition="973" endWordPosition="973">essor operates from the system (e.g., the productions from a parser, the shapes from a visualization). Preprocessor: alters, if needed, the user-supplied query (e.g., fixes typos, removes white spaces, compiles a regular expression) or improves the query by following various heuristics (e.g., based on natural language processing). Query engine: extracts a subset of elements from the data provider based on the preprocessed query (e.g., substring matching, regular expressions, similarity threshold). Sorter (optional): can reorder the filtered results (e.g., based on the frequency of their usage [26]). Hence, a search processor is an object that knows how certain domain concepts related to its target object are reflected in an application and can restrict textual searches to software entities appropriate for those domain concepts. However, a search processor models just an individual query. To model a complete foraging loop, SPOTTER relies on search steps and exploration sessions: a search step captures a step in a foraging loop; an exploration session consists of a series of connected search steps. Each step takes as input an object and loads all processors associated with that object. W</context>
+</contexts>
+<marker>[26]</marker>
+<rawString>B. Spasojević, M. Lungu, and O. Nierstrasz. Overthrowing the tyranny of alphabetical ordering in documentation systems. In 2014 IEEE International Conference on Software Maintenance and Evolution (ERA Track), pages 511–515, Sept. 2014.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Starke</author>
+<author>C Luce</author>
+<author>J Sillito</author>
+</authors>
+<title>Searching and skimming: An exploratory study.</title>
+<date>2009</date>
+<booktitle>In Software Maintenance,</booktitle>
+<pages>157--166</pages>
+<contexts>
+<context position="7775" citStr="[27]" startWordPosition="1151" endWordPosition="1151">es of connected search steps. Each step takes as input an object and loads all processors associated with that object. When a user opens a step or enters a textual query all loaded search processors are executed in parallel. For example, opening a search step on a web server loads processors for searching through exposed services and security roles in use. Search results are displayed using a user interface that follows the guidelines for improving search tools proposed by Starke et al.: (i) skimming through search results, (ii) ranking and grouping of results, and (iii) exploring result sets [27]. To determine the extent to which SPOTTER can enable domain-aware searching we have implemented it in Pharo1, as part of the GToolkit project.2 Due to positive feedback from software developers using our prototype, we have continuously improved it and integrated a stable version into the Pharo 4 release3. Currently SPOTTER supports more than 100 different search processors for 30 different data types, created both by us and by the developers of several frameworks and libraries from the Pharo ecosystem. On average, extending Spotter with a new type of search requires 9 lines of code. We discus</context>
+<context position="29099" citStr="[27]" startWordPosition="4564" endWordPosition="4564">es. Furthermore, processors in the current step can also be filtered based on objects from the previous search steps, not only based on the current object. 3.3 A User Interface for the SPOTTER Model While the SPOTTER model can express a wide range of searches, the user interface (UI) plays a crucial role in the usability of a search tool. Hence, in this section we introduce and discuss a UI design for SPOTTER based on the three guidelines proposed by Starke et al.: (i) group and rank results, (ii) support rapid skimming through result sets, and (iii) enable in-depth exploration of result sets [27]. To illustrate the UI we use a running example in which a developer is interested in exploring callers of methods having a certain annotation. 3.3.1 Grouping and Ranking Results Running all search processors loaded in a step is at the core of the SPOTTER model. This raises the need of displaying multiple heterogenous result sets at once. We address this by displaying each result set using one level trees: the roots of the trees are the processors that return results and the children are the actual results; results are presented in the order retuned by the processor (Figure 2a). 3.3.2 Skimming</context>
+</contexts>
+<marker>[27]</marker>
+<rawString>J. Starke, C. Luce, and J. Sillito. Searching and skimming: An exploratory study. In Software Maintenance, 2009. ICSM 2009. IEEE International Conference on, pages 157–166, Sept. 2009.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

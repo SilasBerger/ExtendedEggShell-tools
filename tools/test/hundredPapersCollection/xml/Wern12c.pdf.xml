@@ -1,0 +1,2640 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.000000">
+<title confidence="0.405009666666667">
+Ownership, Filters and Crossing Handlers
+Ownership, Filters and Crossing Handlers
+Flexible Ownership in Dynamic Languages
+</title>
+<author confidence="0.895036">
+Erwann Wernli Pascal Maerki Oscar Nierstrasz
+</author>
+<affiliation confidence="0.886279">
+Software Composition Group, University of Bern
+</affiliation>
+<email confidence="0.640539">
+scg.unibe.ch
+</email>
+<sectionHeader confidence="0.979386" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.998613833333333">
+Sharing mutable objects can result in broken invariants, exposure of
+internal details, and other subtle bugs. To prevent such issues, it is
+important to control accessibility and aliasing of objects. Dynamic
+Ownership is an effective way to do so, but its owner-as-dominator
+discipline is too restrictive: objects are either accessible or not. We
+propose in this paper to control accessibility and aliasing with more
+flexibility using two mechanisms, filters and crossing handlers. We
+demonstrate the benefits of the flexibility offered by these mecha-
+nisms, and report on the adaptation of a Smalltalk web server with
+our approach. We conclude that our variant of dynamic ownership
+is flexible enough to accommodate an existing design, while at the
+same time constraining it enough to highlight design anomalies.
+</bodyText>
+<sectionHeader confidence="0.977363" genericHeader="categories and subject descriptors">
+Categories and Subject Descriptors D.3.3 [Software]: Program-
+</sectionHeader>
+<category confidence="0.270396">
+ming Languages — Constructs and Features
+</category>
+<sectionHeader confidence="0.98063" genericHeader="keywords">
+Keywords Ownership, Encapsulation
+1. Introduction
+</sectionHeader>
+<bodyText confidence="0.999183197183098">
+Sharing objects is the essence of object-oriented programming,
+but sharing makes it hard to protect the integrity of the system:
+internal information of objects might be revealed, invariants could
+be broken, or thread safety could be compromised. To prevent such
+issues, it is important to control the accessibility of object members,
+and aliasing of objects themselves.
+For instance, a web server might serve multiple web sites com-
+posed of web pages (see Figure 1). Multiple web servers might run
+within the same virtual machine on different ports, and must be iso-
+lated. Aliases to web pages must be forbidden across web sites and
+web servers.
+Dynamic Ownership [17] structures objects in the heap in an
+ownership hierarchy, similarly to ownership types [6, 12, 28],
+and dynamically confines objects within their owner. This policy,
+known in the literature as owner-as-dominator [12], is an effective
+way to control accessibility and aliasing but is however too restric-
+tive: objects are either accessible or not. To regain some flexibility,
+we propose in this paper to structure objects in an ownership hierar-
+chy and to control accessibility and aliasing with two mechanisms,
+filters and crossing handlers.
+[Copyright notice will appear here once ’preprint’ option is removed.]
+Each object defines an implicit ownership boundary. Each own-
+ership boundary has in and out filters that control the interface that
+objects within the boundary expose to objects outside the boundary,
+and inversely. References can cross one or more ownership bound-
+aries and filters are cumulative. An object might see all, or only a
+limited subset of the methods of another object depending on their
+relative position in the tree. Ownership can be transferred at any
+time.
+Reference transfer and ownership transfer are however subject
+to the restriction that all references crossing boundaries inward
+must expose at least one method. Without this restriction, objects
+could be aliased in an unrestricted manner; with this restriction, ob-
+jects that expose no methods outside a given boundary are confined
+within the boundary. This restriction enables a flexible control of
+confinement using filters.
+When a reference transfer that would violate this restriction
+occurs, the system reifies the reference transfer and triggers the
+corresponding crossing handler. By default, the crossing handler
+raises an exception and prevents such aliasing. Crossing handlers
+are reflective hooks that can be modified to take some action to
+return a reference that exposes at least one method.
+Filters and crossing handlers default to the classic owner-as-
+dominator policy. We demonstrate in this paper how both mecha-
+nisms can be configured to relax the restrictive owner-as-dominator
+policy. Filters in particular can be used to expose parts of an aggre-
+gate, or expose a limited view of the objects within an owner. The
+latter case allows read-only objects to be exposed. Crossing han-
+dlers facilitate the systematic implementation of defensive copy-
+ing, which complements well the owner-as-dominator policy. We
+also illustrate other techniques our approach enables.
+We have implemented our variant of dynamic ownership in
+Smalltalk and adapted an available, open-source web server to use
+dynamic ownership. We found filters and crossing handlers easy to
+apply and believe they favor object-orientation, without imposing
+too strong encapsulation constraints.
+In contrast to static ownership type systems, our approach is
+more flexible since it exploits the benefits of dynamic execution
+for ownership transfer and crossing handler. Also, unlike certain
+approaches for dynamic languages [4, 32] our approach does not
+bind policies to references and instead defines the policy to be en-
+forced based on the position of the caller and callee in the owner-
+ship graph, which we believe is more natural.
+The paper is organized as follows: section 2 presents filters and
+crossing handlers and their default behavior; section 3 and section 4
+show examples of filters and crossing handlers; section 5 discusses
+the relationship between secure programming and ownership; sec-
+tion 6 and section 7 define the semantics and implementation of our
+variant of dynamic ownership; section 8 describes the adaptation of
+the web server and section 9 opens further perspectives. We discuss
+related work in section 10 before we conclude in section 11.
+</bodyText>
+<figure confidence="0.982238536585366">
+Draft 1 2013/2/27
+:WebServer
+:Page
+Extranet:SiteIntranet:Site
+:Page
+:List
+:Node :Node
+ownership references
+sites
+homepage homepage
+server
+site
+boundaries
+site
+server
+∅
+∅
+∅
+∅
+∅
+∅
+∅
+∅
+:Page
+data
+{navigation}
+{navigation}
+filters
+{out}
+{in}
+next
+data data
+extranet
+intranet
+head
+pages
+:List
+:Node
+∅
+∅
+head
+</figure>
+<figureCaption confidence="0.999334">
+Figure 1. Example of an ownership topology.
+</figureCaption>
+<figure confidence="0.7617895">
+Page&gt;&gt;inFilters ^ #(navigation)
+Page&gt;&gt;outFilters ^ #(navigation)
+</figure>
+<figureCaption confidence="0.994153">
+Figure 2. Definition of the in and out filters for the Page class
+</figureCaption>
+<figure confidence="0.997406153846154">
+Page&gt;&gt;fullUrl
+&lt;topic:navigation&gt;
+^ site baseUrl , ’/’ , self relativeUrl.
+Site&gt;&gt;baseUrl
+&lt;topic:navigation&gt;
+^ server hostUrl , ’/’ , self name.
+Site&gt;&gt;siteMap
+&lt;topic:navigation&gt;
+^ homepage flattenChildren
+collect: [ :page  |page fullUrl ].
+Server&gt;&gt;hostUrl
+&lt;topic:navigation&gt;
+^ hostname , ’:’ , port.
+</figure>
+<figureCaption confidence="0.756069">
+Figure 3. Methods belonging to the navigation topic
+2. Filters and Crossing Handlers
+</figureCaption>
+<bodyText confidence="0.988021558823529">
+Let us consider the web server in Figure 1. The web server con-
+tains web sites that are composed of web pages. The web server
+has a hostname and port. The web server uses a list to maintain
+references to its two web sites, called “Intranet” and “Extranet”.
+Each web site has a name and a home web page. Web pages are
+instances of Page. Web pages can have subpages; a web page keeps
+references to its subpages in a list. Web pages have URLs that are
+of the form http://host:port/site/relative/path.
+Information hiding is a well established principle and it is im-
+portant to control the accessibility of object members to not break
+system invariants. For instance, to move a page between web sites,
+it is not enough to remove it from one list and add it to another list;
+in addition, the page and subpages must be updated to reference the
+right web site. The list of subpages should be manipulated only via
+methods exposed by the corresponding page.
+Ownership Objects are organized at run-time in an ownership
+tree. In Figure 1, the web server owns the web sites; the web sites
+own the web pages; lists own their corresponding nodes. The nodes
+do not own the objects they reference, though. Each object defines
+an implicit ownership boundary that contains all the objects it owns
+directly and indirectly. The ownership tree is established at run-
+time: when new objects are instantiated, the owner of a new object
+is by default the sender of the new message.
+Filters Methods belong to zero or more topics1, and filters select
+sets of topics. From a given reference, a method is accessible only
+if its topics match the in and out filters of the boundaries crossed
+by the reference. The effect of filters is cumulative. An object can
+access all methods of its parent, children, and siblings. No filter is
+applied in the case of such message sends.
+In Figure 1, the class Page uses the topic navigation as in
+and out filters. Other classes have empty filters. Figure 2 shows
+how filters are technically defined. Let us consider the methods in
+Figure 3 that deal with URL and site map generation. The methods
+belong to the navigation topic2:
+</bodyText>
+<listItem confidence="0.999490333333333">
+• Pages can not access method WebServer&gt;&gt;hostUrl since web
+sites have empty out filters. To render the complete URL, pages
+must use Site&gt;&gt;baseUrl.
+• Nested pages can access method Site&gt;&gt;baseUrl since the out
+filter of pages is navigation.
+• In Site&gt;&gt;siteMap, the site flattens the tree of pages into a list. It
+</listItem>
+<bodyText confidence="0.920295695652174">
+can access method Page&gt;&gt;fullUrl on all pages in the list, since
+the in filter of pages is navigation.
+Crossing Handlers Filters can lead to references that expose no
+methods. Outgoing references (crossing boundaries from inside to
+outside) of this kind are valid, while incoming references (crossing
+boundaries from the outside to the inside) are not. All incoming
+references in the system must expose at least one method. With this
+restriction, hiding all methods of an object expresses confinement.
+This corresponds to the traditional principles of alias protec-
+tion [28]: nodes of a list can reference the data they hold (outgoing
+references), but external (incoming) references to the nodes violate
+encapsulation and must be forbidden. Only the list can reference its
+nodes.
+The event of an invalid reference transfer is reified and the cor-
+responding crossing handler is triggered. By default, the crossing
+handler performs no action and raises an exception. It could how-
+ever be adapted to perform some actions after which the reference
+transfer should be valid. Let us consider Figure 1, which uses the
+default crossing handler:
+• When instances of List, WebServer and Site return a reference
+to objects they own, a crossing handler is fired since their
+in filter is empty. The default crossing handler will raise an
+exception and prevent the reference transfer.
+</bodyText>
+<footnote confidence="0.514855333333333">
+1 This terminology was chosen to avoid confusion with interfaces, cate-
+gories, and protocols
+2Readers unfamiliar with the syntax of Smalltalk might want to read
+</footnote>
+<bodyText confidence="0.910218714285714">
+the code examples aloud and interpret them as normal sentences: An
+invocation to a method named method:with:, using two arguments
+looks like: receiver method: arg1 with: arg2. Other syntactic el-
+ements of Smalltalk are: the dot to separate statements: statement1.
+statement2, and square brackets to denote code blocks or anonymous
+functions: [ statements ].
+Draft 2 2013/2/27
+</bodyText>
+<listItem confidence="0.835312">
+• An instance of Page can return a reference to a subpages, since
+</listItem>
+<bodyText confidence="0.956655">
+Page’s in filter contains the navigation topic.
+Ownership Transfer When an object creates another object, it is
+assigned by default to be the owner of the new object. Since the de-
+fault owner is not always appropriate, ownership can be transferred
+if necessary. Methods Object&gt;&gt;owner and Object&gt;&gt;owner: respec-
+tively query the current owner of an object, or modify it. Ownership
+transfer must preserve the tree structure of the ownership graph, and
+must not result in invalid incoming references.
+</bodyText>
+<subsectionHeader confidence="0.99515">
+2.1 Default Policy
+</subsectionHeader>
+<bodyText confidence="0.996940933333333">
+By default, the set of in filters is empty, as well as the set of out
+filters. With an empty set of in filters, the topics of the methods
+are irrelevant and references to internal objects cannot be passed to
+the outside. The default crossing handler raises an exception when
+a reference to an internal object is passed to the outside, either as
+a return value or as a parameter. This corresponds to the classic
+owner-as-dominator policy [12].
+Let us consider the web server in Figure 1. The list of sites
+is implemented as a list composed of nodes. Since the set of in
+filters is empty, an attempt to return a reference to a node will
+trigger the crossing handler which will raise an exception: the list
+is an aggregate and the nodes are effectively inaccessible outside
+the aggregate. With an empty set of out filters, objects within the
+boundary can only depend on the identity of objects outside the
+boundary.
+</bodyText>
+<sectionHeader confidence="0.792463" genericHeader="method">
+3. Using Filters
+</sectionHeader>
+<bodyText confidence="0.89721175">
+Each object defines an implicit ownership boundary. We first show
+how implicit boundaries can be configured with filters to relax the
+owner-as-dominator policy. We then show how objects with no
+behavior can be added to a design and serve as explicit boundaries.
+</bodyText>
+<subsectionHeader confidence="0.998261">
+3.1 Iterators
+</subsectionHeader>
+<bodyText confidence="0.999727588235294">
+Owner-as-dominator is too restrictive to implement common id-
+ioms like iterators: for efficiency the iterator must be owned by the
+aggregate to have access to internal data, but cannot then be re-
+turned to the outside [27].
+In our approach, filters can easily be used to solve this situation.
+The list owns the iterator, which is then a sibling of the nodes
+and has full access to them. The in filters of the list contain the
+iteration topic, which match methods next and current of the
+iterator, shown in Figure 5. The iterator can be by consequence
+returned outside the list, while nodes cannot.
+Several variants of ownership types using class nesting [6],
+ownership domains [2], relaxed constraints for dynamic aliases3 [12]
+or additional access modifiers [23], have been devised to solve this
+problem. The implementation of dynamic ownership by Gordon
+and Noble [17, 28] relies on a special language feature to “export”
+objects to solve this issue. Filters and crossing handlers support this
+situation, while being general mechanisms.
+</bodyText>
+<subsectionHeader confidence="0.983029">
+3.2 Read-only References
+</subsectionHeader>
+<bodyText confidence="0.9921306">
+With owner-as-dominator, encapsulated objects cannot be returned
+to the outside, which effectively prevents unwanted modification
+to the internal representation from ever happening. When internal
+state must be exposed, a safe alternative is to expose only a limited
+read-only view. This is known as representation observation [7].
+</bodyText>
+<sectionHeader confidence="0.884451" genericHeader="method">
+3 Static aliases correspond to references from instance variables. Dynamic
+</sectionHeader>
+<bodyText confidence="0.982981">
+aliases correspond to references from temporary variables, parameters, and
+return values. Static aliases are allocated in the heap. Dynamic aliases are
+allocated in the stack.
+</bodyText>
+<figure confidence="0.974544727272727">
+:List
+:Node :Node
+∅
+head
+next
+:Iterator
+{iteration}
+current
+ownership references boundaries filters
+{out}
+{in}
+</figure>
+<figureCaption confidence="0.996868">
+Figure 4. Iterators can be returned to the outside since they match
+</figureCaption>
+<figure confidence="0.910903571428571">
+the iteration topic.
+Iterator&gt;&gt;next
+&lt;topic:iteration&gt;
+current := current next.
+Iterator&gt;&gt;current
+&lt;topic:iteration&gt;
+^ current data.
+</figure>
+<figureCaption confidence="0.986262">
+Figure 5. Methods belonging to the iteration topic
+</figureCaption>
+<figure confidence="0.988811222222222">
+:Site
+:Array
+∅
+ownership references boundaries filters
+{out}
+{in}
+Alice:String
+Bob:String
+{read-only}
+</figure>
+<figureCaption confidence="0.998637">
+Figure 6. The site enables a read-only view of the internal array
+</figureCaption>
+<bodyText confidence="0.99951496">
+Let us consider that each web site has several administrators
+that are stored in an array. Administrators can be changed only via
+a special administration page. The ability to obtain an unrestricted
+reference to the internal array from outside the web server would
+imply that the list can be freely changed. To prevent mutations,
+the method Array&gt;&gt;at: is assigned the topic read-only and the in
+filters of the web site matches the read-only topic. The situation is
+shown in Figure 6. This way, objects outside the web site only have
+a limited access to the array.
+Since the effect of filters is cumulative, read-only access will be
+applied transitively to all objects within the boundary. This works
+well for nested and recursive structures, as was shown previously
+when limiting access to the navigation topic for web pages.
+There have been several proposals for read-only references [7].
+For dynamic languages, only few approaches have been proposed.
+Schaerli et al. proposed encapsulation policies [32], which enable
+fine-grained control of the interface objects expose. It however fell
+short in dealing with recursive structures. Arnaud et al. proposed a
+specific solution to this problem with read-only references [4]. In
+both cases, the policy is attached to a reference, not the object itself,
+and references with limited capabilities must be created explicitly.
+We believe these approaches are counter-intuitive since they define
+behavior based on the history of the reference instead of the dy-
+namic context. Using the ownership topology appears to be much
+more natural.
+</bodyText>
+<subsectionHeader confidence="0.999299">
+3.3 Access Modifiers
+</subsectionHeader>
+<bodyText confidence="0.9981646">
+The public and protected access modifiers can be simulated with
+explicit boundaries. Unlike implicit boundaries, explicit boundaries
+correspond to “non-domain” objects with no behavior of their own.
+Each class categorizes its methods into one of two topics public
+and protected, in addition to other existing topics. Each object is
+</bodyText>
+<figure confidence="0.981597">
+Draft 3 2013/2/27
+:Wrapper
+{public}
+{all}
+:Site ∅
+ownership references boundaries filters
+{out}
+{in}
+Alice:String
+Bob:String
+{read-only}
+:Wrapper
+{public}
+{all}
+:Array
+</figure>
+<figureCaption confidence="0.824765">
+Figure 7. Each object is owned by a synthetic wrapper that ex-
+poses only public methods
+</figureCaption>
+<figure confidence="0.9688801">
+∅
+{request}
+:WebServer :WebHandler
+:Request
+:Response
+:Sandbox
+:Connection
+:List
+:Node
+∅
+∅
+∅
+∅
+{request}
+{request}
+ownership static alias
+boundaries filters
+{out}
+{in}
+dyynamic alias
+</figure>
+<figureCaption confidence="0.999811">
+Figure 8. The web server is sandboxed
+</figureCaption>
+<bodyText confidence="0.922828307692308">
+then owned by a “wrapper” which exposes only public methods.
+Figure 7 shows this situation. Instead of owning the array directly,
+the web site owns now the wrapper of the array.
+This strategy implements instance protected methods: an object
+cannot access the protected methods of another object. Whether the
+receiver of a message is self or an alias of self has no impact. The
+strategy is similar to accessibility of instance variables in Smalltalk.
+This contrasts with Ruby and Newspeak. Ruby implements
+class protected methods. Newspeak implements instance protected
+methods, but the lack of consideration of the sender in the method
+lookup algorithm results in different semantics for self sends with
+self or an alias of self 4. Since our approach works with objects
+and not classes, we cannot simulate private.
+</bodyText>
+<subsectionHeader confidence="0.973256">
+3.4 Sandboxing
+</subsectionHeader>
+<bodyText confidence="0.996241272727273">
+An object has full access to its siblings. Therefore, for the sake
+of security, one might want to protect objects within an additional
+explicit boundary. We call this sandboxing.
+Figure 9 shows the design of the web server with the web
+handler, and illustrates two forms of sandboxing. The server is a
+generic infrastructure that abstracts the HTTP protocol. It manages
+instances of Connection, Request and Response classes. HTTP
+request data can be read with Request&gt;&gt;fields and the response
+is produced with Request&gt;&gt;sendResponse:stream: that takes a
+stream and an HTTP response code. The actual treatment of the
+request is delegated to a WebHandler. The handler is an extension
+</bodyText>
+<figure confidence="0.991762136363636">
+4 §5.7 of the specification
+ownership static alias
+boundaries filters
+{out}
+{in}
+dyynamic alias
+:WebServer
+:WebHandler
+:Request
+:Response
+:Sandbox
+:Connection
+:List
+:Node
+∅
+∅
+∅
+∅
+∅
+{request}
+∅
+{request}
+</figure>
+<figureCaption confidence="0.998069">
+Figure 9. The handler is sandboxed
+</figureCaption>
+<figure confidence="0.990925705882353">
+{close}
+∅
+∅
+{request}
+:WebServer
+ownership references (static alias) boundaries filters
+{out}
+{in}
+∅
+∅
+{open}
+:Connection
+:Closed∅ :Open
+openState
+closedState
+:Request
+:Response
+</figure>
+<figureCaption confidence="0.829548">
+Figure 10. A connection can be owned either by the closed or
+open state.
+</figureCaption>
+<bodyText confidence="0.984892625">
+of the web server that implements the desired functionality, e.g.,
+list directories, evaluate templates, etc. The handler is an untrusted
+component from the point of view of the web server.
+Two forms of sandboxing are possible, as shown in Figure 8
+and Figure 9. In one case, the sandbox is around the web server,
+and in the other case it is inside the web server. In both cases, the
+web handler has only access to the request topic, which suffices to
+treat the request and produce the response.
+</bodyText>
+<sectionHeader confidence="0.575192" genericHeader="method">
+3.5 First-class State
+</sectionHeader>
+<bodyText confidence="0.990112086956522">
+In our model, the interface an object exposes depends on its direct
+and indirect owners. While an object cannot “on its own” change
+the interface it exposes, we can very easily do so using first-class
+state [34]. Depending on which state it is owned, the object exposes
+a different set of operations. Ownership transfer is used to perform
+actual state changes.
+Let us imagine that connections in Figure 9 have two states:
+open and closed. We model these settings with three objects, one
+being the connection itself, the two others the first-class states. The
+connection class defines two topics, open and closed. Each first-
+class state exposes one topic. When the connection is owned by the
+open state, it exposes only methods of the open topic. Inversely,
+when it is owned by the closed state, it exposes the closed topic.
+The connection must be owned by either state. Figure 10 shows
+such a situation. Similarly to sandboxing, the web server owns now
+the states instead of the connection. For objects that reference the
+connection, the pattern is transparent.
+Draft 4 2013/2/27
+Note that a useful variant of this technique can be used to
+“freeze” objects [20], after which they are immutable. All that is
+required is to implement a first-class “frozen” state, which filters
+out all mutating methods making the owned object effectively im-
+mutable.
+</bodyText>
+<sectionHeader confidence="0.574372" genericHeader="method">
+4. Using Crossing Handlers
+</sectionHeader>
+<bodyText confidence="0.9835645">
+Examples in the previous chapter relied on the default crossing han-
+dler which raises an exception when an invalid reference transfer
+occurs. We now show how crossing handlers complement filters in
+useful ways.
+</bodyText>
+<subsectionHeader confidence="0.997329">
+4.1 Defensive Copying
+</subsectionHeader>
+<bodyText confidence="0.99510692">
+Let us consider again the problem of the previous chapter with
+the administrators. With owner-as-dominator, encapsulated objects
+cannot be returned to the outside. When internal state must be
+exposed, it is a common practice to return a copy of the object.
+This technique is known as defensive copying [5].
+Let us consider that each web site has several administrators
+whose names are stored in an array. Administrators can be changed
+only via a special administration page. The ability to obtain a refer-
+ence to the internal array from outside the web server would imply
+that the list can be freely changed. A typical implementation of the
+administrator accessor would copy the array before returning it5:
+Site&gt;&gt;administrator
+^ administrator copy.
+Languages do not have mechanisms to express such policies
+cleanly: developers must manually add code for copying objects
+whenever appropriate; copying and non-copying accessors might
+exist side by side and cause confusion; applying the technique
+systematically when modules grow is hard.
+In our approach, the crossing handler can be overridden to im-
+plement the strategy. Whenever an encapsulated object is returned
+to the outside, the crossing handler is triggered. It copies the object
+being referenced and assigns it the sender as owner. The copy is
+then used for the reference transfer that is resumed.
+Site&gt;&gt;handleCrossing: anObject sender: theSender
+^ anObject copy owner: theSender.
+</bodyText>
+<subsectionHeader confidence="0.95771">
+4.2 Remoting
+</subsectionHeader>
+<bodyText confidence="0.9971863">
+With distributed objects, objects can be local and remote. Remote
+invocations have a pass-by-value semantics while local invocations
+have a pass-by-reference semantics. Parameters of remote invoca-
+tions must be serializable. Since the caller does not know whether
+the receiver is local or remote, all parameters must be serializable.
+This prevents useful optimizations, such as using implicit futures
+as parameters.
+Local and remote objects can be organized into distinct bound-
+aries in the ownership hierarchy. The local boundary exposes only
+serializable objects. When a non-serializable object is passed as pa-
+rameter, the crossing handler is fired and can attempt to resolve the
+conflict. For instance, if an implicit future is passed as parameter of
+a remote invocation, the handler can wait until its value is available
+and pass it instead.
+Local&gt;&gt;handleCrossing: aFuture sender: theSender
+^ aFuture value.
+5 This example is intentionally close to Java’s Class.getSigners() bug
+in early versions of the JDK. The method returned the internal array which
+could be tampered with by a malicious client to break security. This bug
+was motivational for ownership types [2].
+</bodyText>
+<subsectionHeader confidence="0.998399">
+4.3 Synchronization
+</subsectionHeader>
+<bodyText confidence="0.998553578947369">
+Threads are objects. Objects that are owned by the threads are
+thread-local. Objects that are not owned by any thread are global.
+Rather than statically controlling thread locality [37], we control
+it dynamically. Threads expose only the sharable objects, i.e.,
+objects with at least one sharable method. Object that do not have
+sharable members cannot be passed to other threads or global
+object since the crossing handler triggers an error.
+To pass thread local objects outside the boundary of the thread,
+they must be adapted first to become sharable. This adaptation
+can be done manually, or automatically in a crossing handler. For
+instance, a crossing handler can synchronize objects when they
+escape their threads by dynamically changing the class of the object
+(e.g., Smalltalk’s become: or changeClassTo:).
+Thread&gt;&gt;handleCrossing: anObject sender: theSender
+^ anObject synchronize.
+Note that the handler is triggered independently of whether the
+receiver would create a static alias of the thread local object or not.
+It is more conservative than tracking whether objects are reachable
+by multiple threads.
+</bodyText>
+<sectionHeader confidence="0.972407" genericHeader="method">
+5. Security
+</sectionHeader>
+<bodyText confidence="0.996783333333333">
+Dynamic ownership can be used to increase the security of open
+systems. We consider in this section the impact of reflection and
+ownership transfer from the perspective of security.
+</bodyText>
+<subsectionHeader confidence="0.993376">
+5.1 Ownership Transfer
+</subsectionHeader>
+<bodyText confidence="0.995983878787879">
+Ownership transfer could be used to bypass the constraints imposed
+by filters and crossing handlers, and thus break encapsulation. In
+Figure 9, the handler is an untrusted component. Ownership is
+leveraged to constrain interactions between the handler and the
+web server to legal scenarios according to the principle of least
+privilege.
+There are essentially two privilege escalation scenarios to con-
+sider: 1) a malicious object changes the owner of an object to obtain
+privileged access to it, and 2) a malicious object changes its owner
+to obtain privileged access to other objects.
+Since ownership transfer is realized via regular message sends,
+it can be limited by using filters to mitigate the first threat: if
+ownership transfer is not exposed with in filters, external objects
+will not be able to transfer ownership of internal objects; if an
+object does not trust one of its internal objects, it can sandbox it (see
+subsection 3.4) and use an out filter to prevent ownership transfers.
+It is preferable to own only objects one trusts. Container objects
+should usually not own their content, e.g., a list does not own the
+data it holds.
+Filters and crossing handlers are however not sufficient to ad-
+dress the second threat. The web handler could for instance make
+the web request its owner. This way, it would be a sibling of the
+web response and have full access to it. It could use this privilege
+to break encryption protocols.
+To prevent such a case, the new candidate owner must accept
+the transfer first. The web request would for instance reject own-
+ership of the web handler. In our approach, different objects can
+specify different ownership transfer policies by overriding the hook
+Object&gt;&gt;acceptOwnershipOf: anObject. Following the principle
+of deny by default, all transfers are by default rejected. For conve-
+nience, the acceptance check is however bypassed if the initiator of
+the transfer is the new owner itself. That is, anObject owner: self
+always succeeds.
+</bodyText>
+<figure confidence="0.9787822">
+Draft 5 2013/2/27
+:WebServer
+∅
+∅
+:PageWithChild
+Extranet:Site
+ownership references
+homepage
+site
+boundaries
+:LeafPage
+child
+filters
+{out}
+{in}
+{reflection}
+∅
+∅
+∅
+server
+</figure>
+<figureCaption confidence="0.951816333333333">
+Figure 11. Reflection can be limited with filters. The dotted refer-
+ence can be obtained only via reflection, since reflection bypasses
+accessibility and aliasing constraints.
+</figureCaption>
+<subsectionHeader confidence="0.989983">
+5.2 Reflection
+</subsectionHeader>
+<bodyText confidence="0.997619068965517">
+Unstratified reflective capabilities to query the class of an object
+(class), invoke methods (perform), and access the state of an
+object (at and at:) defeat encapsulation. For instance, it is possible
+with reflection to inspect the value of a field for which there is no
+accessor.
+Since reflection is also realized via regular message sends, it
+can be limited using filters. If the out filters hide reflective methods
+but the in filters expose them, objects can only reflect on objects
+they own, but not arbitrary objects. This way, a site can for instance
+reflect on all the pages it owns transitively, but not on the page
+of another site. If we want to prevent reflection between siblings,
+sandboxing can be used in addition (see subsection 3.4). This would
+prevent that a web site reflects on another web site.
+The effect of reflective methods is not subject to constraints im-
+posed by filters and crossing handlers: it is possible to reflectively
+invoke a method that would otherwise be inaccessible, and reflec-
+tive accesses to the state of an object bypass crossing handlers. This
+way, features to save and restore a website (including its pages)
+could for instance be implemented using a generic reflection-based
+serializer. If the effects of reflective methods were also constrained,
+many useful patterns that use reflection would not be applicable any
+longer.
+Reflection can be used to break the encapsulation of an object
+at most one level down. Let us consider Figure 11. The web server
+can reflect on the homepage since the web site enables reflection.
+Despite the empty filters of the homepage, the web site can then
+reflectively obtain a reference to the leaf page. It would however
+fail to reflectively invoke methods on the leaf page or inspect its
+state.
+</bodyText>
+<sectionHeader confidence="0.978986" genericHeader="method">
+6. Semantics
+</sectionHeader>
+<bodyText confidence="0.999772666666667">
+We have presented informally how our variant of dynamic owner-
+ship works with several examples. We describe in this section the
+semantics of the mechanisms more precisely, and how they can be
+integrated into a dynamic language. We omit custom crossing han-
+dler and use a set-theoretic approach to formalize the semantics of
+filters and the default crossing handler.
+</bodyText>
+<subsectionHeader confidence="0.997003">
+6.1 Ownership and References
+</subsectionHeader>
+<bodyText confidence="0.9965976">
+The heap is a set of objects O. The world is a special object in
+the heap, world ∈ O. The partial function owner : O → O maps
+an object to its owner, possibly the world. owner is defined for all
+objects except world. The owner function defines a partial order ≺
+over the set of objects:
+</bodyText>
+<equation confidence="0.970846">
+o1 ≺ o2 ⇐⇒ ∃n &gt; 0, ownern(o1) = o2
+</equation>
+<bodyText confidence="0.996889666666667">
+The world is the indirect owner of all objects: o ≺ world, ∀o ∈ O.
+The function references : O → 2O defines the existing references
+(static or dynamic) across objects at a point in time.
+</bodyText>
+<subsectionHeader confidence="0.996183">
+6.2 Topics and Filters
+</subsectionHeader>
+<bodyText confidence="0.9704785">
+For the purpose of explaining our model, we consider that methods
+are attached to objects, not classes. The details of method behavior
+</bodyText>
+<listItem confidence="0.965783428571429">
+is also irrelevant. We model only topics and filters as:
+• methods : O → 2M maps objects to methods names m ∈ M;
+• topics : M → 2T maps method names to topic names t ∈ T ;
+• inFilters : O → 2T maps objects to set of topics that serve as
+in filters;
+• outFilters : O → 2T maps objects to set of topics that serve as
+out filters;
+</listItem>
+<bodyText confidence="0.962847">
+All methods belong to a special topic all ∈ T , that can be used
+in filters.
+If classes and inheritance were considered, rules for topic vari-
+ance in overridden methods would need to be specified. Similarly
+to traditional access modifiers, subclasses can only make methods
+more visible, i.e., they can only add topics to existing methods, not
+remove them.
+</bodyText>
+<subsectionHeader confidence="0.996714">
+6.3 Paths
+</subsectionHeader>
+<bodyText confidence="0.996315">
+The ancestors of an object o, anc(o) = {o′|o ≺ o′}, is the set
+of all direct and indirect owners of that object, up to the world.
+Conversely, the descendants of an object, desc(o) = {o′|o′ ≺ o}
+is the set of all objects that object owns directly or indirectly. The
+depth of an object, d(o) is the cardinality of its set of ancestors,
+</bodyText>
+<equation confidence="0.947096">
+d(o) = |anc(o) |The first common ancestor of two objects is:
+com(o1, o2) = max(anc(o1) ∩ anc(o2))
+</equation>
+<bodyText confidence="0.990044125">
+where max returns the object with the maximum depth. (Since the
+ownership relation forms a tree, there is a unique first common
+ancestor.)
+The outPath from an object a to an object b is the sequence
+of ancestors of a up to the first common ancestor of a and b.
+Respectively, the inPath from an object a to an object b is the
+sequence of descendants starting from the common ancestors of
+a and b down to b:
+</bodyText>
+<equation confidence="0.99771225">
+outPath(a, b) =
+ȷ
+owner(a), outPath(owner(a), b) if d(a) &gt; D
+() if o/w
+inPath(a, b) =
+ȷ
+inPath(a, owner(b)), b if d(b) &gt; D
+() if o/w
+</equation>
+<bodyText confidence="0.75418225">
+where D = 1+depth(com(a, b)). The path from a to b is then the
+sequence inPath(a, b), com(a, b), outPath(a, b). In the ownership
+tree below, outPath(a, e) = (b) and inPath(a, e) = (d). The path
+between a and e is (b, c, d).
+</bodyText>
+<figure confidence="0.968109">
+a
+b
+c
+e
+d
+Draft 6 2013/2/27
+</figure>
+<subsectionHeader confidence="0.888682">
+6.4 Accessibility
+</subsectionHeader>
+<bodyText confidence="0.936994">
+An object a ∈ O can send message m ∈ M to object b ∈ O
+only if the topics of method m match the filters along the path from
+a to b. Formally, the condition can be expressed as a predicate:
+</bodyText>
+<equation confidence="0.946333333333333">
+isAccessible(a, b, m) ⇐⇒ ∀o ∈ outPath(a, b), outFilters(o) ∩
+topics(m) ̸= ∅ and ∀o ∈ inPath(a, b), inFilters(o) ∩ topics(m) ̸=
+∅.
+</equation>
+<bodyText confidence="0.9989415">
+Let us consider Figure 7. If method Array&gt;&gt;at has topics
+read-only and public, it is visible outside of the web site, since
+each boundary exposes either the topic read-only or the topic
+public.
+Note that outPath(a, b) = ∅ and inPath(a, b) = ∅ if a and b are
+parent and child, child and parent, or siblings. In these cases, the
+accessibility condition is trivially satisfied, and both objects can
+access all methods of the other.
+</bodyText>
+<subsectionHeader confidence="0.97325">
+6.5 Validity of References
+</subsectionHeader>
+<bodyText confidence="0.843366555555556">
+A reference is valid if the boundaries that it crosses into expose
+at least one method; the boundaries that it crosses out could hide
+all methods, though. The validity of a reference between two ob-
+jects can be defined as a variation of the accessibility for an indi-
+vidual method: isValidReference(a, b) ⇐⇒ ∃m ∈ M,∀o ∈
+inPath(a, b), inFilters(o) ∩ topics(m) ̸= ∅. Note that unlike
+isAccessible, isValidReference considers only the inPath between
+the two objects. The system must establish only valid references:
+∀a, b ∈ O, b ∈ references(a) ⇒ isValidReference(a, b).
+</bodyText>
+<subsectionHeader confidence="0.942401">
+6.6 Instantiation
+</subsectionHeader>
+<bodyText confidence="0.987271666666667">
+When an object o requests the creation of another object, a new
+object is allocated in the heap O and it is assigned o as its owner.
+A reference from o to the new object is established. Since o and
+the new object are parent and child, o can access all methods of the
+new object. This preserves the partial order ≺ and the consistency
+of the references at run-time.
+</bodyText>
+<subsectionHeader confidence="0.990176">
+6.7 Aliasing
+</subsectionHeader>
+<bodyText confidence="0.998096769230769">
+Since references cover both static and dynamic aliases, passing
+references as parameters or return values of method invocations
+creates new references between objects. The system must establish
+only valid references and prevent invalid reference transfer with an
+error.
+Let us first consider return values. Let s, r, v be respec-
+tively the sender, receiver and return value of a message. The
+reference between r and v is valid, v ∈ references(r) and
+isValidReference(r, v), otherwise an error would have been raised
+previously. The system must ensure that the reference between s
+and v will be valid as well.
+In practice, one does not need to check all boundaries along the
+inPath(s, v) to assess the validity of the reference. Let us define
+</bodyText>
+<equation confidence="0.89636625">
+path truncation ⊖ :
+a, b ⊖ c =
+ȷ
+a if b = c
+</equation>
+<bodyText confidence="0.98732175">
+a, b if o/w
+Since the reference from r to v is known to be valid, it suffices to
+assess whether the boundaries inPath(s, v) ⊖ inPath(r, v) accept
+incoming references to v.
+Figure 12 illustrates the references involved when p1 sends a
+message to s2 that returns a reference to p2.1. The in boundaries
+crossed between p1 and p2.1 are {s2,p2}. The in boundaries be-
+tween s2 and p2.1 are {p2}. The list of boundaries to check cor-
+responds to inPath(p1,p2.1) ⊖ inPath(s2,p2.1), which is {s2} in
+this case. Since s2 has no in filters, the reference to p2.1 exposes
+no method and s2’s crossing handler is fired. The handler raises an
+exception and prevents p1 from obtaining a reference to p2.1.
+</bodyText>
+<figure confidence="0.991681888888889">
+w:WebServer
+s1:Site
+p1:Page
+homepage
+server
+site
+server
+∅
+∅
+extranetintranet
+p2:PageWithChild
+s2:Site
+homepage
+site
+p2.1:LeafPage
+childX
+ownership static alias
+boundaries filters
+{out}
+{in}
+dyynamic alias
+{navigation}
+∅
+{navigation}
+∅
+{navigation}
+{navigation}
+</figure>
+<bodyText confidence="0.998431777777778">
+Figure 12. p1 invokes a method on s2 which returns a reference to
+p2.1. The in boundaries crossed from p1 to p2.1 are {s2,p2}. The
+in boundaries crossed from s2 to p2.1 are {p2}. The set of crossing
+handlers to check corresponds to {s2,p2} ⊖ {p2} = {s2}. s2’s
+crossing handler raises an exception and prevents that p1 obtains
+a reference to p2.1 (reference marked with a X).
+The treatment of parameters is similar. Let s, r, p be respec-
+tively the sender, receiver and the parameter of interest of a mes-
+sage. The reference between s and p is known to be valid. The sys-
+tem must ensure that the reference between r and p will be valid
+as well. In practice, it suffices to assess whether the boundaries
+inPath(r, p) ⊖ inPath(s, p) accept incoming references to p.
+Custom crossing handler could be modeled by rewriting mes-
+sage sends o.m(p∗, . . .) as ⌊o.m(⌈p∗⌉self,o, . . .)⌋self,o. The opera-
+tors ⌊. . .⌋self,o and ⌈. . .⌉self,o perform the checks for the parame-
+ters and return value as described above. They invoke the special
+method handleCrossing ∈ M for each boundary that is crossed
+inside.
+</bodyText>
+<subsectionHeader confidence="0.997216">
+6.8 Ownership Transfer
+</subsectionHeader>
+<bodyText confidence="0.9898079">
+The owner of an objects can be changed at run-time. The ownership
+transfer must preserve the partial order ≺ and the consistency of
+the references at run-time, though. Failure to do so results in a run-
+time error. In practice, this implies that the new owner must not be
+a descendant of the current owner, and that the system must verify
+the validity of all references to descendants of the impacted object.
+Custom ownership transfer policies (see subsection 5.1) could
+be modeled by invoking a special method acceptOwnershipOf ∈
+M on the new candidate owner. If the invocation returns false, the
+transfer is rejected.
+</bodyText>
+<sectionHeader confidence="0.536372" genericHeader="method">
+7. Implementation
+</sectionHeader>
+<bodyText confidence="0.975654555555556">
+We have implemented a prototype of our variant of dynamic own-
+ership in Pharo Smalltalk. Essentially, message sends must be in-
+tercepted to enforce the accessibility defined by filters, and exe-
+cute crossing handlers if necessary. We implemented a compiler
+that transforms the original source and weaves it with additional
+logic, similarly to the technique used by Rivard to implement con-
+tracts [31]. Each call site is rewritten with one level of indirection
+that performs the additional logic, and then sends the original mes-
+sage.
+</bodyText>
+<table confidence="0.229737285714286">
+Draft 7 2013/2/27
+ |myself |
+myself := self.
+self print: anObject. &amp;quot;1&amp;quot;
+myself print: anObject. &amp;quot;2&amp;quot;
+[ :p  |self print: p ] value: anObject. &amp;quot;3&amp;quot;
+[ :p  |myself print: p ] value: anObject. &amp;quot;4&amp;quot;
+</table>
+<figureCaption confidence="0.9273885">
+Figure 13. Message sends with similar intent
+Closures and self The four statements in Figure 13 have the
+</figureCaption>
+<bodyText confidence="0.97634987755102">
+same intent: they send message print: to self with anObject as
+parameter. Self-sends are never filtered. In the first case, the self
+send is statically detected and is not rewritten with one level of
+indirection. The second case uses an alias myself of self. The self-
+send is not detected statically and the message send goes through
+one level of indirection. Cases 3 and 4 illustrate the peculiarities of
+closures. Within closures, self is not bound to the closure itself,
+but to the enclosing object. By consequence, the owner of a closure
+is the owner of the enclosing object. Therefore, despite the fact that
+closures are objects, [...] value: anObject in Figure 13 leads to
+a reference transfer that is within the same boundary. Also, since we
+rewrite the call sites, non-local returns within closures are correctly
+handled.
+Primitive Types Instances of String, SmallInteger, etc. are im-
+mutable singleton objects. Dynamic ownership raises the question
+whether such scalar values can be owned or not. We can argue
+that since they are immutable, so leaking such a value cannot com-
+promise internal invariants of the object and it therefore makes no
+sense to own scalar values. On the other hand, such a value might
+still represent sensitive information that one does not want to ex-
+pose. In this case, similar values need to be treated as distinct ob-
+jects since their owner can differ. For instance, two objects could
+each own an instance of a string with the same value. In our im-
+plementation, these objects are owned by the world and are not
+subject to dynamic accessibility and aliasing checks. This decision
+also applied to nil, the unique instance of UndefinedObject.
+Control Flow Control flow is realized in Smalltalk with message
+sends. The most common control flow messages (ifTrue:ifFalse,
+whileTrue:, etc.) are not rewritten. The same treatment could be
+extended to boolean operators (or: and and:), assuming they are
+not redefined in other classes.
+Ownership Transfer After the owner of an object o has changed,
+the system must ensure that all references to objects within o’s
+implicit boundary are still valid (i.e., expose at least one method).
+In Pharo, Object&gt;&gt;pointersTo performs a linear scan of all objects
+in memory and returns all objects pointing to a particular object.
+First-class Classes Smalltalk has no constructors. Objects are
+instantiated by sending the message new to the corresponding
+classes6. Classes are objects, and constructors are class-side meth-
+ods that act as factories. In our implementation, classes are owned
+by the world. To assign a default owner to a newly instantiated
+object, our implementation intercepts the message new. The de-
+fault owner is the sender of the new message. First-class classes
+pose two challenges to our model. First, constructor methods that
+use self new internally will produce objects owned by the class
+itself. Second, since classes are owned by the world, the construc-
+tor method might not be accessible if a boundary hides it. In our
+implementation, classes are treated in a special way to circumvent
+these problems.
+</bodyText>
+<figure confidence="0.98339485">
+:WebServer :WikiHandler∅
+{request}
+ownership static alias
+boundaries filters
+{out}
+{in}
+dyynamic alias
+:WebPage
+:WebPage
+:Request
+:Response
+:List
+:Array
+∅
+∅
+∅
+∅
+{content}{log}
+{all}
+{all}
+</figure>
+<figureCaption confidence="0.993288">
+Figure 14. Key objects of the web server and their organization in
+</figureCaption>
+<bodyText confidence="0.817921">
+an ownership structure.
+</bodyText>
+<sectionHeader confidence="0.872337" genericHeader="method">
+8. Experiments
+</sectionHeader>
+<bodyText confidence="0.997856333333333">
+We used an existing Smalltalk web server7 to experiment with
+filters and crossing handlers. We report here on our experience
+using these mechanisms.
+</bodyText>
+<subsectionHeader confidence="0.988587">
+8.1 Adapting the Web Server
+</subsectionHeader>
+<bodyText confidence="0.982757411764706">
+Figure 14 shows the key objects of the web server and their or-
+ganization in an ownership structure. The examples in the pre-
+vious chapters were intentionally very similar to the design of
+this web server. The key classes are WebServer, WebRequest and
+WebResponse. Since the web server is only an infrastructure com-
+ponent to handle the HTTP protocol, we implemented in addition
+a minimal WikiHandler to view and edit WebPage. The web server
+uses several classes of the collection hierarchy that we adapted for
+dynamic ownership. The system consists of about 20 classes.
+Ownership and Topics Two topics were mainly used to relax
+ownership: request and content. The first topic allows the web
+server to pass the request to the wiki handler. To process the re-
+quest, the handler first locates the web page for the requested
+URL, and then renders the web page. The request topic enables
+the wiki to read (but not write) attributes of request such as the
+URL. The content topic enables the handle to access nested web
+pages and renders them. The response is owned by the request. It
+cannot be accessed by the web server. Because the web server
+logs entries it creates with WebServer&gt;&gt;logEntryFor: request
+response: response, a third topic log was necessary. Only 14
+methods needed to be annotated, and the effort was low. Note that
+implementing Request&gt;&gt;createLogEntry would be more object
+oriented and wouldn’t need the log topic. In that sense, ownership
+favors object-orientation.
+Factory Methods By default, the owner of an object is the one
+that invoked the corresponding factory method (see section 7).
+This is not always appropriate. For instance, Collection&gt;&gt;select:
+returns a collection that must have the same owner as the original
+collection. Such methods must be adapted to transfer the ownership
+after creation. The new owner accepts the transfer if it comes from
+an object it already owns.
+Cloning Cloning should produce a new object that is indistin-
+guishable from the original one. The implementation in Objectwas
+adapted to produce a copy of the object with the same owner as
+</bodyText>
+<footnote confidence="0.907736333333333">
+6 In Pharo, the primitive method is actually called basicNew
+7Original: http://www.squeaksource.com/WebClient.html Experiment:
+http://ss3.gemstone.com/ss/DynOwn.html
+</footnote>
+<figure confidence="0.411049666666667">
+Draft 8 2013/2/27
+fields
+ |fields |
+</figure>
+<figureCaption confidence="0.656430571428571">
+fields := Dictionary new.
+self getFields associations:[:a |fields add: a].
+self postFields associations:[:a |fields add: a].
+^fields
+Figure 15. This code violates ownership and encapsulation since it
+adds the internal associations of a dictionary to another one without
+copying.
+</figureCaption>
+<figure confidence="0.97939425">
+fields
+ |fields |
+fields := Dictionary new.
+self getFields keysAndValuesDo:
+[:key :val  |fields at: key put: val ].
+self postFields keysAndValuesDo:
+[:key :val  |fields at: key put: val].
+^fields
+</figure>
+<figureCaption confidence="0.8947645">
+Figure 16. The modified code does not access the internal state of
+dictionaries.
+</figureCaption>
+<bodyText confidence="0.95911165">
+the original object. The implementation must be further adapted
+for specific classes. For instance, copying a dictionary copies the
+associations its owns as well. This kind of copying is called sheep
+cloning [21]. In this case, the owner of the copied associations must
+change to be the copied collection. Cloning can be considered to be
+a special factory method.
+Utility Methods Class-side utility methods raise problems of
+ownership transfer similar to constructor methods (see section 7).
+We moved utility methods to a trait that could be reused when-
+ever necessary. Code like WebUtils decodeUrl: aString is then
+rewritten as self decodeUrl: aString. This reformulation avoids
+problematic boundary crossings, and accessibility restrictions. The
+trait contains 7 such methods.
+Ownership Bugs The method WebRequest&gt;&gt;fields in Figure 15
+violates encapsulation and ownership: it adds the internal associa-
+tions of a dictionary to another one without copying. It is the goal
+of dynamic ownership to identity such violations. Figure 16 shows
+the modified code without the aliasing bug. This example shows
+that such code exists and that dynamic ownership can detect design
+anomalies.
+</bodyText>
+<subsectionHeader confidence="0.992247">
+8.2 Performance
+</subsectionHeader>
+<bodyText confidence="0.991058523809524">
+Naturally, enforcing dynamic ownership entails an overhead. The
+dynamic checks entail finding the common owner to two objects,
+and several manipulations of lists. Also, listing and comparing
+topics is expensive. Since our implementation was not optimized
+for performance, the overhead is significant.
+The check for validity of references after an ownership trans-
+fer transfer was disabled during our evaluation of performance.
+Indeed, pointersTo is a very expensive operation that performs a
+linear scan of all objects in memory at the application level. Own-
+ership transfers are occasional, so we can afford some overhead for
+them, but it would require support from the virtual machine in a
+production implementation.
+Certain message sends can be optimized easily: messages sent
+to an alias of self can bypass all dynamic checks; messages sent
+to a child require only checking whether the return value crosses a
+boundary; messages sent to a parent require only checking whether
+the arguments cross a boundary; messages sent to a sibling require
+checking whether the arguments and the return value cross a bound-
+ary, but do not require checking for accessibility of methods.
+self self parent children sibling other
+(static) (dynamic) to children to parent to sibling
+</bodyText>
+<figure confidence="0.583188">
+3 25 28 41 47 390
+3 25 28 41 48 87
+</figure>
+<figureCaption confidence="0.981811">
+Figure 17. Times (ms) for 10’000 executions of the method
+</figureCaption>
+<bodyText confidence="0.650289">
+returnParameter: 42 invoked on itself, a child, its parent, a sib-
+lings, or another object. The method takes a parameter as argument
+and returns it as-is. The first line shows measures when caching of
+accessibility checks is disabled, the second when it is enabled.
+</bodyText>
+<figure confidence="0.999053696808511">
+0
+500
+1000
+1500
+2000
+2500
+3000
+A
+rr
+a
+y
+S
+o
+c
+k
+e
+tS
+tr
+e
+a
+m
+A
+s
+s
+o
+c
+ia
+ti
+o
+n
+O
+rd
+e
+re
+d
+C
+o
+lle
+c
+ti
+o
+n
+W
+e
+b
+R
+e
+q
+u
+e
+s
+t
+D
+ic
+ti
+o
+n
+a
+ry
+W
+ri
+te
+S
+tr
+e
+a
+m
+W
+e
+b
+P
+a
+g
+e
+W
+e
+b
+R
+e
+s
+p
+o
+n
+s
+e
+H
+tm
+lW
+ri
+te
+r
+W
+e
+b
+S
+e
+rv
+e
+r
+R
+e
+a
+d
+S
+tr
+e
+a
+m
+W
+ik
+i
+M
+u
+te
+x
+Id
+e
+n
+ti
+ty
+S
+e
+t
+S
+m
+a
+llI
+n
+te
+g
+e
+r
+B
+y
+te
+S
+tr
+in
+g
+T
+ru
+e
+F
+a
+ls
+e
+S
+o
+c
+k
+e
+t
+U
+n
+d
+e
+fi
+n
+e
+d
+O
+b
+je
+c
+t
+C
+h
+a
+ra
+c
+te
+r
+D
+a
+te
+A
+n
+d
+T
+im
+e
+bypass
+other
+sibling
+parent
+children
+self
+7277 4773
+</figure>
+<figureCaption confidence="0.73184425">
+Figure 18. Distribution of message sends for the key classes (the
+graph is best viewed in color). The majority of interactions between
+objects are message sends that can be optimized.
+Figure 17 shows micro benchmarks for message sends. Static
+</figureCaption>
+<bodyText confidence="0.99360832">
+self sends (i.e., using self) are not rewritten and correspond to the
+performance of the original system. Dynamic self sends (i.e., us-
+ing an alias of self) go through one level of indirection, but bypass
+all dynamic checks. Dynamic self sends indicate that the level of
+indirection itself entails a degradation of factor 8 (25 vs. 3). Mes-
+sages sent to a child, a parent, or a sibling can be partly optimized.
+Messages sent to “other” objects in the ownership structure require
+the execution of expensive logic to enforce the generic accessibility
+and aliasing constraints. The two lines show the times when the re-
+sults of accessibility checks (see subsection 6.4) are cached or not.
+The overhead of the micro benchmarks range between factor 8 (25
+vs. 3) and 29 (87 vs. 3) when caching is enabled. Note that passing
+a different parameter, or more than one parameter, might degrade
+the performance further.
+Figure 18 shows the distribution of message sends across the
+five categories for key classes in the web server. On the left are
+measures for objects subject to dynamic checks. On the right are
+measures for primitive types (see section 7) not subject to dynamic
+checks. We can see that the majority of interactions between objects
+consists of message sends that can be optimized. Macro bench-
+marks of the code of the web server using a mock socket (indepen-
+dent of IO) indicate a degradation of about factor 13 when caching
+of accessibility checks is enabled (204 vs. 2521). This overhead
+must be put in perspective with the overhead of the level of indirec-
+tion itself that is of factor 8.
+</bodyText>
+<sectionHeader confidence="0.978146" genericHeader="method">
+9. Discussion
+</sectionHeader>
+<bodyText confidence="0.993295857142857">
+Our experiments show that our variant of dynamic ownership can
+be effectively put to work to better control aliasing and accessi-
+bility. We found them flexible enough to accommodate an exist-
+ing design, and at the same time constraining enough to highlight
+design anomalies. The system we studied was however small. We
+plan in future work to investigate how our approach scale for bigger
+systems. Here we sketch some improvements that our experiment
+suggests.
+Draft 9 2013/2/27
+Flexibility with Impersonation Constructor methods and class-
+side utility methods are problematic since classes are owned by
+the world. For instance, invoking the copy constructor OrderedCol-
+lection from: aCollection implies that the reference aCollect-
+ion is first transferred to the object OrderCollection. The transfer
+might raise a crossing error. Rather than solving the problem specif-
+ically for classes, we plan to explore impersonation of objects.
+When object r executes an impersonated method in response to
+a message from object s, the owner of r resolves temporary to the
+owner of s for the current execution. Impersonated methods could
+be prefixed for instance with %, e.g.,OrderedCollection&gt;&gt;%new:
+aCollection ^self new withAll: aCollection. To avoid a secu-
+rity breach, the sender must authorize the impersonation when the
+message is sent, e.g.,OrderedCollection %from: aCollection.
+Message sends prefixed with % can be dynamically dispatched to
+regular or impersonated methods; message sends without the prefix
+can be dynamically dispatched only to regular methods.
+This enhancement enables forms of borrowing. Let us consider
+that the web server of Figure 1 uses a serializer to save and restore
+the web pages. If the serializer is a utility class owned by the
+world, it cannot access the web pages. To grant access to the
+web pages, the web server can let the serializer borrow the web
+pages by transferring its ownership to the serializer. This however
+assumes that the serializer accepts the transfer, and will transfer
+the ownership back. Impersonation is more appropriate to grant the
+serializer temporary access to the web pages.
+</bodyText>
+<subsectionHeader confidence="0.36164">
+Improving Performance The dynamic checks follow the path
+</subsectionHeader>
+<bodyText confidence="0.996855866666667">
+between objects in the ownership tree. The identity of objects
+along the path is however not relevant, but only the classes of
+those objects matter to the dynamic checks. Computing information
+about the relative positioning of objects in the ownership tree is
+expensive. Our implementation caches the results of accessibility
+checks, but not the aliasing checks. We plan to investigate how this
+information could be effectively computed and cached in this case
+as well. The cache could be maintained per object, or per call site.
+In tracing VM [16], traces are recorded and compiled to native
+code at run-time. Recorded traces are reused by speculating on
+branching and types. Guards in the traces validate this speculation,
+and if a guard fails, the trace exits. To support dynamic ownership,
+a tracing VM could speculate on the relative positions of objects in
+the ownership tree, in addition to branches and types. Checking the
+validity of references after ownership transfers would also benefit
+from VM support, since it is an expensive operation.
+Note that dynamic ownership can be considered to be a special
+kind of contract. Filters could be turned off during execution of
+production systems for performance reasons. As long as the sys-
+tem does not use custom crossing handlers, they can be turned off
+as well (indeed, if the system uses custom crossing handlers, re-
+moving them might impact the application behavior).
+Composition with Dynamic Topics It is easy to assign topics to
+a class as long as they are used in a specific context. If a class is
+reused in multiple contexts, it might be complicated to assign topics
+that satisfy all contexts. Let us consider Figure 6: the site enables
+a read-only view of the internal array. Let us imagine that the site
+uses another array internally to keep encryption keys. The second
+array will also be read-only since there is no way to distinguish
+from both contexts where arrays are used. The solution to this
+problem would be to have topics per objects: two instances of the
+same class could have different topics. We plan to achieve this with
+rewriting rules attached to individual objects: one array rewrites the
+topic read-only to admin-read-only, the other to key-read-only.
+The web site can decide to expose only admin-read-only. For
+composition, a rewriting rule attached to object o would impact o,
+but also objects owned by o.
+10. Related work
+The risks related to aliasing have been since long recognized [18],
+and our work relates to a large body of research.
+The closest related work is Dynamic Ownership by Gordon and
+Noble [17], which itself built on previous concepts of Dynamic
+Alias Protection [29], Flexible Alias Protection [28] and Ownership
+Monitoring [19]. In contrast to Dynamic Ownership, filters enable
+objects to be accessed outside their owner’s boundary via a possi-
+bly limited interface. Also, we not only check accessibility when
+messages are sent, but also aliasing of objects in return values and
+arguments. Flexible Alias Protection [28] enforces “external inde-
+pendence”, a property which states that internal objects must not
+depend on mutable state of external objects: in Dynamic Owner-
+ship, invocations to external objects raise an exception if state is
+mutated or if a value is returned. Our approach can be used to de-
+fine a topic that is used to categorize such legal methods, but it
+cannot raise an exception if a method is wrongly categorized.
+Ownership Types Since the work by Clarke et al. [14] that in-
+troduced the owners-as-dominators model, many variants of static
+ownership types have been proposed. Similarly to our work, these
+approaches aim at relaxing the owner-as-dominator model to regain
+flexibility. In an extension of their previous work [12], Clark et al.
+enable dynamic aliases to expose internal objects such as iterators.
+Boyapati et al. used inner classes instead [6]. With Ownership Do-
+mains [2, 3], objects can be organized into various domains with
+different access constraints. Universe Types [25] similarly partition
+objects into universes and control references between them. Vari-
+ant Ownership Types [23] parameterized types with an accessibility
+context in addition to the ownership context, thus giving more fine-
+grained control over aliasing. In these mechanisms, a member of a
+class can be accessed if its type can be named. Filters and crossing
+handlers are dynamic. Gradual Ownership[33] combines static and
+dynamic typing. Dynamic checks are introduced for code that has
+not been statically typed. Other variants of ownership types exist
+which address other aspects of aliasing, for instance uniqueness of
+references [8, 30], thread-locality [37] or data transfer between ac-
+tors [13]. Our examples of crossing handlers drew inspiration from
+the two latter works.
+Limited Interfaces In addition to accessibility, Variant Owner-
+ship Types [23] can specify whether references are writable or read-
+only. Universe Types [25] enforce the owner-as-modifier discipline,
+where read-only references across universes are allowed, but only
+the owner of an object can modify it. Our approach can encode
+the owner-as-modifier discipline by exposing a special read-only
+topic. Several languages can define write-once variables, e.g.,
+C++’s const and Java’s final keywords. Used with references,
+const does not provide transitive read-only access. Schaerli et al.
+proposed encapsulation policies [32], which enable policies to be
+bound to references, but does not consider transitivity. There have
+been several proposals of type systems that support transitive read-
+only references [7, 38] (independently of ownership). Arnaud et al.
+proposed a variant of transitive read-only references for dynamic
+languages [4]. Filters are flexible and able to expose limited inter-
+faces; an interface with only read-only methods is just a special
+case. In contrast to deep read-only references, read-only access is
+only transitive to objects within the boundary. It can be considered
+as a benefit, or a limitation depending on the context. Our approach
+is syntactic and it assumes that methods have been correctly cat-
+egorized in the read-only topic by developers. Traditional access
+modifiers can be used to limit interfaces. Modifiers can implement
+class privacy or object privacy. Our approach implements object
+privacy, which was shown to be more intuitive [36]. Arbitrary ac-
+cessibility rules can be easily implemented with techniques that
+reify message sends, such as composition filters [1]. The Law of
+Draft 10 2013/2/27
+Demeter [22] is a design principle which dissuades invocations to
+objects returned by previous invocations. Organizing the design
+in layers, where objects in a given layer can only call objects in
+the layer below, is a way to enforce the law. The law of Demeter,
+layers, and confinement with ownership are design principles that
+prevent interaction between distant entities.
+Security Encapsulation controls accesses from external to inter-
+nal objects; secure programming controls accesses from an object
+to its external environment. Global namespaces compromise secu-
+rity since accesses to global namespaces cannot be controlled. In
+Java, access to the class namespace can be controlled with class
+loaders and security managers, which are mechanisms outside of
+the base language. In the object-capability model [24], objects can
+only send messages to objects that have been obtained previously
+with message sends. In this model, global namespaces and reflec-
+tion are loopholes. Filters can be used to limit access to external re-
+sources, since filters work in both in and out directions. To control
+interactions between modules, objects can be wrapped into mem-
+branes [15, 24, 35], which transitively impose revocability on all
+references exchanged via the membrane, both inward and outward.
+When the membrane is revoked, the wrapped module is guaran-
+teed to become eligible for garbage collection; revoked references
+raise exceptions when used. Ownership boundaries resemble mem-
+branes that intercept outward transfer of references. Newspeak is a
+language that follows the object-capability model. In Newspeak,
+external dependencies must be provided when an object is cre-
+ated [10]; there is no global namespace, only nested virtual classes.
+Also, Newspeak decouples reflection from classes via mirrors [9].
+Tribal Ownership [11] exploits class nesting to define an implicit
+ownership structure for objects. From the perspective of security,
+ownership transfer must be limited. Ownership transfer is hard to
+support in static type systems [26], but very natural in a dynamic
+approach.
+</bodyText>
+<sectionHeader confidence="0.588289" genericHeader="conclusions">
+11. Conclusions
+</sectionHeader>
+<bodyText confidence="0.979166702702703">
+We have proposed a variant of dynamic ownership with filters and
+crossing handlers. With these mechanisms, the owner-as-dominator
+policy can be relaxed to control the sharing of internal objects in a
+flexible way.
+We have illustrated our approach with several examples and
+experimented with filters and crossing handlers by adapting a web
+server. Our conclusions are the following:
+1. Filters and crossing handlers can be effectively put to work to
+better control aliasing and accessibility. We found our variant
+of dynamic ownership flexible enough to accommodate an ex-
+isting design, and at the same time constraining enough to high-
+light design anomalies.
+2. The strength of our approach lies in the cumulative effect of fil-
+ters. Filters at various boundaries compose naturally to define
+the specific interface that is exposed to another object. Bound-
+aries can filter independent concerns.
+3. Objects can be easily confined, not only within their direct
+owner, but also within indirect owners. Outside of their direct
+owner, only limited interfaces are exposed. Object interactions
+tend to be local with respect to the position of objects in the
+tree, i.e., interactions between distant objects in the tree are rare.
+Filters fit well with this locality.
+4. Filters have a wider applicability than crossing handlers. Cross-
+ing handlers can however facilitate the implementation of
+certain patterns, and follow the tradition of providing re-
+flective hooks in dynamic languages, such as Smalltalk’s
+doesNotUnderstand:.
+5. Since accessibility is defined based on the relative positions of
+objects in the ownership tree, ownership transfer require ap-
+proval by the new owner or it might introduce an encapsulation
+breach.
+6. Reflection can be scoped and limited with filters.
+We believe the our model is easy to use and promotes object-
+orientation. We plan to investigate how the overhead of our im-
+plementation can be reduced, possibly by using additional caches.
+Also, we plan to investigate how filters scale to larger code base
+and introduce topic rewriting to avoid collision in topic names.
+</bodyText>
+<sectionHeader confidence="0.847144" genericHeader="acknowledgments">
+Acknowledgment
+</sectionHeader>
+<bodyText confidence="0.926373">
+We would like to thank Jorge Ressia, Marcus Denker, and Andrea
+Caracciolo for reviews of earlier drafts of our paper. We grate-
+fully acknowledge the financial support of the Swiss National Sci-
+ence Foundation for the project “Synchronizing Models and Code”
+(SNF Project No. 200020-131827, Oct. 2010 - Sept. 2012).
+</bodyText>
+<sectionHeader confidence="0.927979" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.998661412121212">
+[1] M. Aksit, K. Wakita, J. Bosch, L. Bergmans, and A. Yonezawa. Ab-
+stracting object interactions using composition filters. In Proceedings
+of the Workshop on Object-Based Distributed Programming, ECOOP
+’93, pages 152–184, London, UK, UK, 1994. Springer-Verlag. ISBN
+3-540-57932-X. URL http://dl.acm.org/citation.cfm?id=
+646775.705734.
+[2] J. Aldrich and C. Chambers. Ownership domains: Separating aliasing
+policy from mechanism. In ECOOP, pages 1–25, 2004.
+[3] J. Aldrich, C. Chambers, and D. Notkin. Archjava: connecting soft-
+ware architecture to implementation. In ICSE, pages 187–197, 2002.
+[4] J.-B. Arnaud, M. Denker, S. Ducasse, D. Pollet, A. Bergel, and
+M. Suen. Read-only execution for dynamic languages. In Pro-
+ceedings of the 48th International Conference on Objects, Models,
+Components, Patterns (TOOLS EUROPE’10). LNCS Springer Ver-
+lag, July 2010. URL http://www.bergel.eu/download/papers/
+Berg10eReadOnly.pdf.
+[5] J. Bloch. Effective Java (2nd Edition) (The Java Series). Prentice
+Hall PTR, Upper Saddle River, NJ, USA, 2 edition, 2008. ISBN
+0321356683, 9780321356680.
+[6] C. Boyapati, B. Liskov, and L. Shrira. Ownership types for object
+encapsulation. SIGPLAN Not., 38(1):213–223, 2003. ISSN 0362-
+1340. doi: http://doi.acm.org/10.1145/640128.604156.
+[7] J. Boyland. Why we should not add readonly to Java (yet. In In FTfJP,
+pages 5–29, 2005.
+[8] J. Boyland, J. Noble, and W. Retert. Capabilities for sharing: A
+generalisation of uniqueness and read-only. In Proceedings of the 15th
+European Conference on Object-Oriented Programming, ECOOP ’01,
+pages 2–27, London, UK, UK, 2001. Springer-Verlag. ISBN 3-540-
+42206-4. URL http://dl.acm.org/citation.cfm?id=646158.
+680004.
+[9] G. Bracha and D. Ungar. Mirrors: design principles for meta-level
+facilities of object-oriented programming languages. SIGPLAN Not.,
+39:331–344, October 2004. ISSN 0362-1340. doi: http://doi.acm.org/
+10.1145/1035292.1029004. URL http://doi.acm.org/10.1145/
+1035292.1029004.
+[10] G. Bracha, P. von der Ahé, V. Bykov, Y. Kashai, W. Maddox, and
+E. Miranda. Modules as objects in Newspeak. In ECOOP, pages
+405–428, 2010.
+[11] N. Cameron, J. Noble, and T. Wrigstad. Tribal ownership. In Pro-
+ceedings of the ACM international conference on Object oriented pro-
+gramming systems languages and applications, OOPSLA ’10, pages
+618–633, New York, NY, USA, 2010. ACM. ISBN 978-1-4503-0203-
+6. doi: http://doi.acm.org/10.1145/1869459.1869510. URL http:
+//doi.acm.org/10.1145/1869459.1869510.
+[12] D. Clarke and S. Drossopoulou. Ownership, encapsulation and the
+disjointness of type and effect. SIGPLAN Not., 37(11):292–310,
+Draft 11 2013/2/27
+Nov. 2002. ISSN 0362-1340. doi: 10.1145/583854.582447. URL
+http://doi.acm.org/10.1145/583854.582447.
+[13] D. Clarke, T. Wrigstad, J. Östlund, and E. B. Johnsen. Minimal own-
+ership for active objects. In Proceedings of the 6th Asian Symposium
+on Programming Languages and Systems, APLAS ’08, pages 139–
+154, Berlin, Heidelberg, 2008. Springer-Verlag. ISBN 978-3-540-
+89329-5. doi: http://dx.doi.org/10.1007/978-3-540-89330-1 11. URL
+http://dx.doi.org/10.1007/978-3-540-89330-1_11.
+[14] D. G. Clarke, J. M. Potter, and J. Noble. Ownership types for flexible
+alias protection. SIGPLAN Not., 33(10):48–64, Oct. 1998. ISSN 0362-
+1340. doi: 10.1145/286942.286947. URL http://doi.acm.org/
+10.1145/286942.286947.
+[15] T. V. Cutsem and M. S. Miller. On the design of the ECMAScript
+reflection api. Technical report, Vrije Universiteit Brussel, 2012.
+[16] A. Gal, B. Eich, M. Shaver, D. Anderson, D. Mandelin, M. R.
+Haghighat, B. Kaplan, G. Hoare, B. Zbarsky, J. Orendorff, J. Ru-
+derman, E. W. Smith, R. Reitmaier, M. Bebenita, M. Chang, and
+M. Franz. Trace-based just-in-time type specialization for dynamic
+languages. In Proceedings of the 2009 ACM SIGPLAN conference on
+Programming language design and implementation, PLDI ’09, pages
+465–478, New York, NY, USA, 2009. ACM. ISBN 978-1-60558-392-
+1. doi: 10.1145/1542476.1542528. URL http://doi.acm.org/10.
+1145/1542476.1542528.
+[17] D. Gordon and J. Noble. Dynamic ownership in a dynamic language.
+In Proceedings of the 2007 symposium on Dynamic languages, DLS
+’07, pages 41–52, New York, NY, USA, 2007. ACM. ISBN 978-
+1-59593-868-8. doi: http://doi.acm.org/10.1145/1297081.1297090.
+URL http://doi.acm.org/10.1145/1297081.1297090.
+[18] J. Hogg, D. Lea, A. Wills, D. deChampeaux, and R. Holt. The Geneva
+convention on the treatment of object aliasing. SIGPLAN OOPS
+Mess., 3(2):11–16, Apr. 1992. ISSN 1055-6400. doi: 10.1145/130943.
+130947. URL http://doi.acm.org/10.1145/130943.130947.
+[19] S. Kent and I. Maung. Encapsulation and aggregation. In In TOOLS
+Pacific 18. Prentice Hall, 1995.
+[20] K. R. Leino, P. Müller, and A. Wallenburg. Flexible immutability with
+frozen objects. In VSTTE ’08: Proceedings of the 2nd international
+conference on Verified Software: Theories, Tools, Experiments, pages
+192–208, Berlin, Heidelberg, 2008. Springer-Verlag. ISBN 978-3-
+540-87872-8. doi: http://dx.doi.org/10.1007/978-3-540-87873-5 17.
+[21] P. Li, N. Cameron, and J. Noble. Cloning in ownership. In Pro-
+ceedings of the ACM international conference companion on Object
+oriented programming systems languages and applications compan-
+ion, SPLASH ’11, pages 63–66, New York, NY, USA, 2011. ACM.
+ISBN 978-1-4503-0942-4. doi: 10.1145/2048147.2048175. URL
+http://doi.acm.org/10.1145/2048147.2048175.
+[22] K. J. Lieberherr and I. M. Holland. Assuring good style for object-
+oriented programs. IEEE Softw., 6(5):38–48, Sept. 1989. ISSN
+0740-7459. doi: 10.1109/52.35588. URL http://dx.doi.org/10.
+1109/52.35588.
+[23] Y. Lu and J. Potter. On ownership and accessibility. In In ECOOP’06,
+volume 4067 of LNCS, pages 99–123. Springer-Verlag, 2006.
+[24] M. S. Miller and J. S. Shapiro. Paradigm Regained: Abstraction
+Mechanisms for Access Control. LECTURE NOTES IN COMPUTER
+SCIENCE, pages 224–242, 2003.
+[25] P. Müller and A. Poetzsch-Heffter. Universes: A type system for con-
+trolling representation exposure. In A. Poetzsch-Heffter and J. Meyer,
+editors, Programming Languages and Fundamentals of Programming,
+pages 131–140. Fernuniversität Hagen, 1999. Technical Report 263.
+[26] P. Müller and A. Rudich. Ownership transfer in universe types.
+SIGPLAN Not., 42(10):461–478, Oct. 2007. ISSN 0362-1340. doi:
+10.1145/1297105.1297061. URL http://doi.acm.org/10.1145/
+1297105.1297061.
+[27] J. Noble. Iterators and encapsulation. In Proceedings of the Technol-
+ogy of Object-Oriented Languages and Systems (TOOLS 33), pages
+431–, Washington, DC, USA, 2000. IEEE Computer Society. ISBN
+0-7695-0731-X. URL http://dl.acm.org/citation.cfm?id=
+832260.833174.
+[28] J. Noble, J. Vitek, and J. Potter. Flexible alias protection. In EC-
+COP ’98: Proceedings of the 12th European Conference on Object-
+Oriented Programming, pages 158–185, London, UK, 1998. Springer-
+Verlag. ISBN 3-540-64737-6.
+[29] J. Noble, D. Clarke, and J. Potter. Object ownership for dynamic alias
+protection. In In Proceedings TOOLS ’99, pages 176–187. Society
+Press, 1999.
+[30] J. Östlund, T. Wrigstad, D. Clarke, and B. Åkerblom. Owner-
+ship, uniqueness, and immutability. In R. F. Paige and B. Meyer,
+editors, Objects, Components, Models and Patterns, 46th Interna-
+tional Conference, TOOLS EUROPE 2008, volume 11 of Lecture
+Notes in Business Information Processing, pages 178–197. Springer,
+2008. ISBN 978-3-540-69823-4. doi: http://dx.doi.org/10.1007/
+978-3-540-69824-1 11.
+[31] Rivard. Smalltalk: a reflective language. In Proceedings of Reflec-
+tion’96, 1996.
+[32] N. Schärli, A. P. Black, and S. Ducasse. Object-oriented encapsulation
+for dynamically typed languages. SIGPLAN Not., 39(10):130–149,
+Oct. 2004. ISSN 0362-1340. doi: 10.1145/1035292.1028988. URL
+http://doi.acm.org/10.1145/1035292.1028988.
+[33] I. Sergey and D. Clarke. Gradual ownership types. In ESOP, pages
+579–599, 2012.
+[34] J. Sunshine, K. Naden, S. Stork, J. Aldrich, and E. Tanter. First-
+class state change in Plaid. In Proceedings of the 2011 ACM
+international conference on Object oriented programming systems
+languages and applications, OOPSLA ’11, pages 713–732, New
+York, NY, USA, 2011. ACM. ISBN 978-1-4503-0940-0. doi:
+10.1145/2048066.2048122. URL http://doi.acm.org/10.1145/
+2048066.2048122.
+[35] T. Van Cutsem and M. S. Miller. Proxies: design principles for
+robust object-oriented intercession apis. SIGPLAN Not., 45(12):59–
+72, Oct. 2010. ISSN 0362-1340. doi: 10.1145/1899661.1869638.
+URL http://doi.acm.org/10.1145/1899661.1869638.
+[36] J. Voigt, W. Irwin, and N. Churcher. Intuitiveness of class and object
+encapsulation. In 6th International Conference on Information Tech-
+nology and Applications, 2009.
+[37] T. Wrigstad, F. Pizlo, F. Meawad, L. Zhao, and J. Vitek. Loci: Simple
+thread-locality for java. In Proceedings of the 23rd European Con-
+ference on ECOOP 2009 — Object-Oriented Programming, Genoa,
+pages 445–469, Berlin, Heidelberg, 2009. Springer-Verlag. ISBN 978-
+3-642-03012-3. doi: 10.1007/978-3-642-03013-0 21. URL http:
+//dx.doi.org/10.1007/978-3-642-03013-0_21.
+[38] Y. Zibin, A. Potanin, M. Ali, S. Artzi, A. Kie, un, and M. D. Ernst.
+Object and reference immutability using java generics. In Proceed-
+ings of the the 6th joint meeting of the European software engineer-
+ing conference and the ACM SIGSOFT symposium on The founda-
+tions of software engineering, ESEC-FSE ’07, pages 75–84, New
+York, NY, USA, 2007. ACM. ISBN 978-1-59593-811-4. doi:
+10.1145/1287624.1287637. URL http://doi.acm.org/10.1145/
+1287624.1287637.
+Draft 12 2013/2/27
+</reference>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.142953">
+<title confidence="0.999519333333333">Ownership, Filters and Crossing Handlers Ownership, Filters and Crossing Handlers Flexible Ownership in Dynamic Languages</title>
+<author confidence="0.994547">Erwann Wernli Pascal Maerki Oscar Nierstrasz</author>
+<affiliation confidence="0.994004">Software Composition Group, University of Bern</affiliation>
+<email confidence="0.939916">scg.unibe.ch</email>
+<abstract confidence="0.999909461538461">Sharing mutable objects can result in broken invariants, exposure of internal details, and other subtle bugs. To prevent such issues, it is important to control accessibility and aliasing of objects. Dynamic Ownership is an effective way to do so, but its owner-as-dominator discipline is too restrictive: objects are either accessible or not. We propose in this paper to control accessibility and aliasing with more flexibility using two mechanisms, filters and crossing handlers. We demonstrate the benefits of the flexibility offered by these mechanisms, and report on the adaptation of a Smalltalk web server with our approach. We conclude that our variant of dynamic ownership is flexible enough to accommodate an existing design, while at the same time constraining it enough to highlight design anomalies.</abstract>
+<note confidence="0.321362">Categories and Subject Descriptors D.3.3 [Software]: Program-</note>
+<title confidence="0.618969">ming Languages — Constructs and Features</title>
+<intro confidence="0.533448">Keywords Ownership, Encapsulation</intro>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>M Aksit</author>
+<author>K Wakita</author>
+<author>J Bosch</author>
+<author>L Bergmans</author>
+<author>A Yonezawa</author>
+</authors>
+<title>Abstracting object interactions using composition filters.</title>
+<date>1994</date>
+<booktitle>In Proceedings of the Workshop on Object-Based Distributed Programming, ECOOP ’93,</booktitle>
+<pages>152--184</pages>
+<location>London, UK, UK,</location>
+<note>Springer-Verlag. ISBN 3-540-57932-X. URL http://dl.acm.org/citation.cfm?id=</note>
+<contexts>
+<context position="58608" citStr="[1]" startWordPosition="9605" endWordPosition="9605">s, read-only access is only transitive to objects within the boundary. It can be considered as a benefit, or a limitation depending on the context. Our approach is syntactic and it assumes that methods have been correctly categorized in the read-only topic by developers. Traditional access modifiers can be used to limit interfaces. Modifiers can implement class privacy or object privacy. Our approach implements object privacy, which was shown to be more intuitive [36]. Arbitrary accessibility rules can be easily implemented with techniques that reify message sends, such as composition filters [1]. The Law of Draft 10 2013/2/27 Demeter [22] is a design principle which dissuades invocations to objects returned by previous invocations. Organizing the design in layers, where objects in a given layer can only call objects in the layer below, is a way to enforce the law. The law of Demeter, layers, and confinement with ownership are design principles that prevent interaction between distant entities. Security Encapsulation controls accesses from external to internal objects; secure programming controls accesses from an object to its external environment. Global namespaces compromise securit</context>
+</contexts>
+<marker>[1]</marker>
+<rawString>M. Aksit, K. Wakita, J. Bosch, L. Bergmans, and A. Yonezawa. Abstracting object interactions using composition filters. In Proceedings of the Workshop on Object-Based Distributed Programming, ECOOP ’93, pages 152–184, London, UK, UK, 1994. Springer-Verlag. ISBN 3-540-57932-X. URL http://dl.acm.org/citation.cfm?id= 646775.705734.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Aldrich</author>
+<author>C Chambers</author>
+</authors>
+<title>Ownership domains: Separating aliasing policy from mechanism.</title>
+<date>2004</date>
+<booktitle>In ECOOP,</booktitle>
+<pages>1--25</pages>
+<contexts>
+<context position="13253" citStr="[2]" startWordPosition="2124" endWordPosition="2124">tors: for efficiency the iterator must be owned by the aggregate to have access to internal data, but cannot then be returned to the outside [27]. In our approach, filters can easily be used to solve this situation. The list owns the iterator, which is then a sibling of the nodes and has full access to them. The in filters of the list contain the iteration topic, which match methods next and current of the iterator, shown in Figure 5. The iterator can be by consequence returned outside the list, while nodes cannot. Several variants of ownership types using class nesting [6], ownership domains [2], relaxed constraints for dynamic aliases3 [12] or additional access modifiers [23], have been devised to solve this problem. The implementation of dynamic ownership by Gordon and Noble [17, 28] relies on a special language feature to “export” objects to solve this issue. Filters and crossing handlers support this situation, while being general mechanisms. 3.2 Read-only References With owner-as-dominator, encapsulated objects cannot be returned to the outside, which effectively prevents unwanted modification to the internal representation from ever happening. When internal state must be expose</context>
+<context position="23899" citStr="[2]" startWordPosition="3777" endWordPosition="3777">en a non-serializable object is passed as parameter, the crossing handler is fired and can attempt to resolve the conflict. For instance, if an implicit future is passed as parameter of a remote invocation, the handler can wait until its value is available and pass it instead. Local&gt;&gt;handleCrossing: aFuture sender: theSender ^ aFuture value. 5 This example is intentionally close to Java’s Class.getSigners() bug in early versions of the JDK. The method returned the internal array which could be tampered with by a malicious client to break security. This bug was motivational for ownership types [2]. 4.3 Synchronization Threads are objects. Objects that are owned by the threads are thread-local. Objects that are not owned by any thread are global. Rather than statically controlling thread locality [37], we control it dynamically. Threads expose only the sharable objects, i.e., objects with at least one sharable method. Object that do not have sharable members cannot be passed to other threads or global object since the crossing handler triggers an error. To pass thread local objects outside the boundary of the thread, they must be adapted first to become sharable. This adaptation can be </context>
+<context position="56032" citStr="[2, 3]" startWordPosition="9220" endWordPosition="9221">o define a topic that is used to categorize such legal methods, but it cannot raise an exception if a method is wrongly categorized. Ownership Types Since the work by Clarke et al. [14] that introduced the owners-as-dominators model, many variants of static ownership types have been proposed. Similarly to our work, these approaches aim at relaxing the owner-as-dominator model to regain flexibility. In an extension of their previous work [12], Clark et al. enable dynamic aliases to expose internal objects such as iterators. Boyapati et al. used inner classes instead [6]. With Ownership Domains [2, 3], objects can be organized into various domains with different access constraints. Universe Types [25] similarly partition objects into universes and control references between them. Variant Ownership Types [23] parameterized types with an accessibility context in addition to the ownership context, thus giving more finegrained control over aliasing. In these mechanisms, a member of a class can be accessed if its type can be named. Filters and crossing handlers are dynamic. Gradual Ownership[33] combines static and dynamic typing. Dynamic checks are introduced for code that has not been statica</context>
+</contexts>
+<marker>[2]</marker>
+<rawString>J. Aldrich and C. Chambers. Ownership domains: Separating aliasing policy from mechanism. In ECOOP, pages 1–25, 2004.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Aldrich</author>
+<author>C Chambers</author>
+<author>D Notkin</author>
+</authors>
+<title>Archjava: connecting software architecture to implementation.</title>
+<date>2002</date>
+<booktitle>In ICSE,</booktitle>
+<pages>187--197</pages>
+<contexts>
+<context position="56032" citStr="[2, 3]" startWordPosition="9220" endWordPosition="9221">o define a topic that is used to categorize such legal methods, but it cannot raise an exception if a method is wrongly categorized. Ownership Types Since the work by Clarke et al. [14] that introduced the owners-as-dominators model, many variants of static ownership types have been proposed. Similarly to our work, these approaches aim at relaxing the owner-as-dominator model to regain flexibility. In an extension of their previous work [12], Clark et al. enable dynamic aliases to expose internal objects such as iterators. Boyapati et al. used inner classes instead [6]. With Ownership Domains [2, 3], objects can be organized into various domains with different access constraints. Universe Types [25] similarly partition objects into universes and control references between them. Variant Ownership Types [23] parameterized types with an accessibility context in addition to the ownership context, thus giving more finegrained control over aliasing. In these mechanisms, a member of a class can be accessed if its type can be named. Filters and crossing handlers are dynamic. Gradual Ownership[33] combines static and dynamic typing. Dynamic checks are introduced for code that has not been statica</context>
+</contexts>
+<marker>[3]</marker>
+<rawString>J. Aldrich, C. Chambers, and D. Notkin. Archjava: connecting software architecture to implementation. In ICSE, pages 187–197, 2002.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J-B Arnaud</author>
+<author>M Denker</author>
+<author>S Ducasse</author>
+<author>D Pollet</author>
+<author>A Bergel</author>
+<author>M Suen</author>
+</authors>
+<title>Read-only execution for dynamic languages.</title>
+<date>2010</date>
+<booktitle>In Proceedings of the 48th International Conference on Objects, Models, Components, Patterns (TOOLS EUROPE’10). LNCS</booktitle>
+<publisher>Springer Verlag,</publisher>
+<note>URL http://www.bergel.eu/download/papers/ Berg10eReadOnly.pdf.</note>
+<contexts>
+<context position="4851" citStr="[4, 32]" startWordPosition="730" endWordPosition="731">r-as-dominator policy. We also illustrate other techniques our approach enables. We have implemented our variant of dynamic ownership in Smalltalk and adapted an available, open-source web server to use dynamic ownership. We found filters and crossing handlers easy to apply and believe they favor object-orientation, without imposing too strong encapsulation constraints. In contrast to static ownership type systems, our approach is more flexible since it exploits the benefits of dynamic execution for ownership transfer and crossing handler. Also, unlike certain approaches for dynamic languages [4, 32] our approach does not bind policies to references and instead defines the policy to be enforced based on the position of the caller and callee in the ownership graph, which we believe is more natural. The paper is organized as follows: section 2 presents filters and crossing handlers and their default behavior; section 3 and section 4 show examples of filters and crossing handlers; section 5 discusses the relationship between secure programming and ownership; section 6 and section 7 define the semantics and implementation of our variant of dynamic ownership; section 8 describes the adaptation</context>
+<context position="15970" citStr="[4]" startWordPosition="2528" endWordPosition="2528">cess will be applied transitively to all objects within the boundary. This works well for nested and recursive structures, as was shown previously when limiting access to the navigation topic for web pages. There have been several proposals for read-only references [7]. For dynamic languages, only few approaches have been proposed. Schaerli et al. proposed encapsulation policies [32], which enable fine-grained control of the interface objects expose. It however fell short in dealing with recursive structures. Arnaud et al. proposed a specific solution to this problem with read-only references [4]. In both cases, the policy is attached to a reference, not the object itself, and references with limited capabilities must be created explicitly. We believe these approaches are counter-intuitive since they define behavior based on the history of the reference instead of the dynamic context. Using the ownership topology appears to be much more natural. 3.3 Access Modifiers The public and protected access modifiers can be simulated with explicit boundaries. Unlike implicit boundaries, explicit boundaries correspond to “non-domain” objects with no behavior of their own. Each class categorizes </context>
+<context position="57839" citStr="[4]" startWordPosition="9485" endWordPosition="9485"> owner-as-modifier discipline by exposing a special read-only topic. Several languages can define write-once variables, e.g., C++’s const and Java’s final keywords. Used with references, const does not provide transitive read-only access. Schaerli et al. proposed encapsulation policies [32], which enable policies to be bound to references, but does not consider transitivity. There have been several proposals of type systems that support transitive readonly references [7, 38] (independently of ownership). Arnaud et al. proposed a variant of transitive read-only references for dynamic languages [4]. Filters are flexible and able to expose limited interfaces; an interface with only read-only methods is just a special case. In contrast to deep read-only references, read-only access is only transitive to objects within the boundary. It can be considered as a benefit, or a limitation depending on the context. Our approach is syntactic and it assumes that methods have been correctly categorized in the read-only topic by developers. Traditional access modifiers can be used to limit interfaces. Modifiers can implement class privacy or object privacy. Our approach implements object privacy, whi</context>
+</contexts>
+<marker>[4]</marker>
+<rawString>J.-B. Arnaud, M. Denker, S. Ducasse, D. Pollet, A. Bergel, and M. Suen. Read-only execution for dynamic languages. In Proceedings of the 48th International Conference on Objects, Models, Components, Patterns (TOOLS EUROPE’10). LNCS Springer Verlag, July 2010. URL http://www.bergel.eu/download/papers/ Berg10eReadOnly.pdf.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Bloch</author>
+</authors>
+<title>Effective Java (2nd Edition) (The Java Series). Prentice Hall PTR, Upper Saddle River,</title>
+<date>2008</date>
+<journal>ISBN</journal>
+<volume>0321356683</volume>
+<pages>9780321356680</pages>
+<location>NJ, USA, 2 edition,</location>
+<contexts>
+<context position="21585" citStr="[5]" startWordPosition="3424" endWordPosition="3424">he owned object effectively immutable. 4. Using Crossing Handlers Examples in the previous chapter relied on the default crossing handler which raises an exception when an invalid reference transfer occurs. We now show how crossing handlers complement filters in useful ways. 4.1 Defensive Copying Let us consider again the problem of the previous chapter with the administrators. With owner-as-dominator, encapsulated objects cannot be returned to the outside. When internal state must be exposed, it is a common practice to return a copy of the object. This technique is known as defensive copying [5]. Let us consider that each web site has several administrators whose names are stored in an array. Administrators can be changed only via a special administration page. The ability to obtain a reference to the internal array from outside the web server would imply that the list can be freely changed. A typical implementation of the administrator accessor would copy the array before returning it5: Site&gt;&gt;administrator ^ administrator copy. Languages do not have mechanisms to express such policies cleanly: developers must manually add code for copying objects whenever appropriate; copying and no</context>
+</contexts>
+<marker>[5]</marker>
+<rawString>J. Bloch. Effective Java (2nd Edition) (The Java Series). Prentice Hall PTR, Upper Saddle River, NJ, USA, 2 edition, 2008. ISBN 0321356683, 9780321356680.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>C Boyapati</author>
+<author>B Liskov</author>
+<author>L Shrira</author>
+</authors>
+<title>Ownership types for object encapsulation.</title>
+<date>2003</date>
+<journal>SIGPLAN Not.,</journal>
+<volume>38</volume>
+<issue>1</issue>
+<note>ISSN 0362-1340. doi: http://doi.acm.org/10.1145/640128.604156.</note>
+<contexts>
+<context position="1966" citStr="[6, 12, 28]" startWordPosition="293" endWordPosition="295">jects might be revealed, invariants could be broken, or thread safety could be compromised. To prevent such issues, it is important to control the accessibility of object members, and aliasing of objects themselves. For instance, a web server might serve multiple web sites composed of web pages (see Figure 1). Multiple web servers might run within the same virtual machine on different ports, and must be isolated. Aliases to web pages must be forbidden across web sites and web servers. Dynamic Ownership [17] structures objects in the heap in an ownership hierarchy, similarly to ownership types [6, 12, 28], and dynamically confines objects within their owner. This policy, known in the literature as owner-as-dominator [12], is an effective way to control accessibility and aliasing but is however too restrictive: objects are either accessible or not. To regain some flexibility, we propose in this paper to structure objects in an ownership hierarchy and to control accessibility and aliasing with two mechanisms, filters and crossing handlers. [Copyright notice will appear here once ’preprint’ option is removed.] Each object defines an implicit ownership boundary. Each ownership boundary has in and </context>
+<context position="13230" citStr="[6]" startWordPosition="2121" endWordPosition="2121">ommon idioms like iterators: for efficiency the iterator must be owned by the aggregate to have access to internal data, but cannot then be returned to the outside [27]. In our approach, filters can easily be used to solve this situation. The list owns the iterator, which is then a sibling of the nodes and has full access to them. The in filters of the list contain the iteration topic, which match methods next and current of the iterator, shown in Figure 5. The iterator can be by consequence returned outside the list, while nodes cannot. Several variants of ownership types using class nesting [6], ownership domains [2], relaxed constraints for dynamic aliases3 [12] or additional access modifiers [23], have been devised to solve this problem. The implementation of dynamic ownership by Gordon and Noble [17, 28] relies on a special language feature to “export” objects to solve this issue. Filters and crossing handlers support this situation, while being general mechanisms. 3.2 Read-only References With owner-as-dominator, encapsulated objects cannot be returned to the outside, which effectively prevents unwanted modification to the internal representation from ever happening. When intern</context>
+<context position="56001" citStr="[6]" startWordPosition="9215" endWordPosition="9215">. Our approach can be used to define a topic that is used to categorize such legal methods, but it cannot raise an exception if a method is wrongly categorized. Ownership Types Since the work by Clarke et al. [14] that introduced the owners-as-dominators model, many variants of static ownership types have been proposed. Similarly to our work, these approaches aim at relaxing the owner-as-dominator model to regain flexibility. In an extension of their previous work [12], Clark et al. enable dynamic aliases to expose internal objects such as iterators. Boyapati et al. used inner classes instead [6]. With Ownership Domains [2, 3], objects can be organized into various domains with different access constraints. Universe Types [25] similarly partition objects into universes and control references between them. Variant Ownership Types [23] parameterized types with an accessibility context in addition to the ownership context, thus giving more finegrained control over aliasing. In these mechanisms, a member of a class can be accessed if its type can be named. Filters and crossing handlers are dynamic. Gradual Ownership[33] combines static and dynamic typing. Dynamic checks are introduced for</context>
+</contexts>
+<marker>[6]</marker>
+<rawString>C. Boyapati, B. Liskov, and L. Shrira. Ownership types for object encapsulation. SIGPLAN Not., 38(1):213–223, 2003. ISSN 0362-1340. doi: http://doi.acm.org/10.1145/640128.604156.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Boyland</author>
+</authors>
+<title>Why we should not add readonly to Java (yet. In</title>
+<date>2005</date>
+<booktitle>In FTfJP,</booktitle>
+<pages>5--29</pages>
+<contexts>
+<context position="13966" citStr="[7]" startWordPosition="2226" endWordPosition="2226">e this problem. The implementation of dynamic ownership by Gordon and Noble [17, 28] relies on a special language feature to “export” objects to solve this issue. Filters and crossing handlers support this situation, while being general mechanisms. 3.2 Read-only References With owner-as-dominator, encapsulated objects cannot be returned to the outside, which effectively prevents unwanted modification to the internal representation from ever happening. When internal state must be exposed, a safe alternative is to expose only a limited read-only view. This is known as representation observation [7]. 3 Static aliases correspond to references from instance variables. Dynamic aliases correspond to references from temporary variables, parameters, and return values. Static aliases are allocated in the heap. Dynamic aliases are allocated in the stack. :List :Node :Node ∅ head next :Iterator {iteration} current ownership references boundaries filters {out} {in} Figure 4. Iterators can be returned to the outside since they match the iteration topic. Iterator&gt;&gt;next &lt;topic:iteration&gt; current := current next. Iterator&gt;&gt;current &lt;topic:iteration&gt; ^ current data. Figure 5. Methods belonging to the it</context>
+<context position="15636" citStr="[7]" startWordPosition="2480" endWordPosition="2480">can be freely changed. To prevent mutations, the method Array&gt;&gt;at: is assigned the topic read-only and the in filters of the web site matches the read-only topic. The situation is shown in Figure 6. This way, objects outside the web site only have a limited access to the array. Since the effect of filters is cumulative, read-only access will be applied transitively to all objects within the boundary. This works well for nested and recursive structures, as was shown previously when limiting access to the navigation topic for web pages. There have been several proposals for read-only references [7]. For dynamic languages, only few approaches have been proposed. Schaerli et al. proposed encapsulation policies [32], which enable fine-grained control of the interface objects expose. It however fell short in dealing with recursive structures. Arnaud et al. proposed a specific solution to this problem with read-only references [4]. In both cases, the policy is attached to a reference, not the object itself, and references with limited capabilities must be created explicitly. We believe these approaches are counter-intuitive since they define behavior based on the history of the reference ins</context>
+<context position="57715" citStr="[7, 38]" startWordPosition="9467" endWordPosition="9468">re read-only references across universes are allowed, but only the owner of an object can modify it. Our approach can encode the owner-as-modifier discipline by exposing a special read-only topic. Several languages can define write-once variables, e.g., C++’s const and Java’s final keywords. Used with references, const does not provide transitive read-only access. Schaerli et al. proposed encapsulation policies [32], which enable policies to be bound to references, but does not consider transitivity. There have been several proposals of type systems that support transitive readonly references [7, 38] (independently of ownership). Arnaud et al. proposed a variant of transitive read-only references for dynamic languages [4]. Filters are flexible and able to expose limited interfaces; an interface with only read-only methods is just a special case. In contrast to deep read-only references, read-only access is only transitive to objects within the boundary. It can be considered as a benefit, or a limitation depending on the context. Our approach is syntactic and it assumes that methods have been correctly categorized in the read-only topic by developers. Traditional access modifiers can be us</context>
+</contexts>
+<marker>[7]</marker>
+<rawString>J. Boyland. Why we should not add readonly to Java (yet. In In FTfJP, pages 5–29, 2005.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Boyland</author>
+<author>J Noble</author>
+<author>W Retert</author>
+</authors>
+<title>Capabilities for sharing: A generalisation of uniqueness and read-only.</title>
+<date>2001</date>
+<booktitle>In Proceedings of the 15th European Conference on Object-Oriented Programming, ECOOP ’01,</booktitle>
+<pages>2--27</pages>
+<location>London, UK, UK,</location>
+<contexts>
+<context position="56769" citStr="[8, 30]" startWordPosition="9330" endWordPosition="9331"> into universes and control references between them. Variant Ownership Types [23] parameterized types with an accessibility context in addition to the ownership context, thus giving more finegrained control over aliasing. In these mechanisms, a member of a class can be accessed if its type can be named. Filters and crossing handlers are dynamic. Gradual Ownership[33] combines static and dynamic typing. Dynamic checks are introduced for code that has not been statically typed. Other variants of ownership types exist which address other aspects of aliasing, for instance uniqueness of references [8, 30], thread-locality [37] or data transfer between actors [13]. Our examples of crossing handlers drew inspiration from the two latter works. Limited Interfaces In addition to accessibility, Variant Ownership Types [23] can specify whether references are writable or readonly. Universe Types [25] enforce the owner-as-modifier discipline, where read-only references across universes are allowed, but only the owner of an object can modify it. Our approach can encode the owner-as-modifier discipline by exposing a special read-only topic. Several languages can define write-once variables, e.g., C++’s c</context>
+</contexts>
+<marker>[8]</marker>
+<rawString>J. Boyland, J. Noble, and W. Retert. Capabilities for sharing: A generalisation of uniqueness and read-only. In Proceedings of the 15th European Conference on Object-Oriented Programming, ECOOP ’01, pages 2–27, London, UK, UK, 2001. Springer-Verlag. ISBN 3-540-42206-4. URL http://dl.acm.org/citation.cfm?id=646158. 680004.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>G Bracha</author>
+<author>D Ungar</author>
+</authors>
+<title>Mirrors: design principles for meta-level facilities of object-oriented programming languages.</title>
+<date>2004</date>
+<journal>SIGPLAN Not.,</journal>
+<booktitle>ISSN 0362-1340. doi: http://doi.acm.org/ 10.1145/1035292.1029004. URL http://doi.acm.org/10.1145/</booktitle>
+<pages>39--331</pages>
+<contexts>
+<context position="60439" citStr="[9]" startWordPosition="9883" endWordPosition="9883">impose revocability on all references exchanged via the membrane, both inward and outward. When the membrane is revoked, the wrapped module is guaranteed to become eligible for garbage collection; revoked references raise exceptions when used. Ownership boundaries resemble membranes that intercept outward transfer of references. Newspeak is a language that follows the object-capability model. In Newspeak, external dependencies must be provided when an object is created [10]; there is no global namespace, only nested virtual classes. Also, Newspeak decouples reflection from classes via mirrors [9]. Tribal Ownership [11] exploits class nesting to define an implicit ownership structure for objects. From the perspective of security, ownership transfer must be limited. Ownership transfer is hard to support in static type systems [26], but very natural in a dynamic approach. 11. Conclusions We have proposed a variant of dynamic ownership with filters and crossing handlers. With these mechanisms, the owner-as-dominator policy can be relaxed to control the sharing of internal objects in a flexible way. We have illustrated our approach with several examples and experimented with filters and cr</context>
+</contexts>
+<marker>[9]</marker>
+<rawString>G. Bracha and D. Ungar. Mirrors: design principles for meta-level facilities of object-oriented programming languages. SIGPLAN Not., 39:331–344, October 2004. ISSN 0362-1340. doi: http://doi.acm.org/ 10.1145/1035292.1029004. URL http://doi.acm.org/10.1145/ 1035292.1029004.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>G Bracha</author>
+<author>P von der Ahe</author>
+<author>V Bykov</author>
+<author>Y Kashai</author>
+<author>W Maddox</author>
+<author>E Miranda</author>
+</authors>
+<title>Modules as objects in Newspeak. In</title>
+<date>2010</date>
+<booktitle>ECOOP,</booktitle>
+<pages>405--428</pages>
+<contexts>
+<context position="60314" citStr="[10]" startWordPosition="9865" endWordPosition="9865">t directions. To control interactions between modules, objects can be wrapped into membranes [15, 24, 35], which transitively impose revocability on all references exchanged via the membrane, both inward and outward. When the membrane is revoked, the wrapped module is guaranteed to become eligible for garbage collection; revoked references raise exceptions when used. Ownership boundaries resemble membranes that intercept outward transfer of references. Newspeak is a language that follows the object-capability model. In Newspeak, external dependencies must be provided when an object is created [10]; there is no global namespace, only nested virtual classes. Also, Newspeak decouples reflection from classes via mirrors [9]. Tribal Ownership [11] exploits class nesting to define an implicit ownership structure for objects. From the perspective of security, ownership transfer must be limited. Ownership transfer is hard to support in static type systems [26], but very natural in a dynamic approach. 11. Conclusions We have proposed a variant of dynamic ownership with filters and crossing handlers. With these mechanisms, the owner-as-dominator policy can be relaxed to control the sharing of in</context>
+</contexts>
+<marker>[10]</marker>
+<rawString>G. Bracha, P. von der Ahé, V. Bykov, Y. Kashai, W. Maddox, and E. Miranda. Modules as objects in Newspeak. In ECOOP, pages 405–428, 2010.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>N Cameron</author>
+<author>J Noble</author>
+<author>T Wrigstad</author>
+</authors>
+<title>Tribal ownership.</title>
+<date>2010</date>
+<journal>ACM. ISBN</journal>
+<booktitle>In Proceedings of the ACM international conference on Object oriented programming systems languages and applications, OOPSLA ’10,</booktitle>
+<pages>618--633</pages>
+<location>New York, NY, USA,</location>
+<note>doi: http://doi.acm.org/10.1145/1869459.1869510. URL http: //doi.acm.org/10.1145/1869459.1869510.</note>
+<contexts>
+<context position="60462" citStr="[11]" startWordPosition="9886" endWordPosition="9886"> all references exchanged via the membrane, both inward and outward. When the membrane is revoked, the wrapped module is guaranteed to become eligible for garbage collection; revoked references raise exceptions when used. Ownership boundaries resemble membranes that intercept outward transfer of references. Newspeak is a language that follows the object-capability model. In Newspeak, external dependencies must be provided when an object is created [10]; there is no global namespace, only nested virtual classes. Also, Newspeak decouples reflection from classes via mirrors [9]. Tribal Ownership [11] exploits class nesting to define an implicit ownership structure for objects. From the perspective of security, ownership transfer must be limited. Ownership transfer is hard to support in static type systems [26], but very natural in a dynamic approach. 11. Conclusions We have proposed a variant of dynamic ownership with filters and crossing handlers. With these mechanisms, the owner-as-dominator policy can be relaxed to control the sharing of internal objects in a flexible way. We have illustrated our approach with several examples and experimented with filters and crossing handlers by adap</context>
+</contexts>
+<marker>[11]</marker>
+<rawString>N. Cameron, J. Noble, and T. Wrigstad. Tribal ownership. In Proceedings of the ACM international conference on Object oriented programming systems languages and applications, OOPSLA ’10, pages 618–633, New York, NY, USA, 2010. ACM. ISBN 978-1-4503-0203-6. doi: http://doi.acm.org/10.1145/1869459.1869510. URL http: //doi.acm.org/10.1145/1869459.1869510.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Clarke</author>
+<author>S Drossopoulou</author>
+</authors>
+<title>Ownership, encapsulation and the disjointness of type and effect.</title>
+<date>2002</date>
+<journal>SIGPLAN Not.,</journal>
+<volume>37</volume>
+<issue>11</issue>
+<pages>2013--2</pages>
+<note>URL http://doi.acm.org/10.1145/583854.582447.</note>
+<contexts>
+<context position="1966" citStr="[6, 12, 28]" startWordPosition="293" endWordPosition="295">jects might be revealed, invariants could be broken, or thread safety could be compromised. To prevent such issues, it is important to control the accessibility of object members, and aliasing of objects themselves. For instance, a web server might serve multiple web sites composed of web pages (see Figure 1). Multiple web servers might run within the same virtual machine on different ports, and must be isolated. Aliases to web pages must be forbidden across web sites and web servers. Dynamic Ownership [17] structures objects in the heap in an ownership hierarchy, similarly to ownership types [6, 12, 28], and dynamically confines objects within their owner. This policy, known in the literature as owner-as-dominator [12], is an effective way to control accessibility and aliasing but is however too restrictive: objects are either accessible or not. To regain some flexibility, we propose in this paper to structure objects in an ownership hierarchy and to control accessibility and aliasing with two mechanisms, filters and crossing handlers. [Copyright notice will appear here once ’preprint’ option is removed.] Each object defines an implicit ownership boundary. Each ownership boundary has in and </context>
+<context position="11810" citStr="[12]" startWordPosition="1877" endWordPosition="1877">, or modify it. Ownership transfer must preserve the tree structure of the ownership graph, and must not result in invalid incoming references. 2.1 Default Policy By default, the set of in filters is empty, as well as the set of out filters. With an empty set of in filters, the topics of the methods are irrelevant and references to internal objects cannot be passed to the outside. The default crossing handler raises an exception when a reference to an internal object is passed to the outside, either as a return value or as a parameter. This corresponds to the classic owner-as-dominator policy [12]. Let us consider the web server in Figure 1. The list of sites is implemented as a list composed of nodes. Since the set of in filters is empty, an attempt to return a reference to a node will trigger the crossing handler which will raise an exception: the list is an aggregate and the nodes are effectively inaccessible outside the aggregate. With an empty set of out filters, objects within the boundary can only depend on the identity of objects outside the boundary. 3. Using Filters Each object defines an implicit ownership boundary. We first show how implicit boundaries can be configured wit</context>
+<context position="13300" citStr="[12]" startWordPosition="2130" endWordPosition="2130">d by the aggregate to have access to internal data, but cannot then be returned to the outside [27]. In our approach, filters can easily be used to solve this situation. The list owns the iterator, which is then a sibling of the nodes and has full access to them. The in filters of the list contain the iteration topic, which match methods next and current of the iterator, shown in Figure 5. The iterator can be by consequence returned outside the list, while nodes cannot. Several variants of ownership types using class nesting [6], ownership domains [2], relaxed constraints for dynamic aliases3 [12] or additional access modifiers [23], have been devised to solve this problem. The implementation of dynamic ownership by Gordon and Noble [17, 28] relies on a special language feature to “export” objects to solve this issue. Filters and crossing handlers support this situation, while being general mechanisms. 3.2 Read-only References With owner-as-dominator, encapsulated objects cannot be returned to the outside, which effectively prevents unwanted modification to the internal representation from ever happening. When internal state must be exposed, a safe alternative is to expose only a limit</context>
+<context position="55871" citStr="[12]" startWordPosition="9194" endWordPosition="9194">nal objects: in Dynamic Ownership, invocations to external objects raise an exception if state is mutated or if a value is returned. Our approach can be used to define a topic that is used to categorize such legal methods, but it cannot raise an exception if a method is wrongly categorized. Ownership Types Since the work by Clarke et al. [14] that introduced the owners-as-dominators model, many variants of static ownership types have been proposed. Similarly to our work, these approaches aim at relaxing the owner-as-dominator model to regain flexibility. In an extension of their previous work [12], Clark et al. enable dynamic aliases to expose internal objects such as iterators. Boyapati et al. used inner classes instead [6]. With Ownership Domains [2, 3], objects can be organized into various domains with different access constraints. Universe Types [25] similarly partition objects into universes and control references between them. Variant Ownership Types [23] parameterized types with an accessibility context in addition to the ownership context, thus giving more finegrained control over aliasing. In these mechanisms, a member of a class can be accessed if its type can be named. Filt</context>
+</contexts>
+<marker>[12]</marker>
+<rawString>D. Clarke and S. Drossopoulou. Ownership, encapsulation and the disjointness of type and effect. SIGPLAN Not., 37(11):292–310, Draft 11 2013/2/27 Nov. 2002. ISSN 0362-1340. doi: 10.1145/583854.582447. URL http://doi.acm.org/10.1145/583854.582447.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Clarke</author>
+<author>T Wrigstad</author>
+<author>J Ostlund</author>
+<author>E B Johnsen</author>
+</authors>
+<title>Minimal ownership for active objects.</title>
+<date>2008</date>
+<booktitle>In Proceedings of the 6th Asian Symposium on Programming Languages and Systems, APLAS ’08,</booktitle>
+<pages>139--154</pages>
+<location>Berlin, Heidelberg,</location>
+<contexts>
+<context position="56828" citStr="[13]" startWordPosition="9340" endWordPosition="9340">wnership Types [23] parameterized types with an accessibility context in addition to the ownership context, thus giving more finegrained control over aliasing. In these mechanisms, a member of a class can be accessed if its type can be named. Filters and crossing handlers are dynamic. Gradual Ownership[33] combines static and dynamic typing. Dynamic checks are introduced for code that has not been statically typed. Other variants of ownership types exist which address other aspects of aliasing, for instance uniqueness of references [8, 30], thread-locality [37] or data transfer between actors [13]. Our examples of crossing handlers drew inspiration from the two latter works. Limited Interfaces In addition to accessibility, Variant Ownership Types [23] can specify whether references are writable or readonly. Universe Types [25] enforce the owner-as-modifier discipline, where read-only references across universes are allowed, but only the owner of an object can modify it. Our approach can encode the owner-as-modifier discipline by exposing a special read-only topic. Several languages can define write-once variables, e.g., C++’s const and Java’s final keywords. Used with references, const</context>
+</contexts>
+<marker>[13]</marker>
+<rawString>D. Clarke, T. Wrigstad, J. Östlund, and E. B. Johnsen. Minimal ownership for active objects. In Proceedings of the 6th Asian Symposium on Programming Languages and Systems, APLAS ’08, pages 139– 154, Berlin, Heidelberg, 2008. Springer-Verlag. ISBN 978-3-540-89329-5. doi: http://dx.doi.org/10.1007/978-3-540-89330-1 11. URL http://dx.doi.org/10.1007/978-3-540-89330-1_11.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D G Clarke</author>
+<author>J M Potter</author>
+<author>J Noble</author>
+</authors>
+<title>Ownership types for flexible alias protection.</title>
+<date>1998</date>
+<journal>SIGPLAN Not.,</journal>
+<booktitle>ISSN 0362-1340. doi: 10.1145/286942.286947. URL http://doi.acm.org/</booktitle>
+<volume>33</volume>
+<issue>10</issue>
+<pages>10--1145</pages>
+<contexts>
+<context position="55611" citStr="[14]" startWordPosition="9156" endWordPosition="9156">ly check accessibility when messages are sent, but also aliasing of objects in return values and arguments. Flexible Alias Protection [28] enforces “external independence”, a property which states that internal objects must not depend on mutable state of external objects: in Dynamic Ownership, invocations to external objects raise an exception if state is mutated or if a value is returned. Our approach can be used to define a topic that is used to categorize such legal methods, but it cannot raise an exception if a method is wrongly categorized. Ownership Types Since the work by Clarke et al. [14] that introduced the owners-as-dominators model, many variants of static ownership types have been proposed. Similarly to our work, these approaches aim at relaxing the owner-as-dominator model to regain flexibility. In an extension of their previous work [12], Clark et al. enable dynamic aliases to expose internal objects such as iterators. Boyapati et al. used inner classes instead [6]. With Ownership Domains [2, 3], objects can be organized into various domains with different access constraints. Universe Types [25] similarly partition objects into universes and control references between th</context>
+</contexts>
+<marker>[14]</marker>
+<rawString>D. G. Clarke, J. M. Potter, and J. Noble. Ownership types for flexible alias protection. SIGPLAN Not., 33(10):48–64, Oct. 1998. ISSN 0362-1340. doi: 10.1145/286942.286947. URL http://doi.acm.org/ 10.1145/286942.286947.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>T V Cutsem</author>
+<author>M S Miller</author>
+</authors>
+<title>On the design of the ECMAScript reflection api.</title>
+<date>2012</date>
+<tech>Technical report,</tech>
+<institution>Vrije Universiteit Brussel,</institution>
+<contexts>
+<context position="59815" citStr="[15, 24, 35]" startWordPosition="9791" endWordPosition="9793">curity since accesses to global namespaces cannot be controlled. In Java, access to the class namespace can be controlled with class loaders and security managers, which are mechanisms outside of the base language. In the object-capability model [24], objects can only send messages to objects that have been obtained previously with message sends. In this model, global namespaces and reflection are loopholes. Filters can be used to limit access to external resources, since filters work in both in and out directions. To control interactions between modules, objects can be wrapped into membranes [15, 24, 35], which transitively impose revocability on all references exchanged via the membrane, both inward and outward. When the membrane is revoked, the wrapped module is guaranteed to become eligible for garbage collection; revoked references raise exceptions when used. Ownership boundaries resemble membranes that intercept outward transfer of references. Newspeak is a language that follows the object-capability model. In Newspeak, external dependencies must be provided when an object is created [10]; there is no global namespace, only nested virtual classes. Also, Newspeak decouples reflection from</context>
+</contexts>
+<marker>[15]</marker>
+<rawString>T. V. Cutsem and M. S. Miller. On the design of the ECMAScript reflection api. Technical report, Vrije Universiteit Brussel, 2012.</rawString>
+</citation>
+<citation valid="false">
+<authors>
+<author>A Gal</author>
+<author>B Eich</author>
+<author>M Shaver</author>
+<author>D Anderson</author>
+<author>D Mandelin</author>
+<author>M R Haghighat</author>
+<author>B Kaplan</author>
+<author>G Hoare</author>
+<author>B Zbarsky</author>
+<author>J Orendorff</author>
+<author>J Ruderman</author>
+<author>E W Smith</author>
+<author>R Reitmaier</author>
+<author>M Bebenita</author>
+<author>M Chang</author>
+<author>M Franz</author>
+</authors>
+<title>Trace-based just-in-time type specialization for dynamic languages.</title>
+<date>2009</date>
+<journal>ACM. ISBN</journal>
+<booktitle>In Proceedings of the 2009 ACM SIGPLAN conference on Programming language design and implementation, PLDI ’09,</booktitle>
+<pages>465--478</pages>
+<location>New York, NY, USA,</location>
+<contexts>
+<context position="52673" citStr="[16]" startWordPosition="8668" endWordPosition="8668">mproving Performance The dynamic checks follow the path between objects in the ownership tree. The identity of objects along the path is however not relevant, but only the classes of those objects matter to the dynamic checks. Computing information about the relative positioning of objects in the ownership tree is expensive. Our implementation caches the results of accessibility checks, but not the aliasing checks. We plan to investigate how this information could be effectively computed and cached in this case as well. The cache could be maintained per object, or per call site. In tracing VM [16], traces are recorded and compiled to native code at run-time. Recorded traces are reused by speculating on branching and types. Guards in the traces validate this speculation, and if a guard fails, the trace exits. To support dynamic ownership, a tracing VM could speculate on the relative positions of objects in the ownership tree, in addition to branches and types. Checking the validity of references after ownership transfers would also benefit from VM support, since it is an expensive operation. Note that dynamic ownership can be considered to be a special kind of contract. Filters could be</context>
+</contexts>
+<marker>[16]</marker>
+<rawString>A. Gal, B. Eich, M. Shaver, D. Anderson, D. Mandelin, M. R. Haghighat, B. Kaplan, G. Hoare, B. Zbarsky, J. Orendorff, J. Ruderman, E. W. Smith, R. Reitmaier, M. Bebenita, M. Chang, and M. Franz. Trace-based just-in-time type specialization for dynamic languages. In Proceedings of the 2009 ACM SIGPLAN conference on Programming language design and implementation, PLDI ’09, pages 465–478, New York, NY, USA, 2009. ACM. ISBN 978-1-60558-392-1. doi: 10.1145/1542476.1542528. URL http://doi.acm.org/10. 1145/1542476.1542528.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Gordon</author>
+<author>J Noble</author>
+</authors>
+<title>Dynamic ownership in a dynamic language.</title>
+<date>2007</date>
+<booktitle>In Proceedings of the 2007 symposium on Dynamic languages, DLS ’07,</booktitle>
+<pages>41--52</pages>
+<location>New York, NY, USA,</location>
+<note>ACM. ISBN 978-1-59593-868-8. doi: http://doi.acm.org/10.1145/1297081.1297090. URL http://doi.acm.org/10.1145/1297081.1297090.</note>
+<contexts>
+<context position="1867" citStr="[17]" startWordPosition="279" endWordPosition="279">but sharing makes it hard to protect the integrity of the system: internal information of objects might be revealed, invariants could be broken, or thread safety could be compromised. To prevent such issues, it is important to control the accessibility of object members, and aliasing of objects themselves. For instance, a web server might serve multiple web sites composed of web pages (see Figure 1). Multiple web servers might run within the same virtual machine on different ports, and must be isolated. Aliases to web pages must be forbidden across web sites and web servers. Dynamic Ownership [17] structures objects in the heap in an ownership hierarchy, similarly to ownership types [6, 12, 28], and dynamically confines objects within their owner. This policy, known in the literature as owner-as-dominator [12], is an effective way to control accessibility and aliasing but is however too restrictive: objects are either accessible or not. To regain some flexibility, we propose in this paper to structure objects in an ownership hierarchy and to control accessibility and aliasing with two mechanisms, filters and crossing handlers. [Copyright notice will appear here once ’preprint’ option i</context>
+<context position="13447" citStr="[17, 28]" startWordPosition="2152" endWordPosition="2153">d to solve this situation. The list owns the iterator, which is then a sibling of the nodes and has full access to them. The in filters of the list contain the iteration topic, which match methods next and current of the iterator, shown in Figure 5. The iterator can be by consequence returned outside the list, while nodes cannot. Several variants of ownership types using class nesting [6], ownership domains [2], relaxed constraints for dynamic aliases3 [12] or additional access modifiers [23], have been devised to solve this problem. The implementation of dynamic ownership by Gordon and Noble [17, 28] relies on a special language feature to “export” objects to solve this issue. Filters and crossing handlers support this situation, while being general mechanisms. 3.2 Read-only References With owner-as-dominator, encapsulated objects cannot be returned to the outside, which effectively prevents unwanted modification to the internal representation from ever happening. When internal state must be exposed, a safe alternative is to expose only a limited read-only view. This is known as representation observation [7]. 3 Static aliases correspond to references from instance variables. Dynamic alia</context>
+<context position="54717" citStr="[17]" startWordPosition="9011" endWordPosition="9011">pics per objects: two instances of the same class could have different topics. We plan to achieve this with rewriting rules attached to individual objects: one array rewrites the topic read-only to admin-read-only, the other to key-read-only. The web site can decide to expose only admin-read-only. For composition, a rewriting rule attached to object o would impact o, but also objects owned by o. 10. Related work The risks related to aliasing have been since long recognized [18], and our work relates to a large body of research. The closest related work is Dynamic Ownership by Gordon and Noble [17], which itself built on previous concepts of Dynamic Alias Protection [29], Flexible Alias Protection [28] and Ownership Monitoring [19]. In contrast to Dynamic Ownership, filters enable objects to be accessed outside their owner’s boundary via a possibly limited interface. Also, we not only check accessibility when messages are sent, but also aliasing of objects in return values and arguments. Flexible Alias Protection [28] enforces “external independence”, a property which states that internal objects must not depend on mutable state of external objects: in Dynamic Ownership, invocations to </context>
+</contexts>
+<marker>[17]</marker>
+<rawString>D. Gordon and J. Noble. Dynamic ownership in a dynamic language. In Proceedings of the 2007 symposium on Dynamic languages, DLS ’07, pages 41–52, New York, NY, USA, 2007. ACM. ISBN 978-1-59593-868-8. doi: http://doi.acm.org/10.1145/1297081.1297090. URL http://doi.acm.org/10.1145/1297081.1297090.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Hogg</author>
+<author>D Lea</author>
+<author>A Wills</author>
+<author>D deChampeaux</author>
+<author>R Holt</author>
+</authors>
+<title>The Geneva convention on the treatment of object aliasing.</title>
+<date>1992</date>
+<journal>SIGPLAN OOPS Mess.,</journal>
+<volume>3</volume>
+<issue>2</issue>
+<pages>1055--6400</pages>
+<note>URL http://doi.acm.org/10.1145/130943.130947.</note>
+<contexts>
+<context position="54595" citStr="[18]" startWordPosition="8989" endWordPosition="8989"> there is no way to distinguish from both contexts where arrays are used. The solution to this problem would be to have topics per objects: two instances of the same class could have different topics. We plan to achieve this with rewriting rules attached to individual objects: one array rewrites the topic read-only to admin-read-only, the other to key-read-only. The web site can decide to expose only admin-read-only. For composition, a rewriting rule attached to object o would impact o, but also objects owned by o. 10. Related work The risks related to aliasing have been since long recognized [18], and our work relates to a large body of research. The closest related work is Dynamic Ownership by Gordon and Noble [17], which itself built on previous concepts of Dynamic Alias Protection [29], Flexible Alias Protection [28] and Ownership Monitoring [19]. In contrast to Dynamic Ownership, filters enable objects to be accessed outside their owner’s boundary via a possibly limited interface. Also, we not only check accessibility when messages are sent, but also aliasing of objects in return values and arguments. Flexible Alias Protection [28] enforces “external independence”, a property whic</context>
+</contexts>
+<marker>[18]</marker>
+<rawString>J. Hogg, D. Lea, A. Wills, D. deChampeaux, and R. Holt. The Geneva convention on the treatment of object aliasing. SIGPLAN OOPS Mess., 3(2):11–16, Apr. 1992. ISSN 1055-6400. doi: 10.1145/130943. 130947. URL http://doi.acm.org/10.1145/130943.130947.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Kent</author>
+<author>I Maung</author>
+</authors>
+<title>Encapsulation and aggregation.</title>
+<date>1995</date>
+<booktitle>In In TOOLS Pacific 18.</booktitle>
+<publisher>Prentice Hall,</publisher>
+<contexts>
+<context position="54853" citStr="[19]" startWordPosition="9030" endWordPosition="9030">individual objects: one array rewrites the topic read-only to admin-read-only, the other to key-read-only. The web site can decide to expose only admin-read-only. For composition, a rewriting rule attached to object o would impact o, but also objects owned by o. 10. Related work The risks related to aliasing have been since long recognized [18], and our work relates to a large body of research. The closest related work is Dynamic Ownership by Gordon and Noble [17], which itself built on previous concepts of Dynamic Alias Protection [29], Flexible Alias Protection [28] and Ownership Monitoring [19]. In contrast to Dynamic Ownership, filters enable objects to be accessed outside their owner’s boundary via a possibly limited interface. Also, we not only check accessibility when messages are sent, but also aliasing of objects in return values and arguments. Flexible Alias Protection [28] enforces “external independence”, a property which states that internal objects must not depend on mutable state of external objects: in Dynamic Ownership, invocations to external objects raise an exception if state is mutated or if a value is returned. Our approach can be used to define a topic that is us</context>
+</contexts>
+<marker>[19]</marker>
+<rawString>S. Kent and I. Maung. Encapsulation and aggregation. In In TOOLS Pacific 18. Prentice Hall, 1995.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>K R Leino</author>
+<author>P Muller</author>
+<author>A Wallenburg</author>
+</authors>
+<title>Flexible immutability with frozen objects.</title>
+<date>2008</date>
+<journal>Springer-Verlag. ISBN</journal>
+<booktitle>In VSTTE ’08: Proceedings of the 2nd international conference on Verified Software: Theories, Tools, Experiments,</booktitle>
+<pages>192--208</pages>
+<location>Berlin, Heidelberg,</location>
+<contexts>
+<context position="20834" citStr="[20]" startWordPosition="3306" endWordPosition="3306">he connection class defines two topics, open and closed. Each firstclass state exposes one topic. When the connection is owned by the open state, it exposes only methods of the open topic. Inversely, when it is owned by the closed state, it exposes the closed topic. The connection must be owned by either state. Figure 10 shows such a situation. Similarly to sandboxing, the web server owns now the states instead of the connection. For objects that reference the connection, the pattern is transparent. Draft 4 2013/2/27 Note that a useful variant of this technique can be used to “freeze” objects [20], after which they are immutable. All that is required is to implement a first-class “frozen” state, which filters out all mutating methods making the owned object effectively immutable. 4. Using Crossing Handlers Examples in the previous chapter relied on the default crossing handler which raises an exception when an invalid reference transfer occurs. We now show how crossing handlers complement filters in useful ways. 4.1 Defensive Copying Let us consider again the problem of the previous chapter with the administrators. With owner-as-dominator, encapsulated objects cannot be returned to the</context>
+</contexts>
+<marker>[20]</marker>
+<rawString>K. R. Leino, P. Müller, and A. Wallenburg. Flexible immutability with frozen objects. In VSTTE ’08: Proceedings of the 2nd international conference on Verified Software: Theories, Tools, Experiments, pages 192–208, Berlin, Heidelberg, 2008. Springer-Verlag. ISBN 978-3-540-87872-8. doi: http://dx.doi.org/10.1007/978-3-540-87873-5 17.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>P Li</author>
+<author>N Cameron</author>
+<author>J Noble</author>
+</authors>
+<title>Cloning in ownership.</title>
+<date>2011</date>
+<journal>ACM. ISBN</journal>
+<booktitle>In Proceedings of the ACM international conference companion on Object oriented programming systems languages and applications companion, SPLASH ’11,</booktitle>
+<pages>63--66</pages>
+<location>New York, NY, USA,</location>
+<note>URL http://doi.acm.org/10.1145/2048147.2048175.</note>
+<contexts>
+<context position="45020" citStr="[21]" startWordPosition="7325" endWordPosition="7325">s ownership and encapsulation since it adds the internal associations of a dictionary to another one without copying. fields |fields | fields := Dictionary new. self getFields keysAndValuesDo: [:key :val |fields at: key put: val ]. self postFields keysAndValuesDo: [:key :val |fields at: key put: val]. ^fields Figure 16. The modified code does not access the internal state of dictionaries. the original object. The implementation must be further adapted for specific classes. For instance, copying a dictionary copies the associations its owns as well. This kind of copying is called sheep cloning [21]. In this case, the owner of the copied associations must change to be the copied collection. Cloning can be considered to be a special factory method. Utility Methods Class-side utility methods raise problems of ownership transfer similar to constructor methods (see section 7). We moved utility methods to a trait that could be reused whenever necessary. Code like WebUtils decodeUrl: aString is then rewritten as self decodeUrl: aString. This reformulation avoids problematic boundary crossings, and accessibility restrictions. The trait contains 7 such methods. Ownership Bugs The method WebReque</context>
+</contexts>
+<marker>[21]</marker>
+<rawString>P. Li, N. Cameron, and J. Noble. Cloning in ownership. In Proceedings of the ACM international conference companion on Object oriented programming systems languages and applications companion, SPLASH ’11, pages 63–66, New York, NY, USA, 2011. ACM. ISBN 978-1-4503-0942-4. doi: 10.1145/2048147.2048175. URL http://doi.acm.org/10.1145/2048147.2048175.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>K J Lieberherr</author>
+<author>I M Holland</author>
+</authors>
+<title>Assuring good style for objectoriented programs.</title>
+<date>1989</date>
+<journal>IEEE Softw.,</journal>
+<booktitle>ISSN 0740-7459. doi: 10.1109/52.35588. URL http://dx.doi.org/10.</booktitle>
+<volume>6</volume>
+<issue>5</issue>
+<pages>1109--52</pages>
+<contexts>
+<context position="58652" citStr="[22]" startWordPosition="9613" endWordPosition="9613">bjects within the boundary. It can be considered as a benefit, or a limitation depending on the context. Our approach is syntactic and it assumes that methods have been correctly categorized in the read-only topic by developers. Traditional access modifiers can be used to limit interfaces. Modifiers can implement class privacy or object privacy. Our approach implements object privacy, which was shown to be more intuitive [36]. Arbitrary accessibility rules can be easily implemented with techniques that reify message sends, such as composition filters [1]. The Law of Draft 10 2013/2/27 Demeter [22] is a design principle which dissuades invocations to objects returned by previous invocations. Organizing the design in layers, where objects in a given layer can only call objects in the layer below, is a way to enforce the law. The law of Demeter, layers, and confinement with ownership are design principles that prevent interaction between distant entities. Security Encapsulation controls accesses from external to internal objects; secure programming controls accesses from an object to its external environment. Global namespaces compromise security since accesses to global namespaces cannot</context>
+</contexts>
+<marker>[22]</marker>
+<rawString>K. J. Lieberherr and I. M. Holland. Assuring good style for objectoriented programs. IEEE Softw., 6(5):38–48, Sept. 1989. ISSN 0740-7459. doi: 10.1109/52.35588. URL http://dx.doi.org/10. 1109/52.35588.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Y Lu</author>
+<author>J Potter</author>
+</authors>
+<title>On ownership and accessibility.</title>
+<date>2006</date>
+<booktitle>In In ECOOP’06,</booktitle>
+<volume>4067</volume>
+<pages>99--123</pages>
+<publisher>Springer-Verlag,</publisher>
+<contexts>
+<context position="13336" citStr="[23]" startWordPosition="2135" endWordPosition="2135"> internal data, but cannot then be returned to the outside [27]. In our approach, filters can easily be used to solve this situation. The list owns the iterator, which is then a sibling of the nodes and has full access to them. The in filters of the list contain the iteration topic, which match methods next and current of the iterator, shown in Figure 5. The iterator can be by consequence returned outside the list, while nodes cannot. Several variants of ownership types using class nesting [6], ownership domains [2], relaxed constraints for dynamic aliases3 [12] or additional access modifiers [23], have been devised to solve this problem. The implementation of dynamic ownership by Gordon and Noble [17, 28] relies on a special language feature to “export” objects to solve this issue. Filters and crossing handlers support this situation, while being general mechanisms. 3.2 Read-only References With owner-as-dominator, encapsulated objects cannot be returned to the outside, which effectively prevents unwanted modification to the internal representation from ever happening. When internal state must be exposed, a safe alternative is to expose only a limited read-only view. This is known as </context>
+<context position="56243" citStr="[23]" startWordPosition="9250" endWordPosition="9250">as-dominators model, many variants of static ownership types have been proposed. Similarly to our work, these approaches aim at relaxing the owner-as-dominator model to regain flexibility. In an extension of their previous work [12], Clark et al. enable dynamic aliases to expose internal objects such as iterators. Boyapati et al. used inner classes instead [6]. With Ownership Domains [2, 3], objects can be organized into various domains with different access constraints. Universe Types [25] similarly partition objects into universes and control references between them. Variant Ownership Types [23] parameterized types with an accessibility context in addition to the ownership context, thus giving more finegrained control over aliasing. In these mechanisms, a member of a class can be accessed if its type can be named. Filters and crossing handlers are dynamic. Gradual Ownership[33] combines static and dynamic typing. Dynamic checks are introduced for code that has not been statically typed. Other variants of ownership types exist which address other aspects of aliasing, for instance uniqueness of references [8, 30], thread-locality [37] or data transfer between actors [13]. Our examples </context>
+</contexts>
+<marker>[23]</marker>
+<rawString>Y. Lu and J. Potter. On ownership and accessibility. In In ECOOP’06, volume 4067 of LNCS, pages 99–123. Springer-Verlag, 2006.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M S Miller</author>
+<author>J S Shapiro</author>
+</authors>
+<title>Paradigm Regained: Abstraction Mechanisms for Access Control.</title>
+<date>2003</date>
+<journal>LECTURE NOTES IN COMPUTER SCIENCE,</journal>
+<pages>224--242</pages>
+<contexts>
+<context position="59453" citStr="[24]" startWordPosition="9733" endWordPosition="9733">low, is a way to enforce the law. The law of Demeter, layers, and confinement with ownership are design principles that prevent interaction between distant entities. Security Encapsulation controls accesses from external to internal objects; secure programming controls accesses from an object to its external environment. Global namespaces compromise security since accesses to global namespaces cannot be controlled. In Java, access to the class namespace can be controlled with class loaders and security managers, which are mechanisms outside of the base language. In the object-capability model [24], objects can only send messages to objects that have been obtained previously with message sends. In this model, global namespaces and reflection are loopholes. Filters can be used to limit access to external resources, since filters work in both in and out directions. To control interactions between modules, objects can be wrapped into membranes [15, 24, 35], which transitively impose revocability on all references exchanged via the membrane, both inward and outward. When the membrane is revoked, the wrapped module is guaranteed to become eligible for garbage collection; revoked references r</context>
+</contexts>
+<marker>[24]</marker>
+<rawString>M. S. Miller and J. S. Shapiro. Paradigm Regained: Abstraction Mechanisms for Access Control. LECTURE NOTES IN COMPUTER SCIENCE, pages 224–242, 2003.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>P Muller</author>
+<author>A Poetzsch-Heffter</author>
+</authors>
+<title>Universes: A type system for controlling representation exposure.</title>
+<date>1999</date>
+<booktitle>Programming Languages and Fundamentals of Programming,</booktitle>
+<tech>Technical Report 263.</tech>
+<pages>131--140</pages>
+<editor>In A. Poetzsch-Heffter and J. Meyer, editors,</editor>
+<location>Fernuniversitat Hagen,</location>
+<contexts>
+<context position="56134" citStr="[25]" startWordPosition="9235" endWordPosition="9235">thod is wrongly categorized. Ownership Types Since the work by Clarke et al. [14] that introduced the owners-as-dominators model, many variants of static ownership types have been proposed. Similarly to our work, these approaches aim at relaxing the owner-as-dominator model to regain flexibility. In an extension of their previous work [12], Clark et al. enable dynamic aliases to expose internal objects such as iterators. Boyapati et al. used inner classes instead [6]. With Ownership Domains [2, 3], objects can be organized into various domains with different access constraints. Universe Types [25] similarly partition objects into universes and control references between them. Variant Ownership Types [23] parameterized types with an accessibility context in addition to the ownership context, thus giving more finegrained control over aliasing. In these mechanisms, a member of a class can be accessed if its type can be named. Filters and crossing handlers are dynamic. Gradual Ownership[33] combines static and dynamic typing. Dynamic checks are introduced for code that has not been statically typed. Other variants of ownership types exist which address other aspects of aliasing, for instan</context>
+</contexts>
+<marker>[25]</marker>
+<rawString>P. Müller and A. Poetzsch-Heffter. Universes: A type system for controlling representation exposure. In A. Poetzsch-Heffter and J. Meyer, editors, Programming Languages and Fundamentals of Programming, pages 131–140. Fernuniversität Hagen, 1999. Technical Report 263.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>P Muller</author>
+<author>A Rudich</author>
+</authors>
+<title>Ownership transfer in universe types.</title>
+<date>2007</date>
+<journal>SIGPLAN Not.,</journal>
+<booktitle>ISSN 0362-1340. doi: 10.1145/1297105.1297061. URL http://doi.acm.org/10.1145/</booktitle>
+<volume>42</volume>
+<issue>10</issue>
+<pages>1297105--1297061</pages>
+<contexts>
+<context position="60676" citStr="[26]" startWordPosition="9918" endWordPosition="9918">n used. Ownership boundaries resemble membranes that intercept outward transfer of references. Newspeak is a language that follows the object-capability model. In Newspeak, external dependencies must be provided when an object is created [10]; there is no global namespace, only nested virtual classes. Also, Newspeak decouples reflection from classes via mirrors [9]. Tribal Ownership [11] exploits class nesting to define an implicit ownership structure for objects. From the perspective of security, ownership transfer must be limited. Ownership transfer is hard to support in static type systems [26], but very natural in a dynamic approach. 11. Conclusions We have proposed a variant of dynamic ownership with filters and crossing handlers. With these mechanisms, the owner-as-dominator policy can be relaxed to control the sharing of internal objects in a flexible way. We have illustrated our approach with several examples and experimented with filters and crossing handlers by adapting a web server. Our conclusions are the following: 1. Filters and crossing handlers can be effectively put to work to better control aliasing and accessibility. We found our variant of dynamic ownership flexible</context>
+</contexts>
+<marker>[26]</marker>
+<rawString>P. Müller and A. Rudich. Ownership transfer in universe types. SIGPLAN Not., 42(10):461–478, Oct. 2007. ISSN 0362-1340. doi: 10.1145/1297105.1297061. URL http://doi.acm.org/10.1145/ 1297105.1297061.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Noble</author>
+</authors>
+<title>Iterators and encapsulation.</title>
+<date>2000</date>
+<journal>IEEE Computer Society. ISBN 0-7695-0731-X. URL</journal>
+<booktitle>In Proceedings of the Technology of Object-Oriented Languages and Systems (TOOLS 33),</booktitle>
+<volume>http://dl.acm.org/citation.cfm?id=</volume>
+<pages>431</pages>
+<location>Washington, DC, USA,</location>
+<contexts>
+<context position="12795" citStr="[27]" startWordPosition="2045" endWordPosition="2045">jects within the boundary can only depend on the identity of objects outside the boundary. 3. Using Filters Each object defines an implicit ownership boundary. We first show how implicit boundaries can be configured with filters to relax the owner-as-dominator policy. We then show how objects with no behavior can be added to a design and serve as explicit boundaries. 3.1 Iterators Owner-as-dominator is too restrictive to implement common idioms like iterators: for efficiency the iterator must be owned by the aggregate to have access to internal data, but cannot then be returned to the outside [27]. In our approach, filters can easily be used to solve this situation. The list owns the iterator, which is then a sibling of the nodes and has full access to them. The in filters of the list contain the iteration topic, which match methods next and current of the iterator, shown in Figure 5. The iterator can be by consequence returned outside the list, while nodes cannot. Several variants of ownership types using class nesting [6], ownership domains [2], relaxed constraints for dynamic aliases3 [12] or additional access modifiers [23], have been devised to solve this problem. The implementati</context>
+</contexts>
+<marker>[27]</marker>
+<rawString>J. Noble. Iterators and encapsulation. In Proceedings of the Technology of Object-Oriented Languages and Systems (TOOLS 33), pages 431–, Washington, DC, USA, 2000. IEEE Computer Society. ISBN 0-7695-0731-X. URL http://dl.acm.org/citation.cfm?id= 832260.833174.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Noble</author>
+<author>J Vitek</author>
+<author>J Potter</author>
+</authors>
+<title>Flexible alias protection.</title>
+<date>1998</date>
+<booktitle>In ECCOP ’98: Proceedings of the 12th European Conference on ObjectOriented Programming,</booktitle>
+<pages>158--185</pages>
+<publisher>SpringerVerlag. ISBN</publisher>
+<location>London, UK,</location>
+<contexts>
+<context position="1966" citStr="[6, 12, 28]" startWordPosition="293" endWordPosition="295">jects might be revealed, invariants could be broken, or thread safety could be compromised. To prevent such issues, it is important to control the accessibility of object members, and aliasing of objects themselves. For instance, a web server might serve multiple web sites composed of web pages (see Figure 1). Multiple web servers might run within the same virtual machine on different ports, and must be isolated. Aliases to web pages must be forbidden across web sites and web servers. Dynamic Ownership [17] structures objects in the heap in an ownership hierarchy, similarly to ownership types [6, 12, 28], and dynamically confines objects within their owner. This policy, known in the literature as owner-as-dominator [12], is an effective way to control accessibility and aliasing but is however too restrictive: objects are either accessible or not. To regain some flexibility, we propose in this paper to structure objects in an ownership hierarchy and to control accessibility and aliasing with two mechanisms, filters and crossing handlers. [Copyright notice will appear here once ’preprint’ option is removed.] Each object defines an implicit ownership boundary. Each ownership boundary has in and </context>
+<context position="9459" citStr="[28]" startWordPosition="1494" endWordPosition="1494">e tree of pages into a list. It can access method Page&gt;&gt;fullUrl on all pages in the list, since the in filter of pages is navigation. Crossing Handlers Filters can lead to references that expose no methods. Outgoing references (crossing boundaries from inside to outside) of this kind are valid, while incoming references (crossing boundaries from the outside to the inside) are not. All incoming references in the system must expose at least one method. With this restriction, hiding all methods of an object expresses confinement. This corresponds to the traditional principles of alias protection [28]: nodes of a list can reference the data they hold (outgoing references), but external (incoming) references to the nodes violate encapsulation and must be forbidden. Only the list can reference its nodes. The event of an invalid reference transfer is reified and the corresponding crossing handler is triggered. By default, the crossing handler performs no action and raises an exception. It could however be adapted to perform some actions after which the reference transfer should be valid. Let us consider Figure 1, which uses the default crossing handler: • When instances of List, WebServer and</context>
+<context position="13447" citStr="[17, 28]" startWordPosition="2152" endWordPosition="2153">d to solve this situation. The list owns the iterator, which is then a sibling of the nodes and has full access to them. The in filters of the list contain the iteration topic, which match methods next and current of the iterator, shown in Figure 5. The iterator can be by consequence returned outside the list, while nodes cannot. Several variants of ownership types using class nesting [6], ownership domains [2], relaxed constraints for dynamic aliases3 [12] or additional access modifiers [23], have been devised to solve this problem. The implementation of dynamic ownership by Gordon and Noble [17, 28] relies on a special language feature to “export” objects to solve this issue. Filters and crossing handlers support this situation, while being general mechanisms. 3.2 Read-only References With owner-as-dominator, encapsulated objects cannot be returned to the outside, which effectively prevents unwanted modification to the internal representation from ever happening. When internal state must be exposed, a safe alternative is to expose only a limited read-only view. This is known as representation observation [7]. 3 Static aliases correspond to references from instance variables. Dynamic alia</context>
+<context position="54823" citStr="[28]" startWordPosition="9026" endWordPosition="9026">h rewriting rules attached to individual objects: one array rewrites the topic read-only to admin-read-only, the other to key-read-only. The web site can decide to expose only admin-read-only. For composition, a rewriting rule attached to object o would impact o, but also objects owned by o. 10. Related work The risks related to aliasing have been since long recognized [18], and our work relates to a large body of research. The closest related work is Dynamic Ownership by Gordon and Noble [17], which itself built on previous concepts of Dynamic Alias Protection [29], Flexible Alias Protection [28] and Ownership Monitoring [19]. In contrast to Dynamic Ownership, filters enable objects to be accessed outside their owner’s boundary via a possibly limited interface. Also, we not only check accessibility when messages are sent, but also aliasing of objects in return values and arguments. Flexible Alias Protection [28] enforces “external independence”, a property which states that internal objects must not depend on mutable state of external objects: in Dynamic Ownership, invocations to external objects raise an exception if state is mutated or if a value is returned. Our approach can be use</context>
+</contexts>
+<marker>[28]</marker>
+<rawString>J. Noble, J. Vitek, and J. Potter. Flexible alias protection. In ECCOP ’98: Proceedings of the 12th European Conference on ObjectOriented Programming, pages 158–185, London, UK, 1998. SpringerVerlag. ISBN 3-540-64737-6.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Noble</author>
+<author>D Clarke</author>
+<author>J Potter</author>
+</authors>
+<title>Object ownership for dynamic alias protection. In</title>
+<date>1999</date>
+<booktitle>In Proceedings TOOLS ’99,</booktitle>
+<pages>176--187</pages>
+<publisher>Society Press,</publisher>
+<contexts>
+<context position="54791" citStr="[29]" startWordPosition="9022" endWordPosition="9022">ics. We plan to achieve this with rewriting rules attached to individual objects: one array rewrites the topic read-only to admin-read-only, the other to key-read-only. The web site can decide to expose only admin-read-only. For composition, a rewriting rule attached to object o would impact o, but also objects owned by o. 10. Related work The risks related to aliasing have been since long recognized [18], and our work relates to a large body of research. The closest related work is Dynamic Ownership by Gordon and Noble [17], which itself built on previous concepts of Dynamic Alias Protection [29], Flexible Alias Protection [28] and Ownership Monitoring [19]. In contrast to Dynamic Ownership, filters enable objects to be accessed outside their owner’s boundary via a possibly limited interface. Also, we not only check accessibility when messages are sent, but also aliasing of objects in return values and arguments. Flexible Alias Protection [28] enforces “external independence”, a property which states that internal objects must not depend on mutable state of external objects: in Dynamic Ownership, invocations to external objects raise an exception if state is mutated or if a value is r</context>
+</contexts>
+<marker>[29]</marker>
+<rawString>J. Noble, D. Clarke, and J. Potter. Object ownership for dynamic alias protection. In In Proceedings TOOLS ’99, pages 176–187. Society Press, 1999.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Ostlund</author>
+<author>T Wrigstad</author>
+<author>D Clarke</author>
+<author>B Akerblom</author>
+</authors>
+<title>Ownership, uniqueness, and immutability.</title>
+<date>2008</date>
+<journal>ISBN</journal>
+<booktitle>Components, Models and Patterns, 46th International Conference, TOOLS EUROPE 2008,</booktitle>
+<volume>11</volume>
+<pages>178--197</pages>
+<editor>In R. F. Paige and B. Meyer, editors, Objects,</editor>
+<publisher>Springer,</publisher>
+<contexts>
+<context position="56769" citStr="[8, 30]" startWordPosition="9330" endWordPosition="9331"> into universes and control references between them. Variant Ownership Types [23] parameterized types with an accessibility context in addition to the ownership context, thus giving more finegrained control over aliasing. In these mechanisms, a member of a class can be accessed if its type can be named. Filters and crossing handlers are dynamic. Gradual Ownership[33] combines static and dynamic typing. Dynamic checks are introduced for code that has not been statically typed. Other variants of ownership types exist which address other aspects of aliasing, for instance uniqueness of references [8, 30], thread-locality [37] or data transfer between actors [13]. Our examples of crossing handlers drew inspiration from the two latter works. Limited Interfaces In addition to accessibility, Variant Ownership Types [23] can specify whether references are writable or readonly. Universe Types [25] enforce the owner-as-modifier discipline, where read-only references across universes are allowed, but only the owner of an object can modify it. Our approach can encode the owner-as-modifier discipline by exposing a special read-only topic. Several languages can define write-once variables, e.g., C++’s c</context>
+</contexts>
+<marker>[30]</marker>
+<rawString>J. Östlund, T. Wrigstad, D. Clarke, and B. Åkerblom. Ownership, uniqueness, and immutability. In R. F. Paige and B. Meyer, editors, Objects, Components, Models and Patterns, 46th International Conference, TOOLS EUROPE 2008, volume 11 of Lecture Notes in Business Information Processing, pages 178–197. Springer, 2008. ISBN 978-3-540-69823-4. doi: http://dx.doi.org/10.1007/ 978-3-540-69824-1 11.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Rivard</author>
+</authors>
+<title>Smalltalk: a reflective language.</title>
+<date>1996</date>
+<booktitle>In Proceedings of Reflection’96,</booktitle>
+<contexts>
+<context position="37988" citStr="[31]" startWordPosition="6199" endWordPosition="6199">sfer policies (see subsection 5.1) could be modeled by invoking a special method acceptOwnershipOf ∈ M on the new candidate owner. If the invocation returns false, the transfer is rejected. 7. Implementation We have implemented a prototype of our variant of dynamic ownership in Pharo Smalltalk. Essentially, message sends must be intercepted to enforce the accessibility defined by filters, and execute crossing handlers if necessary. We implemented a compiler that transforms the original source and weaves it with additional logic, similarly to the technique used by Rivard to implement contracts [31]. Each call site is rewritten with one level of indirection that performs the additional logic, and then sends the original message. Draft 7 2013/2/27 |myself | myself := self. self print: anObject. &amp;quot;1&amp;quot; myself print: anObject. &amp;quot;2&amp;quot; [ :p |self print: p ] value: anObject. &amp;quot;3&amp;quot; [ :p |myself print: p ] value: anObject. &amp;quot;4&amp;quot; Figure 13. Message sends with similar intent Closures and self The four statements in Figure 13 have the same intent: they send message print: to self with anObject as parameter. Self-sends are never filtered. In the first case, the self send is statically detected and is not rewr</context>
+</contexts>
+<marker>[31]</marker>
+<rawString>Rivard. Smalltalk: a reflective language. In Proceedings of Reflection’96, 1996.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>N Scharli</author>
+<author>A P Black</author>
+<author>S Ducasse</author>
+</authors>
+<title>Object-oriented encapsulation for dynamically typed languages.</title>
+<date>2004</date>
+<journal>SIGPLAN Not.,</journal>
+<volume>39</volume>
+<issue>10</issue>
+<pages>0362--1340</pages>
+<note>URL http://doi.acm.org/10.1145/1035292.1028988.</note>
+<contexts>
+<context position="4851" citStr="[4, 32]" startWordPosition="730" endWordPosition="731">r-as-dominator policy. We also illustrate other techniques our approach enables. We have implemented our variant of dynamic ownership in Smalltalk and adapted an available, open-source web server to use dynamic ownership. We found filters and crossing handlers easy to apply and believe they favor object-orientation, without imposing too strong encapsulation constraints. In contrast to static ownership type systems, our approach is more flexible since it exploits the benefits of dynamic execution for ownership transfer and crossing handler. Also, unlike certain approaches for dynamic languages [4, 32] our approach does not bind policies to references and instead defines the policy to be enforced based on the position of the caller and callee in the ownership graph, which we believe is more natural. The paper is organized as follows: section 2 presents filters and crossing handlers and their default behavior; section 3 and section 4 show examples of filters and crossing handlers; section 5 discusses the relationship between secure programming and ownership; section 6 and section 7 define the semantics and implementation of our variant of dynamic ownership; section 8 describes the adaptation</context>
+<context position="15753" citStr="[32]" startWordPosition="2496" endWordPosition="2496">s of the web site matches the read-only topic. The situation is shown in Figure 6. This way, objects outside the web site only have a limited access to the array. Since the effect of filters is cumulative, read-only access will be applied transitively to all objects within the boundary. This works well for nested and recursive structures, as was shown previously when limiting access to the navigation topic for web pages. There have been several proposals for read-only references [7]. For dynamic languages, only few approaches have been proposed. Schaerli et al. proposed encapsulation policies [32], which enable fine-grained control of the interface objects expose. It however fell short in dealing with recursive structures. Arnaud et al. proposed a specific solution to this problem with read-only references [4]. In both cases, the policy is attached to a reference, not the object itself, and references with limited capabilities must be created explicitly. We believe these approaches are counter-intuitive since they define behavior based on the history of the reference instead of the dynamic context. Using the ownership topology appears to be much more natural. 3.3 Access Modifiers The p</context>
+<context position="57527" citStr="[32]" startWordPosition="9439" endWordPosition="9439">ces In addition to accessibility, Variant Ownership Types [23] can specify whether references are writable or readonly. Universe Types [25] enforce the owner-as-modifier discipline, where read-only references across universes are allowed, but only the owner of an object can modify it. Our approach can encode the owner-as-modifier discipline by exposing a special read-only topic. Several languages can define write-once variables, e.g., C++’s const and Java’s final keywords. Used with references, const does not provide transitive read-only access. Schaerli et al. proposed encapsulation policies [32], which enable policies to be bound to references, but does not consider transitivity. There have been several proposals of type systems that support transitive readonly references [7, 38] (independently of ownership). Arnaud et al. proposed a variant of transitive read-only references for dynamic languages [4]. Filters are flexible and able to expose limited interfaces; an interface with only read-only methods is just a special case. In contrast to deep read-only references, read-only access is only transitive to objects within the boundary. It can be considered as a benefit, or a limitation </context>
+</contexts>
+<marker>[32]</marker>
+<rawString>N. Schärli, A. P. Black, and S. Ducasse. Object-oriented encapsulation for dynamically typed languages. SIGPLAN Not., 39(10):130–149, Oct. 2004. ISSN 0362-1340. doi: 10.1145/1035292.1028988. URL http://doi.acm.org/10.1145/1035292.1028988.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>I Sergey</author>
+<author>D Clarke</author>
+</authors>
+<title>Gradual ownership types.</title>
+<date>2012</date>
+<booktitle>In ESOP,</booktitle>
+<pages>579--599</pages>
+<contexts>
+<context position="56531" citStr="[33]" startWordPosition="9295" endWordPosition="9295"> objects such as iterators. Boyapati et al. used inner classes instead [6]. With Ownership Domains [2, 3], objects can be organized into various domains with different access constraints. Universe Types [25] similarly partition objects into universes and control references between them. Variant Ownership Types [23] parameterized types with an accessibility context in addition to the ownership context, thus giving more finegrained control over aliasing. In these mechanisms, a member of a class can be accessed if its type can be named. Filters and crossing handlers are dynamic. Gradual Ownership[33] combines static and dynamic typing. Dynamic checks are introduced for code that has not been statically typed. Other variants of ownership types exist which address other aspects of aliasing, for instance uniqueness of references [8, 30], thread-locality [37] or data transfer between actors [13]. Our examples of crossing handlers drew inspiration from the two latter works. Limited Interfaces In addition to accessibility, Variant Ownership Types [23] can specify whether references are writable or readonly. Universe Types [25] enforce the owner-as-modifier discipline, where read-only references</context>
+</contexts>
+<marker>[33]</marker>
+<rawString>I. Sergey and D. Clarke. Gradual ownership types. In ESOP, pages 579–599, 2012.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Sunshine</author>
+<author>K Naden</author>
+<author>S Stork</author>
+<author>J Aldrich</author>
+<author>E Tanter</author>
+</authors>
+<title>Firstclass state change in Plaid.</title>
+<date>2011</date>
+<journal>ACM. ISBN</journal>
+<booktitle>In Proceedings of the 2011 ACM international conference on Object oriented programming systems languages and applications, OOPSLA ’11,</booktitle>
+<pages>713--732</pages>
+<location>New York, NY, USA,</location>
+<contexts>
+<context position="19885" citStr="[34]" startWordPosition="3147" endWordPosition="3147">an untrusted component from the point of view of the web server. Two forms of sandboxing are possible, as shown in Figure 8 and Figure 9. In one case, the sandbox is around the web server, and in the other case it is inside the web server. In both cases, the web handler has only access to the request topic, which suffices to treat the request and produce the response. 3.5 First-class State In our model, the interface an object exposes depends on its direct and indirect owners. While an object cannot “on its own” change the interface it exposes, we can very easily do so using first-class state [34]. Depending on which state it is owned, the object exposes a different set of operations. Ownership transfer is used to perform actual state changes. Let us imagine that connections in Figure 9 have two states: open and closed. We model these settings with three objects, one being the connection itself, the two others the first-class states. The connection class defines two topics, open and closed. Each firstclass state exposes one topic. When the connection is owned by the open state, it exposes only methods of the open topic. Inversely, when it is owned by the closed state, it exposes the cl</context>
+</contexts>
+<marker>[34]</marker>
+<rawString>J. Sunshine, K. Naden, S. Stork, J. Aldrich, and E. Tanter. Firstclass state change in Plaid. In Proceedings of the 2011 ACM international conference on Object oriented programming systems languages and applications, OOPSLA ’11, pages 713–732, New York, NY, USA, 2011. ACM. ISBN 978-1-4503-0940-0. doi: 10.1145/2048066.2048122. URL http://doi.acm.org/10.1145/ 2048066.2048122.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>T Van Cutsem</author>
+<author>M S Miller</author>
+</authors>
+<title>Proxies: design principles for robust object-oriented intercession apis.</title>
+<date>2010</date>
+<journal>SIGPLAN Not.,</journal>
+<volume>45</volume>
+<issue>12</issue>
+<pages>72</pages>
+<note>URL http://doi.acm.org/10.1145/1899661.1869638.</note>
+<contexts>
+<context position="59815" citStr="[15, 24, 35]" startWordPosition="9791" endWordPosition="9793">curity since accesses to global namespaces cannot be controlled. In Java, access to the class namespace can be controlled with class loaders and security managers, which are mechanisms outside of the base language. In the object-capability model [24], objects can only send messages to objects that have been obtained previously with message sends. In this model, global namespaces and reflection are loopholes. Filters can be used to limit access to external resources, since filters work in both in and out directions. To control interactions between modules, objects can be wrapped into membranes [15, 24, 35], which transitively impose revocability on all references exchanged via the membrane, both inward and outward. When the membrane is revoked, the wrapped module is guaranteed to become eligible for garbage collection; revoked references raise exceptions when used. Ownership boundaries resemble membranes that intercept outward transfer of references. Newspeak is a language that follows the object-capability model. In Newspeak, external dependencies must be provided when an object is created [10]; there is no global namespace, only nested virtual classes. Also, Newspeak decouples reflection from</context>
+</contexts>
+<marker>[35]</marker>
+<rawString>T. Van Cutsem and M. S. Miller. Proxies: design principles for robust object-oriented intercession apis. SIGPLAN Not., 45(12):59– 72, Oct. 2010. ISSN 0362-1340. doi: 10.1145/1899661.1869638. URL http://doi.acm.org/10.1145/1899661.1869638.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Voigt</author>
+<author>W Irwin</author>
+<author>N Churcher</author>
+</authors>
+<title>Intuitiveness of class and object encapsulation.</title>
+<date>2009</date>
+<booktitle>In 6th International Conference on Information Technology and Applications,</booktitle>
+<contexts>
+<context position="58477" citStr="[36]" startWordPosition="9586" endWordPosition="9586"> expose limited interfaces; an interface with only read-only methods is just a special case. In contrast to deep read-only references, read-only access is only transitive to objects within the boundary. It can be considered as a benefit, or a limitation depending on the context. Our approach is syntactic and it assumes that methods have been correctly categorized in the read-only topic by developers. Traditional access modifiers can be used to limit interfaces. Modifiers can implement class privacy or object privacy. Our approach implements object privacy, which was shown to be more intuitive [36]. Arbitrary accessibility rules can be easily implemented with techniques that reify message sends, such as composition filters [1]. The Law of Draft 10 2013/2/27 Demeter [22] is a design principle which dissuades invocations to objects returned by previous invocations. Organizing the design in layers, where objects in a given layer can only call objects in the layer below, is a way to enforce the law. The law of Demeter, layers, and confinement with ownership are design principles that prevent interaction between distant entities. Security Encapsulation controls accesses from external to inte</context>
+</contexts>
+<marker>[36]</marker>
+<rawString>J. Voigt, W. Irwin, and N. Churcher. Intuitiveness of class and object encapsulation. In 6th International Conference on Information Technology and Applications, 2009.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>T Wrigstad</author>
+<author>F Pizlo</author>
+<author>F Meawad</author>
+<author>L Zhao</author>
+<author>J Vitek</author>
+</authors>
+<title>Loci: Simple thread-locality for java.</title>
+<date>2009</date>
+<booktitle>In Proceedings of the 23rd European Conference on ECOOP 2009 — Object-Oriented Programming,</booktitle>
+<pages>445--469</pages>
+<location>Genoa,</location>
+<note>URL http:</note>
+<contexts>
+<context position="24106" citStr="[37]" startWordPosition="3808" endWordPosition="3808"> the handler can wait until its value is available and pass it instead. Local&gt;&gt;handleCrossing: aFuture sender: theSender ^ aFuture value. 5 This example is intentionally close to Java’s Class.getSigners() bug in early versions of the JDK. The method returned the internal array which could be tampered with by a malicious client to break security. This bug was motivational for ownership types [2]. 4.3 Synchronization Threads are objects. Objects that are owned by the threads are thread-local. Objects that are not owned by any thread are global. Rather than statically controlling thread locality [37], we control it dynamically. Threads expose only the sharable objects, i.e., objects with at least one sharable method. Object that do not have sharable members cannot be passed to other threads or global object since the crossing handler triggers an error. To pass thread local objects outside the boundary of the thread, they must be adapted first to become sharable. This adaptation can be done manually, or automatically in a crossing handler. For instance, a crossing handler can synchronize objects when they escape their threads by dynamically changing the class of the object (e.g., Smalltalk</context>
+<context position="56791" citStr="[37]" startWordPosition="9333" endWordPosition="9333">ol references between them. Variant Ownership Types [23] parameterized types with an accessibility context in addition to the ownership context, thus giving more finegrained control over aliasing. In these mechanisms, a member of a class can be accessed if its type can be named. Filters and crossing handlers are dynamic. Gradual Ownership[33] combines static and dynamic typing. Dynamic checks are introduced for code that has not been statically typed. Other variants of ownership types exist which address other aspects of aliasing, for instance uniqueness of references [8, 30], thread-locality [37] or data transfer between actors [13]. Our examples of crossing handlers drew inspiration from the two latter works. Limited Interfaces In addition to accessibility, Variant Ownership Types [23] can specify whether references are writable or readonly. Universe Types [25] enforce the owner-as-modifier discipline, where read-only references across universes are allowed, but only the owner of an object can modify it. Our approach can encode the owner-as-modifier discipline by exposing a special read-only topic. Several languages can define write-once variables, e.g., C++’s const and Java’s final </context>
+</contexts>
+<marker>[37]</marker>
+<rawString>T. Wrigstad, F. Pizlo, F. Meawad, L. Zhao, and J. Vitek. Loci: Simple thread-locality for java. In Proceedings of the 23rd European Conference on ECOOP 2009 — Object-Oriented Programming, Genoa, pages 445–469, Berlin, Heidelberg, 2009. Springer-Verlag. ISBN 978-3-642-03012-3. doi: 10.1007/978-3-642-03013-0 21. URL http: //dx.doi.org/10.1007/978-3-642-03013-0_21.</rawString>
+</citation>
+<citation valid="false">
+<authors>
+<author>Y Zibin</author>
+<author>A Potanin</author>
+<author>M Ali</author>
+<author>S Artzi</author>
+<author>A Kie</author>
+<author>un</author>
+<author>M D Ernst</author>
+</authors>
+<title>Object and reference immutability using java generics.</title>
+<date>2007</date>
+<journal>ACM. ISBN</journal>
+<booktitle>In Proceedings of the the 6th joint meeting of the European software engineering conference and the ACM SIGSOFT symposium on The foundations of software engineering, ESEC-FSE ’07,</booktitle>
+<volume>12</volume>
+<pages>75--84</pages>
+<location>New York, NY, USA,</location>
+<contexts>
+<context position="57715" citStr="[7, 38]" startWordPosition="9467" endWordPosition="9468">re read-only references across universes are allowed, but only the owner of an object can modify it. Our approach can encode the owner-as-modifier discipline by exposing a special read-only topic. Several languages can define write-once variables, e.g., C++’s const and Java’s final keywords. Used with references, const does not provide transitive read-only access. Schaerli et al. proposed encapsulation policies [32], which enable policies to be bound to references, but does not consider transitivity. There have been several proposals of type systems that support transitive readonly references [7, 38] (independently of ownership). Arnaud et al. proposed a variant of transitive read-only references for dynamic languages [4]. Filters are flexible and able to expose limited interfaces; an interface with only read-only methods is just a special case. In contrast to deep read-only references, read-only access is only transitive to objects within the boundary. It can be considered as a benefit, or a limitation depending on the context. Our approach is syntactic and it assumes that methods have been correctly categorized in the read-only topic by developers. Traditional access modifiers can be us</context>
+</contexts>
+<marker>[38]</marker>
+<rawString>Y. Zibin, A. Potanin, M. Ali, S. Artzi, A. Kie, un, and M. D. Ernst. Object and reference immutability using java generics. In Proceedings of the the 6th joint meeting of the European software engineering conference and the ACM SIGSOFT symposium on The foundations of software engineering, ESEC-FSE ’07, pages 75–84, New York, NY, USA, 2007. ACM. ISBN 978-1-59593-811-4. doi: 10.1145/1287624.1287637. URL http://doi.acm.org/10.1145/ 1287624.1287637. Draft 12 2013/2/27</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

@@ -1,0 +1,685 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.000005">
+<title confidence="0.720901">
+XRay Views: Understanding the Internals of Classes
+</title>
+<author confidence="0.836329">
+Gabriela Arévalo, Stéphane Ducasse, Oscar Nierstrasz
+</author>
+<affiliation confidence="0.881061">
+Software Composition Group
+University of Bern, Switzerland
+</affiliation>
+<email confidence="0.928386">
+{arevalo, ducasse, oscar}@iam.unibe.ch
+</email>
+<sectionHeader confidence="0.988756" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.965403571428571">
+Understanding the internal workings of classes is a key
+prerequisite to maintaining an object-oriented software sys-
+tem. Unfortunately, classical editing and browsing tools of-
+fer mainly linear and textual views of classes and their im-
+plementation. These views fail to expose the semantic rela-
+tionships between the internal parts of a class. We propose
+XRay views —a technique based on Concept Analysis—
+which reveal the internal relationships between groups of
+methods and attributes of a class. XRay views are com-
+posed out of elementary collaborations between attributes
+and methods, and help the engineer to build a mental model
+of how a class works internally. In this paper we present
+XRay views, and illustrate the approach by applying it on
+the Smalltalk class UIBuilder.
+</bodyText>
+<sectionHeader confidence="0.854289" genericHeader="keywords">
+Keywords: Class Understanding, Concept Analy-
+</sectionHeader>
+<keyword confidence="0.490202">
+sis, Logical Views
+</keyword>
+<sectionHeader confidence="0.962269" genericHeader="introduction">
+1. Introduction
+</sectionHeader>
+<bodyText confidence="0.985012453125">
+Understanding source code is a key activity in the main-
+tenance of software systems [3].
+In the specific case of object oriented systems, reading
+the code is harder than procedural systems [4, 10], and
+therefore the maintenance is actually higher. This is due to
+several reasons [5]. The first issue is that, contrary to proce-
+dural languages, the method definition order in a file is not
+important [4]. There is no simple and apparent top-down
+call decomposition, even if some languages propose the vis-
+ibility notion (private, protected, and public). Furthermore,
+the run-time architecture is not apparent from the source
+code, which only exposes the class hierarchy [5]. Another
+important problem is the presence of late-binding leads to
+“yoyo effects” when walking through a hierarchy and try-
+ing to follow the call-flow [13].
+Focusing on classes, considered as cornerstones of ob-
+ject oriented systems, we propose a technique to support
+software engineers in the task of understanding a complex
+object-oriented system. Instead of requiring the engineer to
+read code line-by-line to understand how a class works, we
+provide logically connected “XRay views” of classes that
+give the engineer an impression of the relationships between
+methods, attributes, and the invocation and access patterns
+of a class. In this way we support opportunistic understand-
+ing [11] in which the engineer understands a class itera-
+tively by exploring patterns (given by the views) and read-
+ing code.
+Taking into account the class as a sole unit, we are able
+to provide answers to the following questions about a class:
+(a) which methods access any attribute, directly or indi-
+rectly, (b) which groups of methods access directly or indi-
+rectly all the attributes or some subset of the attributes, (c)
+which methods are only called internally, (d) which meth-
+ods/attributes are heavily used and accessed, (e) how the
+methods and attributes collaborate. Each of these aspects is
+important for understanding the inner workings of a class,
+but unfortunately they are dispersed in the source code, and
+therefore cannot easily be teased out by a straightforward
+reading of the source. For this reason we generate a graph
+representation of the source code and run our tool, ConAn,
+which applies Concept Analysis to detect different collabo-
+rations to compose them in the XRay views. Concept anal-
+ysis (CA) [6] is a branch of lattice theory that allows us to
+identify meaningful groupings of “objects” that have com-
+mon “attributes” 1. These groupings (known as concepts)
+form a partial order known as concept lattice. There are sev-
+eral algorithms for computing the concepts and the concept
+lattice for a given context [9]. For more details, the inter-
+ested reader should refer to Ganter and Wille [6]. In this pa-
+per we apply this technique and limit our approach to un-
+derstanding a single class, without taking into account rela-
+tionships to subclasses, superclasses, or peer classes.
+This paper is a short version of the approach introduced
+in [2], and is structured as follows: Section 2 introduces the
+definition of elements and properties used in ConAn, and
+the collaborations defined to build the XRay views. Sec-
+1 To avoid confusion with object-oriented terminology, we refer in this
+paper instead to elements having common properties
+Proceedings of the 18th IEEE International Conference on Automated Software Engineering (ASE’03)
+1527-1366/03 $ 17.00 © 2003 IEEE
+tion 3 introduces in detail one specific view and a validation
+in the Smalltalk class UIBuilder. Sections 4 and 5 summa-
+rizes briefly the related work, our main conclusions and fu-
+ture work.
+</bodyText>
+<sectionHeader confidence="0.587692" genericHeader="method">
+2. Applying Concept Analysis to Class Under-
+</sectionHeader>
+<bodyText confidence="0.988549894736842">
+standing
+Complex software systems are composed of entities,
+such as classes, methods, modules, and subsystems, and dif-
+ferent kinds of relationships that hold between them. CA
+can help us to detect patterns in these relationships, but
+first we must encode the software information at hand in
+terms of elements and properties. Depending on exactly
+what kinds of patterns we are interested in, we may apply
+CA in radically different ways.
+In this paper we apply CA to identify concepts that corre-
+spond to the collaborations within a single class. We there-
+fore choose as elements the methods and attributes of a
+class, and as properties the access and invocation relation-
+ships between them. Note that we use the term collabora-
+tion to express a relationship between a set of methods and
+a set of attributes.
+Elements and Properties of Classes: Suppose a class has a
+set of methodsM and a set of attributesA. The basic prop-
+erties we use are extracted from the source code as follows:
+</bodyText>
+<listItem confidence="0.9844685">
+• m reads x means that the method m ∈ M directly
+reads the value of attribute x ∈ A
+• m writes xmeans that the methodm ∈ M directly up-
+dates the value of attribute x ∈ A
+• m calls nmeans that the methodm calls the method n
+explicitly via a self-call.
+We also define a number of derived properties, e.g.:
+• m accesses x if either m reads x or m writes x (i.e.,
+</listItem>
+<equation confidence="0.466866">
+accesses = reads ∪ writes )
+</equation>
+<bodyText confidence="0.960654916666667">
+In Figure 1 we see a graphical representation of a class
+with methods M = {m,n, o, p, q, r, s, t} and attributes
+A = {a, b, c, d}. Here we have o calls m, m calls n,
+n accesses a, and so on.
+These properties express direct relationships be-
+tween entities. We are also interested in indirect relation-
+ships, for example, m accesses a indirectly (which we
+write “m accesses∗ a”). Indirect relationships are impor-
+tant in revealing collaborations between methods and at-
+tributes, and are helpful in assessing the impact of changes.
+We therefore define as well the following derived proper-
+ties:
+</bodyText>
+<figure confidence="0.972378470588235">
+• m calls∗ n if m calls m′ and either m′ calls n or
+m′ calls∗ n (i.e., calls∗ = ∪i≥2 calls i)
+q
+a db
+n
+m
+p
+ts
+r
+attributes
+methods
+c
+o
+calls directly
+calls indirectly
+accesses directly
+accesses indirectly
+</figure>
+<figureCaption confidence="0.998911">
+Figure 1. Attributes accesses and methods
+</figureCaption>
+<listItem confidence="0.906289">
+invocations and the groups they form
+• m reads∗ x if m calls m′ or m calls∗ m′, and
+m′ reads x (i.e., reads∗ = ∪i≥1 calls i · reads )
+• m writes∗ x if m calls m′ or m calls∗ m′, and
+m′ writes x (i.e., writes∗ = ∪i≥1 calls i · writes )
+• m accesses∗ x if m reads∗ x or m writes∗ x (i.e.,
+</listItem>
+<equation confidence="0.987765">
+accesses∗ = reads∗ ∪ writes∗ )
+</equation>
+<bodyText confidence="0.982422857142857">
+In the example, we see that o calls∗ n and n reads a, and
+consequently o reads∗ a.
+We apply CA to our example class to reveal some con-
+cepts, e.g. ({m, o}, {accesses∗ a}), ({p}, {accesses a, b})
+Collaborations: Since we are interested in collaborations
+occurring between sets of methods and attributes, we ex-
+tend our properties to sets in the obvious way. Suppose that
+</bodyText>
+<listItem confidence="0.720177875">
+F and G are arbitrary subsets of the set of elements E. We
+define:
+• F R Gmeans that each entity in F is related with each
+one in G, i.e., ∀e ∈ F, e′ ∈ G, e R e′.
+• F R G means that the entities in F are related exclu-
+sively with those in G, i.e., ∀e ∈ E, e′ ∈ G, e R e′,⇒
+e ∈ F and conversely, ∀e ∈ E, e′ ∈ F, e′ R e ⇒ e ∈
+G.
+</listItem>
+<bodyText confidence="0.96845165">
+Interpretation: We introduce now the collaborations based
+on which XRay views are built. Note that in each case we
+are interested in all of the participants of a given collabo-
+ration. We will only list those that will be used later in the
+paper. The complete list of collaborations is listed in [2].
+Direct Accessors: Direct accessors, readers or writ-
+ers M ⊆ M of an attribute a are defined by a
+non-exclusive relationship: M accesses {a}. This col-
+laboration provides us with a simple classifica-
+tion of the methods according to which attributes they
+use. In our example, {n, p} accesses {a}.
+Proceedings of the 18th IEEE International Conference on Automated Software Engineering (ASE’03)
+1527-1366/03 $ 17.00 © 2003 IEEE
+Exclusive Direct Accessors: A method m is an exclusive
+direct accessor of a when m is the only method to ac-
+cess a directly. We express it as: M accesses {a}. In
+our example, we see that {r} accesses {d}.
+Exclusive Indirect Accessors: We consider a method to
+be an exclusive indirect accessor when it calls a di-
+rect accessor method of a specific attribute. It is repre-
+sented as an exclusive relationship:M accesses∗ {a}.
+This collaboration helps us to distinguish those meth-
+ods that define the behaviour of a class without using
+at all the state from those that use the state of the class.
+In our example, we have {s, t} accesses∗ {d}.
+Collaborating Attributes: This collaboration expresses
+which attributes are used exclusively by a set of meth-
+ods, and we express it as: M accesses A. In the
+example, we have the sets of attributes accessed ex-
+clusively by sets of methods are all of size 1:
+{q} reads {c} and {r} accesses {d}.
+Stateful Core Methods: This collaboration is a special case
+of collaborating attributes and expresses which meth-
+ods access all the state of a class. We express it as:
+M accesses A. This collaboration is interesting be-
+cause it provides a guideline if all the attributes are
+collaborating in the core of the class, and providing a
+functionality to the class through a set of methods. In
+the example, there are no methods accessing the en-
+tire state of the class.
+</bodyText>
+<sectionHeader confidence="0.496936" genericHeader="method">
+3. XRay Views
+</sectionHeader>
+<bodyText confidence="0.968578219512195">
+An XRay view is a group of collaborations that ex-
+poses specific aspects of a class. Based on the collabora-
+tions specified above, we have defined three XRay views:
+STATE USAGE, EXTERNAL/INTERNAL CALLS, and BE-
+HAVIOURAL SKELETON. These three views address dif-
+ferent, but logically related aspects of the behaviour of a
+class. Because of the limited space of the paper, we pro-
+vide a small explanation of all of them, but we only detail
+the definitions and case study of the view STATE USAGE.
+The three views are explained in detail in [2]. STATE US-
+AGE focuses on the way in which the state of a class is ac-
+cessed by the methods, and exposes, for example, how co-
+hesive the class is. EXTERNAL/INTERNAL CALLS catego-
+rizes methods according to whether they are internally or
+externally used, while BEHAVIOURAL SKELETON focuses
+on the way methods invoke each other internally. In order to
+illustrate our approach, we present the analysis of the class
+UIBuilder of the VisualWorks framework. It is a complex
+class that is used to build user interfaces (windows and their
+subcomponents) according to declarative specifications pro-
+vided by its clients. We chose this class because it is com-
+plex enough in terms of number of instance variables (18)
+and methods (122) and communication between their meth-
+ods, and it helps us to show characteristic results of XRay
+view application. As its name shows it is a Builder Design
+Patterns [1].
+For the view, we ran our analysis tool, ConAn, on the
+chosen class, we examined the resulting view by looking
+at and combining the groups presented in the “Used and
+Shown Collaborations” section of the view definition, and
+we validated our findings by reading the source code oppor-
+tunistically.
+XRay View: STATE USAGE
+Description: Clusters attributes and methods according to
+the way methods access the attributes.
+Used and Shown Collaborations: Exclusive Direct Acces-
+sors, Exclusive Indirect Accessors, Collaborating Attributes,
+and Stateful Core Methods.
+Rationale: Objects bundle both public and private be-
+haviour and state. In order to understand the design of
+a class, it is important to gain insight into how the be-
+haviour accesses the state, and what dependencies exist
+between groups of methods and attributes.
+Validation with UIBuilder: Firstly, we find getters and set-
+ters for each attribute. If we consider only the methods
+that access directly the attributes, we can classify the at-
+tributes into three groups: (a) attributes that are accessed
+only through their getter and setter (policy, stack, cache-
+WhileEditing, and decorator); (b) attributes that are accessed
+through their getter and setter, and an additional method
+(labels, values); (c) attributes that are accessed by several
+methods. The view EXTERNAL/INTERNAL CALLS helps us
+to refine our understanding of these differences.
+We also learned that most accessors are readers, and
+there are only very few writers. Most of the writer meth-
+ods are setters. This means that most of the attributes either
+are initialized when instances are created or are initialized
+and modified outside the class scope.
+If we consider the collaborations among the attributes
+taking into account only the direct accessors, we find that
+there are very few groups of collaborating attributes: (wrap-
+per, component), (bindings, window), (stack, composite),
+(policy, window), (source, bindings), (component, decorator,
+wrapper). The methods access groups of attributes only by
+reading them. 9 over 18 attributes are used with other ones.
+This means that there are 9 attributes that are used alone in
+different methods, so this fact reveals that the class is group-
+ing several functionalities and could be split using the set of
+non-collaborating and collaborating attributes. This kind of
+hypothesis can be refined using the BEHAVIOURAL SKELE-
+TON view.
+When we look at indirect accesses to attributes we ob-
+tain some new groups of collaborating attributes but these
+Proceedings of the 18th IEEE International Conference on Automated Software Engineering (ASE’03)
+1527-1366/03 $ 17.00 © 2003 IEEE
+new groups only include two new attributes that were not
+identified by the direct access attribute groups. From this
+observation we can learn that there is a group of 11 core at-
+tributes that are used in the same group of methods.
+In this specific case, we do not have any stateful core
+methods, which is not surprising as the class has a lot of at-
+tributes.
+</bodyText>
+<sectionHeader confidence="0.998255" genericHeader="related work">
+4. Related Work
+</sectionHeader>
+<bodyText confidence="0.997700272727273">
+Within the CA application to understand software sys-
+tems, we find several approaches. Dekel uses CA to visu-
+alize the structure of classes and to select an effective or-
+der for reading the methods [4]. Godin and Mili [7] applied
+concept analysis to maintain, understand and detect incon-
+sistencies in the Smalltalk Collection hierarchy. In C++ and
+Java, Snelting and Tip [12] analysed a class hierarchy by
+making the relationship between methods and variables ex-
+plicit. Similarly, Huchard [8] applied concept analysis to
+improve the generalization/specialization of classes in a hi-
+erarchy.
+</bodyText>
+<sectionHeader confidence="0.987408" genericHeader="conclusions">
+5. Conclusions and Future Work
+</sectionHeader>
+<bodyText confidence="0.993964785714286">
+In this paper we have applied concept analysis to help in
+the understanding of object-oriented classes. The identified
+concepts are the collaborations between groups of methods
+and attributes of a single class. We only introduced the view
+STATE USAGE which helps to understand how the state of
+the class is used. Two other views are defined and intro-
+duced in [2]. Each of them expose specific aspects of a
+class in terms of groups of collaborations. We have limited
+our validation in this paper to the Smalltalk class UIBuilder,
+but also the classes Scanner and OrderedCollection were
+analyzed in [2]. In our validadtion, we use ConAn, a tool
+we have developed to automatically generate collaborations
+that compose the XRay views.
+In our first experiences we can observe the following:
+</bodyText>
+<listItem confidence="0.864850777777778">
+• each XRay view has a clear focus, and identifies a set
+of methods exhibiting some key properties
+• the views do not stand on their own, but complement
+and reinforce each other
+• although the generation of collaborations and the
+views is fully automatic, their interpretation entails it-
+erative application of views and opportunistic code
+reading
+• the current approach does not take inheritance into ac-
+</listItem>
+<bodyText confidence="0.900449">
+count, which can be a limitation to understanding
+Our next steps are to explore the definitions of new kinds
+of views, and apply them to larger classes. We also intend
+to explore ways of analysing classes in the context of their
+class hierarchies, and also considering the possible relation-
+ships and collaborations with other class -not necessarily
+presented in the class hierarchies.
+Acknowledgments We gratefully acknowledge the financial
+support of the Swiss National Science Foundation for the
+</bodyText>
+<reference confidence="0.9209106">
+project “Tools and Techniques for Decomposing and Com-
+posing Software” (SNF Project No. 2000-067855.02), and
+Recast: Evolution of Object-Oriented Applications (SNF
+2000-061655.00/1). We thank Michele Lanza for his re-
+views.
+</reference>
+<sectionHeader confidence="0.572431" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.998291349999999">
+[1] S. R. Alpert, K. Brown, and B. Woolf. The Design Patterns
+Smalltalk Companion. Addison Wesley, 1998.
+[2] G. Arévalo. Understanding classes using x-ray views. In
+Proceedings of 2nd. MASPEGHI (ASE 2003), 2003.
+[3] V. Basili. Evolving and packaging reading technologies.
+Journal Systems and Software, 38(1):3–12, 1997.
+[4] U. Dekel. Applications of concept lattices to code inspec-
+tion and review. Technical report, Department of Computer
+Science, Technion, 2002.
+[5] S. Demeyer, S. Ducasse, and O. Nierstrasz. Object-Oriented
+Reengineering Patterns. Morgan Kaufmann, 2002.
+[6] B. Ganter and R. Wille. Formal Concept Analysis: Mathe-
+matical Foundations. Springer Verlag, 1999.
+[7] R. Godin, H. Mili, G. W. Mineau, R. Missaoui, A. Arfi, and
+T.-T. Chau. Design of class hierarchies based on concept
+(galois) lattices. Theory and Application of Object Systems,
+4(2):117–134, 1998.
+[8] M. Huchard, H. Dicky, and H. Leblanc. Galois lattice as
+a framework to specify algorithms building class hierar-
+chies. Theoretical Informatics and Applications, 34:521–
+548, 2000.
+[9] S. Kuznetsov and S. Obëdkov. Comparing performance
+of algorithms for generating concept lattices. In Proc. Int.
+Workshop on Concept Lattices-based KDD, 2001.
+[10] M. Lanza and S. Ducasse. A categorization of classes
+based on the visualization of their internal structure: the class
+blueprint. In Proceedings of OOPSLA 2001, pages 300–311,
+2001.
+[11] D. Littman, J. Pinto, S. Letovsky, and E. Soloway. Mental
+models and software maintenance. In Soloway and Iyengar,
+editors, Empirical Studies of Programmers, First Workshop,
+pages 80–98, 1996.
+[12] G. Snelting and F. Tip. Reengineering class hierarchies using
+concept analysis. In ACM Trans. Programming Languages
+and Systems, 1998.
+[13] N. Wilde and R. Huitt. Maintenance support for object-
+oriented programs. IEEE Transactions on Software Engi-
+neering, SE-18(12):1038–1044, Dec. 1992.
+Proceedings of the 18th IEEE International Conference on Automated Software Engineering (ASE’03)
+1527-1366/03 $ 17.00 © 2003 IEEE
+</reference>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.529571">
+<title confidence="0.997782">XRay Views: Understanding the Internals of Classes</title>
+<author confidence="0.997938">Gabriela Arévalo</author>
+<author confidence="0.997938">Stéphane Ducasse</author>
+<author confidence="0.997938">Oscar Nierstrasz</author>
+<affiliation confidence="0.9276205">Software Composition Group University of Bern, Switzerland</affiliation>
+<email confidence="0.942058">arevalo@iam.unibe.ch</email>
+<email confidence="0.942058">ducasse@iam.unibe.ch</email>
+<email confidence="0.942058">oscar@iam.unibe.ch</email>
+<abstract confidence="0.9998796">Understanding the internal workings of classes is a key prerequisite to maintaining an object-oriented software system. Unfortunately, classical editing and browsing tools offer mainly linear and textual views of classes and their implementation. These views fail to expose the semantic relationships between the internal parts of a class. We propose XRay views —a technique based on Concept Analysis— which reveal the internal relationships between groups of methods and attributes of a class. XRay views are composed out of elementary collaborations between attributes and methods, and help the engineer to build a mental model of how a class works internally. In this paper we present XRay views, and illustrate the approach by applying it on the Smalltalk class UIBuilder.</abstract>
+<keyword confidence="0.982524">Keywords: Class Understanding, Concept Analy-</keyword>
+<intro confidence="0.678157">sis, Logical Views</intro>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="false">
+<authors>
+<author>project “Tools</author>
+</authors>
+<title>and Techniques for Decomposing and Composing Software” (SNF Project No. 2000-067855.02), and Recast: Evolution of Object-Oriented Applications (SNF 2000-061655.00/1). We thank Michele Lanza for his reviews.</title>
+<marker>“Tools, </marker>
+<rawString> project “Tools and Techniques for Decomposing and Composing Software” (SNF Project No. 2000-067855.02), and Recast: Evolution of Object-Oriented Applications (SNF 2000-061655.00/1). We thank Michele Lanza for his reviews.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S R Alpert</author>
+<author>K Brown</author>
+<author>B Woolf</author>
+</authors>
+<title>The Design Patterns Smalltalk Companion.</title>
+<date>1998</date>
+<publisher>Addison Wesley,</publisher>
+<contexts>
+<context position="11484" citStr="[1]" startWordPosition="1995" endWordPosition="1995"> on the way methods invoke each other internally. In order to illustrate our approach, we present the analysis of the class UIBuilder of the VisualWorks framework. It is a complex class that is used to build user interfaces (windows and their subcomponents) according to declarative specifications provided by its clients. We chose this class because it is complex enough in terms of number of instance variables (18) and methods (122) and communication between their methods, and it helps us to show characteristic results of XRay view application. As its name shows it is a Builder Design Patterns [1]. For the view, we ran our analysis tool, ConAn, on the chosen class, we examined the resulting view by looking at and combining the groups presented in the “Used and Shown Collaborations” section of the view definition, and we validated our findings by reading the source code opportunistically. XRay View: STATE USAGE Description: Clusters attributes and methods according to the way methods access the attributes. Used and Shown Collaborations: Exclusive Direct Accessors, Exclusive Indirect Accessors, Collaborating Attributes, and Stateful Core Methods. Rationale: Objects bundle both public and</context>
+</contexts>
+<marker>[1]</marker>
+<rawString>S. R. Alpert, K. Brown, and B. Woolf. The Design Patterns Smalltalk Companion. Addison Wesley, 1998.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>G Arevalo</author>
+</authors>
+<title>Understanding classes using x-ray views.</title>
+<date>2003</date>
+<booktitle>In Proceedings of 2nd. MASPEGHI (ASE</booktitle>
+<contexts>
+<context position="4077" citStr="[2]" startWordPosition="647" endWordPosition="647">at allows us to identify meaningful groupings of “objects” that have common “attributes” 1. These groupings (known as concepts) form a partial order known as concept lattice. There are several algorithms for computing the concepts and the concept lattice for a given context [9]. For more details, the interested reader should refer to Ganter and Wille [6]. In this paper we apply this technique and limit our approach to understanding a single class, without taking into account relationships to subclasses, superclasses, or peer classes. This paper is a short version of the approach introduced in [2], and is structured as follows: Section 2 introduces the definition of elements and properties used in ConAn, and the collaborations defined to build the XRay views. Sec1 To avoid confusion with object-oriented terminology, we refer in this paper instead to elements having common properties Proceedings of the 18th IEEE International Conference on Automated Software Engineering (ASE’03) 1527-1366/03 $ 17.00 © 2003 IEEE tion 3 introduces in detail one specific view and a validation in the Smalltalk class UIBuilder. Sections 4 and 5 summarizes briefly the related work, our main conclusions and fu</context>
+<context position="8239" citStr="[2]" startWordPosition="1434" endWordPosition="1434">y subsets of the set of elements E. We define: • F R Gmeans that each entity in F is related with each one in G, i.e., ∀e ∈ F, e′ ∈ G, e R e′. • F R G means that the entities in F are related exclusively with those in G, i.e., ∀e ∈ E, e′ ∈ G, e R e′,⇒ e ∈ F and conversely, ∀e ∈ E, e′ ∈ F, e′ R e ⇒ e ∈ G. Interpretation: We introduce now the collaborations based on which XRay views are built. Note that in each case we are interested in all of the participants of a given collaboration. We will only list those that will be used later in the paper. The complete list of collaborations is listed in [2]. Direct Accessors: Direct accessors, readers or writers M ⊆ M of an attribute a are defined by a non-exclusive relationship: M accesses {a}. This collaboration provides us with a simple classification of the methods according to which attributes they use. In our example, {n, p} accesses {a}. Proceedings of the 18th IEEE International Conference on Automated Software Engineering (ASE’03) 1527-1366/03 $ 17.00 © 2003 IEEE Exclusive Direct Accessors: A method m is an exclusive direct accessor of a when m is the only method to access a directly. We express it as: M accesses {a}. In our example, we</context>
+<context position="10598" citStr="[2]" startWordPosition="1846" endWordPosition="1846">re no methods accessing the entire state of the class. 3. XRay Views An XRay view is a group of collaborations that exposes specific aspects of a class. Based on the collaborations specified above, we have defined three XRay views: STATE USAGE, EXTERNAL/INTERNAL CALLS, and BEHAVIOURAL SKELETON. These three views address different, but logically related aspects of the behaviour of a class. Because of the limited space of the paper, we provide a small explanation of all of them, but we only detail the definitions and case study of the view STATE USAGE. The three views are explained in detail in [2]. STATE USAGE focuses on the way in which the state of a class is accessed by the methods, and exposes, for example, how cohesive the class is. EXTERNAL/INTERNAL CALLS categorizes methods according to whether they are internally or externally used, while BEHAVIOURAL SKELETON focuses on the way methods invoke each other internally. In order to illustrate our approach, we present the analysis of the class UIBuilder of the VisualWorks framework. It is a complex class that is used to build user interfaces (windows and their subcomponents) according to declarative specifications provided by its cli</context>
+<context position="15475" citStr="[2]" startWordPosition="2630" endWordPosition="2630">ysed a class hierarchy by making the relationship between methods and variables explicit. Similarly, Huchard [8] applied concept analysis to improve the generalization/specialization of classes in a hierarchy. 5. Conclusions and Future Work In this paper we have applied concept analysis to help in the understanding of object-oriented classes. The identified concepts are the collaborations between groups of methods and attributes of a single class. We only introduced the view STATE USAGE which helps to understand how the state of the class is used. Two other views are defined and introduced in [2]. Each of them expose specific aspects of a class in terms of groups of collaborations. We have limited our validation in this paper to the Smalltalk class UIBuilder, but also the classes Scanner and OrderedCollection were analyzed in [2]. In our validadtion, we use ConAn, a tool we have developed to automatically generate collaborations that compose the XRay views. In our first experiences we can observe the following: • each XRay view has a clear focus, and identifies a set of methods exhibiting some key properties • the views do not stand on their own, but complement and reinforce each othe</context>
+</contexts>
+<marker>[2]</marker>
+<rawString>G. Arévalo. Understanding classes using x-ray views. In Proceedings of 2nd. MASPEGHI (ASE 2003), 2003.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>V Basili</author>
+</authors>
+<title>Evolving and packaging reading technologies.</title>
+<date>1997</date>
+<journal>Journal Systems and Software,</journal>
+<volume>38</volume>
+<issue>1</issue>
+<contexts>
+<context position="1155" citStr="[3]" startWordPosition="171" endWordPosition="171"> We propose XRay views —a technique based on Concept Analysis— which reveal the internal relationships between groups of methods and attributes of a class. XRay views are composed out of elementary collaborations between attributes and methods, and help the engineer to build a mental model of how a class works internally. In this paper we present XRay views, and illustrate the approach by applying it on the Smalltalk class UIBuilder. Keywords: Class Understanding, Concept Analysis, Logical Views 1. Introduction Understanding source code is a key activity in the maintenance of software systems [3]. In the specific case of object oriented systems, reading the code is harder than procedural systems [4, 10], and therefore the maintenance is actually higher. This is due to several reasons [5]. The first issue is that, contrary to procedural languages, the method definition order in a file is not important [4]. There is no simple and apparent top-down call decomposition, even if some languages propose the visibility notion (private, protected, and public). Furthermore, the run-time architecture is not apparent from the source code, which only exposes the class hierarchy [5]. Another importa</context>
+</contexts>
+<marker>[3]</marker>
+<rawString>V. Basili. Evolving and packaging reading technologies. Journal Systems and Software, 38(1):3–12, 1997.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>U Dekel</author>
+</authors>
+<title>Applications of concept lattices to code inspection and review.</title>
+<date>2002</date>
+<tech>Technical report,</tech>
+<institution>Department of Computer Science,</institution>
+<location>Technion,</location>
+<contexts>
+<context position="1264" citStr="[4, 10]" startWordPosition="188" endWordPosition="189">tween groups of methods and attributes of a class. XRay views are composed out of elementary collaborations between attributes and methods, and help the engineer to build a mental model of how a class works internally. In this paper we present XRay views, and illustrate the approach by applying it on the Smalltalk class UIBuilder. Keywords: Class Understanding, Concept Analysis, Logical Views 1. Introduction Understanding source code is a key activity in the maintenance of software systems [3]. In the specific case of object oriented systems, reading the code is harder than procedural systems [4, 10], and therefore the maintenance is actually higher. This is due to several reasons [5]. The first issue is that, contrary to procedural languages, the method definition order in a file is not important [4]. There is no simple and apparent top-down call decomposition, even if some languages propose the visibility notion (private, protected, and public). Furthermore, the run-time architecture is not apparent from the source code, which only exposes the class hierarchy [5]. Another important problem is the presence of late-binding leads to “yoyo effects” when walking through a hierarchy and tryin</context>
+<context position="14693" citStr="[4]" startWordPosition="2507" endWordPosition="2507">527-1366/03 $ 17.00 © 2003 IEEE new groups only include two new attributes that were not identified by the direct access attribute groups. From this observation we can learn that there is a group of 11 core attributes that are used in the same group of methods. In this specific case, we do not have any stateful core methods, which is not surprising as the class has a lot of attributes. 4. Related Work Within the CA application to understand software systems, we find several approaches. Dekel uses CA to visualize the structure of classes and to select an effective order for reading the methods [4]. Godin and Mili [7] applied concept analysis to maintain, understand and detect inconsistencies in the Smalltalk Collection hierarchy. In C++ and Java, Snelting and Tip [12] analysed a class hierarchy by making the relationship between methods and variables explicit. Similarly, Huchard [8] applied concept analysis to improve the generalization/specialization of classes in a hierarchy. 5. Conclusions and Future Work In this paper we have applied concept analysis to help in the understanding of object-oriented classes. The identified concepts are the collaborations between groups of methods and</context>
+</contexts>
+<marker>[4]</marker>
+<rawString>U. Dekel. Applications of concept lattices to code inspection and review. Technical report, Department of Computer Science, Technion, 2002.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Demeyer</author>
+<author>S Ducasse</author>
+<author>O Nierstrasz</author>
+</authors>
+<title>Object-Oriented Reengineering Patterns.</title>
+<date>2002</date>
+<publisher>Morgan Kaufmann,</publisher>
+<contexts>
+<context position="1350" citStr="[5]" startWordPosition="203" endWordPosition="203">ry collaborations between attributes and methods, and help the engineer to build a mental model of how a class works internally. In this paper we present XRay views, and illustrate the approach by applying it on the Smalltalk class UIBuilder. Keywords: Class Understanding, Concept Analysis, Logical Views 1. Introduction Understanding source code is a key activity in the maintenance of software systems [3]. In the specific case of object oriented systems, reading the code is harder than procedural systems [4, 10], and therefore the maintenance is actually higher. This is due to several reasons [5]. The first issue is that, contrary to procedural languages, the method definition order in a file is not important [4]. There is no simple and apparent top-down call decomposition, even if some languages propose the visibility notion (private, protected, and public). Furthermore, the run-time architecture is not apparent from the source code, which only exposes the class hierarchy [5]. Another important problem is the presence of late-binding leads to “yoyo effects” when walking through a hierarchy and trying to follow the call-flow [13]. Focusing on classes, considered as cornerstones of obj</context>
+</contexts>
+<marker>[5]</marker>
+<rawString>S. Demeyer, S. Ducasse, and O. Nierstrasz. Object-Oriented Reengineering Patterns. Morgan Kaufmann, 2002.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>B Ganter</author>
+<author>R Wille</author>
+</authors>
+<title>Formal Concept Analysis: Mathematical Foundations.</title>
+<date>1999</date>
+<publisher>Springer Verlag,</publisher>
+<contexts>
+<context position="3441" citStr="[6]" startWordPosition="539" endWordPosition="539"> (c) which methods are only called internally, (d) which methods/attributes are heavily used and accessed, (e) how the methods and attributes collaborate. Each of these aspects is important for understanding the inner workings of a class, but unfortunately they are dispersed in the source code, and therefore cannot easily be teased out by a straightforward reading of the source. For this reason we generate a graph representation of the source code and run our tool, ConAn, which applies Concept Analysis to detect different collaborations to compose them in the XRay views. Concept analysis (CA) [6] is a branch of lattice theory that allows us to identify meaningful groupings of “objects” that have common “attributes” 1. These groupings (known as concepts) form a partial order known as concept lattice. There are several algorithms for computing the concepts and the concept lattice for a given context [9]. For more details, the interested reader should refer to Ganter and Wille [6]. In this paper we apply this technique and limit our approach to understanding a single class, without taking into account relationships to subclasses, superclasses, or peer classes. This paper is a short versi</context>
+</contexts>
+<marker>[6]</marker>
+<rawString>B. Ganter and R. Wille. Formal Concept Analysis: Mathematical Foundations. Springer Verlag, 1999.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R Godin</author>
+<author>H Mili</author>
+<author>G W Mineau</author>
+<author>R Missaoui</author>
+<author>A Arfi</author>
+<author>T-T Chau</author>
+</authors>
+<title>Design of class hierarchies based on concept (galois) lattices. Theory and Application of Object Systems,</title>
+<date>1998</date>
+<volume>4</volume>
+<issue>2</issue>
+<contexts>
+<context position="14713" citStr="[7]" startWordPosition="2511" endWordPosition="2511">© 2003 IEEE new groups only include two new attributes that were not identified by the direct access attribute groups. From this observation we can learn that there is a group of 11 core attributes that are used in the same group of methods. In this specific case, we do not have any stateful core methods, which is not surprising as the class has a lot of attributes. 4. Related Work Within the CA application to understand software systems, we find several approaches. Dekel uses CA to visualize the structure of classes and to select an effective order for reading the methods [4]. Godin and Mili [7] applied concept analysis to maintain, understand and detect inconsistencies in the Smalltalk Collection hierarchy. In C++ and Java, Snelting and Tip [12] analysed a class hierarchy by making the relationship between methods and variables explicit. Similarly, Huchard [8] applied concept analysis to improve the generalization/specialization of classes in a hierarchy. 5. Conclusions and Future Work In this paper we have applied concept analysis to help in the understanding of object-oriented classes. The identified concepts are the collaborations between groups of methods and attributes of a sin</context>
+</contexts>
+<marker>[7]</marker>
+<rawString>R. Godin, H. Mili, G. W. Mineau, R. Missaoui, A. Arfi, and T.-T. Chau. Design of class hierarchies based on concept (galois) lattices. Theory and Application of Object Systems, 4(2):117–134, 1998.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Huchard</author>
+<author>H Dicky</author>
+<author>H Leblanc</author>
+</authors>
+<title>Galois lattice as a framework to specify algorithms building class hierarchies. Theoretical Informatics and Applications,</title>
+<date>2000</date>
+<pages>34--521</pages>
+<contexts>
+<context position="14984" citStr="[8]" startWordPosition="2551" endWordPosition="2551">not have any stateful core methods, which is not surprising as the class has a lot of attributes. 4. Related Work Within the CA application to understand software systems, we find several approaches. Dekel uses CA to visualize the structure of classes and to select an effective order for reading the methods [4]. Godin and Mili [7] applied concept analysis to maintain, understand and detect inconsistencies in the Smalltalk Collection hierarchy. In C++ and Java, Snelting and Tip [12] analysed a class hierarchy by making the relationship between methods and variables explicit. Similarly, Huchard [8] applied concept analysis to improve the generalization/specialization of classes in a hierarchy. 5. Conclusions and Future Work In this paper we have applied concept analysis to help in the understanding of object-oriented classes. The identified concepts are the collaborations between groups of methods and attributes of a single class. We only introduced the view STATE USAGE which helps to understand how the state of the class is used. Two other views are defined and introduced in [2]. Each of them expose specific aspects of a class in terms of groups of collaborations. We have limited our v</context>
+</contexts>
+<marker>[8]</marker>
+<rawString>M. Huchard, H. Dicky, and H. Leblanc. Galois lattice as a framework to specify algorithms building class hierarchies. Theoretical Informatics and Applications, 34:521– 548, 2000.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Kuznetsov</author>
+<author>S Obedkov</author>
+</authors>
+<title>Comparing performance of algorithms for generating concept lattices.</title>
+<date>2001</date>
+<booktitle>In Proc. Int. Workshop on Concept Lattices-based KDD,</booktitle>
+<contexts>
+<context position="3752" citStr="[9]" startWordPosition="591" endWordPosition="591">annot easily be teased out by a straightforward reading of the source. For this reason we generate a graph representation of the source code and run our tool, ConAn, which applies Concept Analysis to detect different collaborations to compose them in the XRay views. Concept analysis (CA) [6] is a branch of lattice theory that allows us to identify meaningful groupings of “objects” that have common “attributes” 1. These groupings (known as concepts) form a partial order known as concept lattice. There are several algorithms for computing the concepts and the concept lattice for a given context [9]. For more details, the interested reader should refer to Ganter and Wille [6]. In this paper we apply this technique and limit our approach to understanding a single class, without taking into account relationships to subclasses, superclasses, or peer classes. This paper is a short version of the approach introduced in [2], and is structured as follows: Section 2 introduces the definition of elements and properties used in ConAn, and the collaborations defined to build the XRay views. Sec1 To avoid confusion with object-oriented terminology, we refer in this paper instead to elements having c</context>
+</contexts>
+<marker>[9]</marker>
+<rawString>S. Kuznetsov and S. Obëdkov. Comparing performance of algorithms for generating concept lattices. In Proc. Int. Workshop on Concept Lattices-based KDD, 2001.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Lanza</author>
+<author>S Ducasse</author>
+</authors>
+<title>A categorization of classes based on the visualization of their internal structure: the class blueprint.</title>
+<date>2001</date>
+<booktitle>In Proceedings of OOPSLA</booktitle>
+<pages>300--311</pages>
+<contexts>
+<context position="1264" citStr="[4, 10]" startWordPosition="188" endWordPosition="189">tween groups of methods and attributes of a class. XRay views are composed out of elementary collaborations between attributes and methods, and help the engineer to build a mental model of how a class works internally. In this paper we present XRay views, and illustrate the approach by applying it on the Smalltalk class UIBuilder. Keywords: Class Understanding, Concept Analysis, Logical Views 1. Introduction Understanding source code is a key activity in the maintenance of software systems [3]. In the specific case of object oriented systems, reading the code is harder than procedural systems [4, 10], and therefore the maintenance is actually higher. This is due to several reasons [5]. The first issue is that, contrary to procedural languages, the method definition order in a file is not important [4]. There is no simple and apparent top-down call decomposition, even if some languages propose the visibility notion (private, protected, and public). Furthermore, the run-time architecture is not apparent from the source code, which only exposes the class hierarchy [5]. Another important problem is the presence of late-binding leads to “yoyo effects” when walking through a hierarchy and tryin</context>
+</contexts>
+<marker>[10]</marker>
+<rawString>M. Lanza and S. Ducasse. A categorization of classes based on the visualization of their internal structure: the class blueprint. In Proceedings of OOPSLA 2001, pages 300–311, 2001.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Littman</author>
+<author>J Pinto</author>
+<author>S Letovsky</author>
+<author>E Soloway</author>
+</authors>
+<title>Mental models and software maintenance.</title>
+<date>1996</date>
+<booktitle>In Soloway and Iyengar, editors, Empirical Studies of Programmers, First Workshop,</booktitle>
+<pages>80--98</pages>
+<contexts>
+<context position="2429" citStr="[11]" startWordPosition="370" endWordPosition="370">n walking through a hierarchy and trying to follow the call-flow [13]. Focusing on classes, considered as cornerstones of object oriented systems, we propose a technique to support software engineers in the task of understanding a complex object-oriented system. Instead of requiring the engineer to read code line-by-line to understand how a class works, we provide logically connected “XRay views” of classes that give the engineer an impression of the relationships between methods, attributes, and the invocation and access patterns of a class. In this way we support opportunistic understanding [11] in which the engineer understands a class iteratively by exploring patterns (given by the views) and reading code. Taking into account the class as a sole unit, we are able to provide answers to the following questions about a class: (a) which methods access any attribute, directly or indirectly, (b) which groups of methods access directly or indirectly all the attributes or some subset of the attributes, (c) which methods are only called internally, (d) which methods/attributes are heavily used and accessed, (e) how the methods and attributes collaborate. Each of these aspects is important f</context>
+</contexts>
+<marker>[11]</marker>
+<rawString>D. Littman, J. Pinto, S. Letovsky, and E. Soloway. Mental models and software maintenance. In Soloway and Iyengar, editors, Empirical Studies of Programmers, First Workshop, pages 80–98, 1996.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>G Snelting</author>
+<author>F Tip</author>
+</authors>
+<title>Reengineering class hierarchies using concept analysis.</title>
+<date>1998</date>
+<journal>In ACM Trans. Programming Languages and Systems,</journal>
+<contexts>
+<context position="14867" citStr="[12]" startWordPosition="2534" endWordPosition="2534"> that there is a group of 11 core attributes that are used in the same group of methods. In this specific case, we do not have any stateful core methods, which is not surprising as the class has a lot of attributes. 4. Related Work Within the CA application to understand software systems, we find several approaches. Dekel uses CA to visualize the structure of classes and to select an effective order for reading the methods [4]. Godin and Mili [7] applied concept analysis to maintain, understand and detect inconsistencies in the Smalltalk Collection hierarchy. In C++ and Java, Snelting and Tip [12] analysed a class hierarchy by making the relationship between methods and variables explicit. Similarly, Huchard [8] applied concept analysis to improve the generalization/specialization of classes in a hierarchy. 5. Conclusions and Future Work In this paper we have applied concept analysis to help in the understanding of object-oriented classes. The identified concepts are the collaborations between groups of methods and attributes of a single class. We only introduced the view STATE USAGE which helps to understand how the state of the class is used. Two other views are defined and introduce</context>
+</contexts>
+<marker>[12]</marker>
+<rawString>G. Snelting and F. Tip. Reengineering class hierarchies using concept analysis. In ACM Trans. Programming Languages and Systems, 1998.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>N Wilde</author>
+<author>R Huitt</author>
+</authors>
+<title>Maintenance support for objectoriented programs.</title>
+<date>1992</date>
+<journal>IEEE Transactions on Software Engineering,</journal>
+<booktitle>Proceedings of the 18th IEEE International Conference on Automated Software Engineering (ASE’03) 1527-1366/03 $ 17.00 ©</booktitle>
+<volume>18</volume>
+<issue>12</issue>
+<publisher>IEEE</publisher>
+<contexts>
+<context position="1894" citStr="[13]" startWordPosition="289" endWordPosition="289">nance is actually higher. This is due to several reasons [5]. The first issue is that, contrary to procedural languages, the method definition order in a file is not important [4]. There is no simple and apparent top-down call decomposition, even if some languages propose the visibility notion (private, protected, and public). Furthermore, the run-time architecture is not apparent from the source code, which only exposes the class hierarchy [5]. Another important problem is the presence of late-binding leads to “yoyo effects” when walking through a hierarchy and trying to follow the call-flow [13]. Focusing on classes, considered as cornerstones of object oriented systems, we propose a technique to support software engineers in the task of understanding a complex object-oriented system. Instead of requiring the engineer to read code line-by-line to understand how a class works, we provide logically connected “XRay views” of classes that give the engineer an impression of the relationships between methods, attributes, and the invocation and access patterns of a class. In this way we support opportunistic understanding [11] in which the engineer understands a class iteratively by explori</context>
+</contexts>
+<marker>[13]</marker>
+<rawString>N. Wilde and R. Huitt. Maintenance support for objectoriented programs. IEEE Transactions on Software Engineering, SE-18(12):1038–1044, Dec. 1992. Proceedings of the 18th IEEE International Conference on Automated Software Engineering (ASE’03) 1527-1366/03 $ 17.00 © 2003 IEEE</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

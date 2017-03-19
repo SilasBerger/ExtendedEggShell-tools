@@ -1,0 +1,1527 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.000000">
+<title confidence="0.858474">
+High-Level Polymetric Views of Condensed Run-time Information
+</title>
+<author confidence="0.80385">
+Stéphane Ducasse
+</author>
+<affiliation confidence="0.861526">
+Software Composition Group
+University of Bern, Switzerland
+</affiliation>
+<email confidence="0.969089">
+ducasse@iam.unibe.ch
+</email>
+<author confidence="0.889472">
+Michele Lanza
+</author>
+<affiliation confidence="0.887521">
+Software Composition Group
+University of Bern, Switzerland
+</affiliation>
+<email confidence="0.908449">
+lanza@iam.unibe.ch
+</email>
+<author confidence="0.558089">
+Roland Bertuli
+</author>
+<affiliation confidence="0.401775">
+I3S Laboratory
+</affiliation>
+<address confidence="0.461716">
+Sophia-Antipolis, France
+</address>
+<email confidence="0.904445">
+bertuli@essi.fr
+</email>
+<sectionHeader confidence="0.977124" genericHeader="abstract">
+Abstract
+</sectionHeader>
+<bodyText confidence="0.994418611111111">
+Understanding the run-time behavior of object-oriented
+legacy systems is a complex task due to factors such as
+late binding and polymorphism. Current approaches ex-
+tract and use information from the complete execution trace
+of a system. The sheer size and complexity of such traces
+make their handling, storage, and analysis difficult. Current
+software systems which run almost non-stop do not permit
+such a full analysis. In this paper we present a lightweight
+approach based on the extraction of a condensed amount
+of information, e.g., measurements, that does not require a
+full trace. Using this condensed information, we propose
+a visualization approach which allows us to identify and
+understand certain aspects of the objects’ lifetime such as
+their role played in the creation of other objects and the
+communication architecture they support.
+Keywords: software visualization, reverse engineer-
+ing, run-time information, object-oriented program-
+ming, program understanding
+</bodyText>
+<sectionHeader confidence="0.993233" genericHeader="introduction">
+1. Introduction
+</sectionHeader>
+<bodyText confidence="0.999351842105263">
+Corbi [4] reported that during maintenance profession-
+als spend at least half of their time analyzing software to
+understand it. Moreover, Sommerville [27] and Davis [5]
+estimate that the cost of software maintenance accounts for
+50% to 75% of the overall cost of a software system. These
+facts show that understanding applications is one of the
+hardest tasks in the maintenance of software systems.
+One approach is to support the understanding of object-
+oriented systems using dynamic information. An exten-
+sive amount of research has already been dedicated to this
+research field [12] [21] [31] [22] [17] [14] [25] which is
+mostly based on extracting information generated during
+the execution of a software system. To do so people in-
+strument the source code using various techniques (method
+wrapping, logging, extended virtual machines) and then run
+the system. The instrumented source code generates an exe-
+cution trace, which contains information about the run-time
+behavior of the system, e.g., which method is calling which
+other methods, which objects are created at which time by
+which other objects, etc.
+The problem is that often the event trace for large, com-
+plex, long-running systems is voluminous [26]. Our expe-
+rience shows that collecting a trace of a couple of seconds
+generates tens of thousands of events. Moreover, the low-
+level nature of the information contained in such a trace
+makes it hard for a software engineer to infer higher-level
+information about a software system. For example, he may
+want to know which other objects a certain object is send-
+ing messages to, but he does not want to have to anal-
+yse and verify every single method invocation contained in
+the trace. Many approaches based on run-time information
+have therefore as primary goal the reduction of the com-
+plexity of the trace in order to reveal certain aspects like the
+collaboration between classes [17] [25] [3].
+Our approach is based on a condensed set of informa-
+tion, i.e., we do not keep and analyze the complete trace,
+we rather compute simple run-time metrics by counting cer-
+tain events. For example, we count how many methods of
+a class are invoked during the program execution. Then we
+visualize this value, representing the number of the invoked
+methods of a class, in a run-time polymetric view. Poly-
+metric views, presented by Lanza and Ducasse [19] [20],
+are visualisations enriched with software metrics. These
+views allow us to support the understanding of the run-time
+behaviour of a large, complex, and long-running systems.
+This allows us to reduce the amount of information to a few
+metrics, while still obtaining and visualising valuable infor-
+mation about the run-time behaviour of the system.
+In this article we first discuss the problems and chal-
+lenges that the run-time analysis of object-oriented appli-
+cations poses (Section 2). We then present our approach in
+detail (Section 3), before presenting and analyzing a case
+study performed using our tool, DIVOOR, an extension of
+CodeCrawler [18], with different run-time polymetric views
+(Section 4). We conclude the paper with a discussion of our
+findings (Section 5), a look at the related work (Section 6),
+and an outlook on our future work (Section 7).
+</bodyText>
+<sectionHeader confidence="0.945043" genericHeader="method">
+2. Run-time Analysis Problems
+</sectionHeader>
+<bodyText confidence="0.947671">
+Wilde and Huitt [32] assessed that understanding object-
+oriented applications is difficult because of several reasons,
+such as:
+</bodyText>
+<listItem confidence="0.94600725">
+• Polymorphism and late-binding make traditional tool
+analyzers like program slicers inadequate. Data-flow
+analysers are more complex to build especially in pres-
+ence of dynamically typed languages.
+• The use of inheritance and incremental class defini-
+tions, together with the dynamic semantics of self and
+this, make applications more difficult to understand.
+• The domain model of the applications is spread over
+</listItem>
+<bodyText confidence="0.932561666666667">
+classes residing in different hierarchies and/or subsys-
+tems and it is difficult to pinpoint the location of a cer-
+tain functionality.
+Using dynamic information is one way to support the
+understanding process. In such a context essential questions
+need to be answered such as:
+</bodyText>
+<listItem confidence="0.72503005">
+• What are the most instantiated classes?
+• What are the classes having tenured objects? From an
+architectural point of view detecting singletons is also
+valuable information.
+• What are the classes that create objects? Detecting ob-
+ject factories is important information.
+• How do classes communicate with each other?
+• Which percentage of the methods defined in a class are
+actually used?
+2.1 Challenges and Constraints
+The run-time analysis of object-oriented systems is chal-
+lenging because of the following constraints:
+• Amount and density of information. The execution
+traces generated for run-time analysis are packed with
+very large amounts of low-level information. There-
+fore they must be analysed using techniques which
+reduce their complexity, such as filtering, clustering,
+slicing, concept analysis, or visualization [28] [26]
+[13] [3].
+• Granularity of information. Execution traces contain
+</listItem>
+<bodyText confidence="0.967362">
+large amounts of low-level information, e.g., which
+methods invoke which methods, which methods ac-
+cess which attributes, which objects are created at what
+time, etc. It is difficult, using such small pieces of in-
+formation, to gain an understanding at a higher level.
+</bodyText>
+<sectionHeader confidence="0.903519" genericHeader="method">
+3. Our Approach
+</sectionHeader>
+<bodyText confidence="0.997451909090909">
+In a run-time context numerous classes, complex inher-
+itance and containment hierarchies, and diverse patterns
+of dynamic interaction all contribute to difficulties in un-
+derstanding, reusing, debugging, and tuning large object-
+oriented systems. Many of these difficulties are due to the
+amount and quality of the data that can be gathered using
+execution traces. The relevant information we are looking
+for is often hidden in huge amounts of data that must first
+be filtered and analysed. Our approach uses a condensed set
+of information to support the understanding of the run-time
+behavior of an application.
+</bodyText>
+<subsectionHeader confidence="0.998226">
+3.1 The Principle of a Polymetric View
+</subsectionHeader>
+<bodyText confidence="0.9714229">
+The baseline of our work is based upon the approach
+implemented in the tool CodeCrawler [18] [19] [20]. It
+implements the polymetric views, software visualizations
+enriched with software metrics, described by Lanza [19],
+which we mainly used to support the understanding of soft-
+ware systems with static analysis. In Figure 1 we see that,
+given two-dimensional nodes representing entities (e.g.,
+software artifacts) and edges representing relationships, we
+enrich these simple visualizations with up to 5 metrics on
+these node characteristics:
+</bodyText>
+<figure confidence="0.9895355">
+Width
+Metric
+Height
+Metric
+Color Metric
+Entity
+Relationship
+Position Metrics (x,y)
+</figure>
+<figureCaption confidence="0.999332">
+Figure 1. The principle of a polymetric view.
+</figureCaption>
+<listItem confidence="0.9914425">
+• Node Size. The width and height of a node can render
+two measurements. We follow the convention that the
+wider and the higher the node, the bigger the measure-
+ments its size is reflecting.
+• Node Color. The color interval between white and
+black can display a measurement. Here the conven-
+tion is that the higher the measurement the darker the
+node is. Thus light gray represents a smaller metric
+measurement than dark gray.
+• Node Position. The X and Y coordinates of the po-
+</listItem>
+<bodyText confidence="0.946920727272727">
+sition of a node can reflect two other measurements.
+This requires the presence of an absolute origin within
+a fixed coordinate system, therefore not all layouts can
+exploit this dimension, particularly tree layouts.
+In our previous work [20] we only made use of static
+information and software metrics which could be gathered
+from the static analysis of a software system. In this article
+we also make use of the thickness of the edges to render
+measurements. This gives us information about the weight
+of an edge between two entities, e.g., a thick invocation edge
+between two classes signifies there are many invocations
+between the two classes.
+Note that since run-time information tends to be non-
+linear and with huge differences in scale (for example, a
+method can be invoked 10 times, while another one 50’000
+times), some of the views use a logarithmic scale to display
+the measurements.
+Figure 2. An inheritance tree enriched with
+run-time measurements.
+Example. Figure 2 shows an example of an inheritance
+tree enhanced with run-time information. The nodes rep-
+resent the classes of the analyzed application, the edges il-
+lustrate the inheritance relationships. In this example, the
+width of the nodes reflects the number of created instances,
+while the height represents the number of used methods dur-
+ing the execution. The color tone represents the number of
+method calls. For example the flat dark node at the bottom
+of one the hierarchies represents a class which is heavily
+instantiated (the node width is remarkable compared to the
+other nodes), but who seems, once instantiated, to perform
+little behaviour (the node has a small height), i.e., only few
+methods of this class have been invoked during the analysed
+run-time.
+</bodyText>
+<subsectionHeader confidence="0.994417">
+3.2 Run-Time Information Collection
+</subsectionHeader>
+<bodyText confidence="0.9990325">
+Run-time information collection is a rich domain that
+goes from the wrapping of methods [2] and the control of
+objects [8] to the instrumentation of virtual machines.
+A great body of work has been done on run-time infor-
+mation in terms of a trace of events [10] [11] [24]. This trace
+represents valuable information but is space-consuming and
+complex and therefore requires additional abstractions and
+manipulations to extract the wanted information.
+Our approach focuses on collecting a reduced amount
+of information, namely measurements, during the execu-
+tion, such as the number of invocations, number of object
+creations, number of used classes/methods, the number of
+method calls on a class during the execution, etc.). We con-
+strain ourselves to use only relatively simple measurements.
+</bodyText>
+<figure confidence="0.9903399375">
+Class Run-Time Measurements
+Name Description
+NCM Number of called methods
+RCM Ratio of called methods vs. not called methods
+NMI Number of method invocations on a class
+NIMI Number of internal method invocations on a class
+NEMI Number of external method invocations on a class
+NCCM Number of called class (static) methods
+NCMI Number of class (static) method calls on a class
+NCI Number of created instances of a class
+NCO Number of created objects by the class instances
+Method Run-Time Measurements
+Name Description
+TI Total number of calls
+ITI Number of invocations (caller is receiver of invocation)
+ETI number of invocations (caller is different than the receiver)
+</figure>
+<tableCaption confidence="0.737021">
+Table 1. A list of the measurements we extract
+from an execution trace.
+</tableCaption>
+<bodyText confidence="0.9942095">
+The measurements we currently extract from an execu-
+tion trace are listed in Table 1 1.
+</bodyText>
+<sectionHeader confidence="0.985861" genericHeader="method">
+4 Run-time Polymetric Views
+</sectionHeader>
+<bodyText confidence="0.911965272727273">
+In this section we define 3 run-time polymetric views and
+show the result of their application and analysis on a con-
+crete case study that we present below. For the experience,
+we run the application on a scenario covering its different
+aspects.
+1At first sight the difference between NCM and NMI can be delicate
+to grasp. NCM represents the number of called methods of a class, while
+NMI represents the number of invocations on the methods of a class. For
+example, if a class has 5 methods and during the execution 3 different
+methods have been invoked 500 times, then NCM equals to 3 while NMI
+equals to 500.
+</bodyText>
+<subsectionHeader confidence="0.98736">
+4.1 Case Study in a Nutshell
+</subsectionHeader>
+<bodyText confidence="0.997407407407407">
+The particular software system used in our experiment
+is the Moose reengineering environment that is developed
+by our group [9]. Moose is a relatively small case study
+consisting of 137 classes and 2093 methods of Smalltalk
+code. It serves as a foundation for other reverse engineer-
+ing tools. It provides a language independent representa-
+tion and manipulation of source code written in C++, Java,
+Cobol, and Smalltalk. To achieve this language indepen-
+dence it is based on the FAMIX meta-model [7], which de-
+scribes how elementary source code elements such as at-
+tributes, methods, classes, and namespaces are represented
+[6]. Moreover, Moose describes meta-models as instances
+of its own meta-meta-model. This explicit description of
+meta-models supports the creation of generic model reader
+and writers.
+To parse the source code of applications of Java or
+C++, Moose interprets CDIF or XMI compliant files, while
+for extracting Smalltalk applications, Moose uses its own
+parser and analyzes the resulting abstract syntax trees to
+generate Moose models.
+Run-time scenario. We run the Moose system for the
+analysis of a Smalltalk application: therefore a meta-model
+is created, a Smalltalk-specific source code model of the
+application is created, then the application is analyzed (met-
+rics are computed and extracted), finally, using two external
+representation formats (CDIF and XMI), the model is saved
+on file and reloaded multiple times.
+</bodyText>
+<subsectionHeader confidence="0.841927">
+4.2 The Instance Usage Overview
+</subsectionHeader>
+<figure confidence="0.721583555555556">
+Instance Usage Overview Description
+Layout Inheritance tree, without sort
+Nodes Classes
+Edges Inheritance
+Scope Full system
+Metric Scale Logarithmic
+Node Width NCI (Number of created instances)
+Node Height NCM (Number of called methods)
+Node Color NMI (Number of method invocations on a class)
+</figure>
+<figureCaption confidence="0.6921435">
+Figure Figure 3
+View Intention. The Instance Usage Overview shows
+</figureCaption>
+<bodyText confidence="0.991347909090909">
+which classes are instantiated and used during the system’s
+execution. As shown by the view description above, the
+node width represents the number of created instances, the
+height of a node represents the number of methods that
+have been used, and the color represents the total number
+of method invocations during the program execution.
+Revealing Symptoms. Note that this view only considers
+instance method invocations and does not take into account
+class or static method invocations. While this view provides
+an overview of a complete application it also offers detailed
+information, such as:
+</bodyText>
+<listItem confidence="0.999847666666667">
+• Small, white, and square nodes represent classes that
+have not been instantiated, therefore not used.
+• Narrow, pale nodes represent classes whose methods
+</listItem>
+<bodyText confidence="0.749687333333333">
+have been invoked but having no or few instances.
+This can be the case of singletons or abstract classes
+which are not instantiated but their methods are used
+</bodyText>
+<listItem confidence="0.9513636">
+by means of inheritance.
+• Flat, pale nodes represent classes that are heavily in-
+stantiated but not often used as their number of invo-
+cation is low (denoted by the light color).
+• Flat, dark nodes represent classes that are heavily in-
+stantiated with few used, but heavily invoked, meth-
+ods.
+• Large, dark nodes represent classes that have been
+heavily instantiated and whose behaviour has been
+greatly used.
+</listItem>
+<bodyText confidence="0.979145">
+Case Study. Figure 3 shows a part of the Instance Usage
+Overview applied on our case study.
+The dark, large node annotated as A in our view is a
+CDIF scanner, which parses files written in the CDIF for-
+mat, an old industrial exchange format. An instance of the
+scanner is created each time a model is loaded into memory.
+It is heavily invoked since the scanning is a dense process
+putting in movement many small and specific methods.
+The dark, large node annotated as B represents the
+Moose meta-meta-model AttributeDescription class which
+has been instantiated a high number of times. This meta-
+meta-model class is instantiated to represent the current
+Moose meta-model. As Moose is a dynamic environment
+and meta-models can be extended, the current meta-model
+representation is created each time a model is loaded. Sev-
+eral methods (i.e., mainly accessors) are then executed to
+populate the meta-model entity from a meta-meta-model
+description. This explains the high number of created in-
+stances. However, we were puzzled by the fact that those
+classes are so heavily instantiated and used (350,000 calls
+and 3,500 instances). Further inspections may yield chances
+for optimizations.
+The FAMIX meta-model classes (represented in the in-
+heritance hierarchy whose root is called C on the figure)
+which model the source code entities are flat, lightly col-
+ored nodes. Indeed the models loaded into Moose during
+the scenario are simple models containing only a couple of
+classes. Hence these classes are not the most instantiated
+</bodyText>
+<figureCaption confidence="0.917376">
+Figure 3. The Instance Usage Overview.
+</figureCaption>
+<bodyText confidence="0.9725205">
+as would be case with the loading of large models. This
+inheritance hierarchy contains the three following shapes:
+</bodyText>
+<listItem confidence="0.542790933333333">
+1. The flat nodes are the information extracted from
+Smalltalk code (Classes, Methods, Attributes, Inher-
+itances, ...), and they occur always as leaves of the
+inheritance tree. The white classes (D) that model
+instance and local variables are less instantiated and
+used compared to the two classes modeling variable
+accesses and method invocations (E, F).
+2. The small, square leaf nodes (G) represent classes that
+are defined in the language independent meta-model
+but that are not relevant in Smalltalk (classes modeling
+entities such as Includes, SourceFiles, Functions, etc.).
+Therefore these classes have not been instantiated at
+all.
+3. The narrow nodes in the middle of the hierarchy (H)
+represent abstract classes as they are not instantiated
+</listItem>
+<bodyText confidence="0.95361292">
+but their methods are invoked by subclass instances.
+The small hierarchy (under the class annotated I) repre-
+sents the visitors parse tree that extracts the FAMIX meta
+model from the Smalltalk source code. The class VWParse-
+TreeEnumerator 2 (J) is invoked each time a model is cre-
+ated from Smalltalk source code while the other two Visi-
+tors, which are VWParsetreeMetricCalculator (K) and VW-
+ParseAnnotator (L), are dedicated to analysis that is only
+performed on demand.
+Finally the small hierarchy (M) is not covered at all by
+our execution. In fact, these classes represent a part the
+graphical user interface of Moose, and have not been used
+during the execution.
+2VW stands for VisualWorks, a Smalltalk development environment
+and distribution.
+Discussion. The Instance Usage Overview gives an
+overview of the run-time behavior of a whole application. It
+gives clues on the classes used in the system in the context
+of superclass code reuse. This view has the double advan-
+tage of combining static (inheritance shape of the system,
+number of classes) and run-time information for each class
+(number of created instances, number of method calls, num-
+ber of invoked methods). It helps to identify often instanti-
+ated classes, not instantiated classes, heavily used classes,
+and unused classes.
+</bodyText>
+<subsectionHeader confidence="0.960979">
+4.3 The Communication Interaction View
+</subsectionHeader>
+<table confidence="0.889098">
+Communication Interaction Description
+Layout Embedded Spring Layout
+Nodes Classes
+Edges Invocations
+Scope Full system
+Metric Scale Linear
+Node Width NCM (Number of called methods)
+Node Height NCM (Number of called methods)
+Node Color NMI (Number of method invocations on a class)
+Edge Width Number of Invocations Between two Classes
+Figure Figure 4
+View Intention. The Communication Interaction view
+</table>
+<bodyText confidence="0.998207875">
+shows the communication between classes of a system dur-
+ing its execution. As described above the size of a node
+represents the number of methods used and the color the
+number of method invocations. The Communication Inter-
+action view takes advantage of an embedded spring layout:
+it weights the springs on the edges so that classes heavily
+communicating with each other will aggregate themselves.
+In addition, the width of the edges represents the class-to-
+</bodyText>
+<figureCaption confidence="0.948183666666667">
+class communication.
+Figure 4. The Communication Interaction view.
+Revealing Symptoms. This view only considers instance
+</figureCaption>
+<bodyText confidence="0.8700705">
+level method invocations and not direct class references or
+instance creations between classes. This view may contain:
+</bodyText>
+<listItem confidence="0.9934105">
+• Unconnected, tiny, square nodes represent classes
+whose methods do not invoke other methods or get in-
+voked by other methods.
+• Connected, tiny, square nodes represent classes whose
+methods are rarely invoked. Note that such classes
+can still have methods heavily invoking other methods,
+represented as a dark class node.
+• Large, white, square nodes represent classes having
+a considerable number of method used but which are
+rarely invoked during the execution.
+• Dark, square nodes represent heavily used classes.
+Small, dark, square nodes in addition represent classes
+whose few methods are heavily used.
+• Groups of nodes loosely connected to the view core
+</listItem>
+<bodyText confidence="0.986921477272727">
+represent classes communicating via a funnel [18] [20]
+to the rest of the system.
+Case Study. Figure 4 shows the application of the Com-
+munication Interaction view on our case study.
+A group of classes is clearly disconnected from the rest
+of the core of the view, while it joins the biggest part of the
+view through the class annotated as A. This group of classes
+implements the XMI file production based on a MOF com-
+pliant interface and is disconnected from the rest because
+the XMI/MOF production is an independent package used
+by Moose to produce XMI model files. The big class (B)
+is the XMI producer which uses MOF interface objects
+that communicate via a bridge class (A) with the FAMIX-
+compliant meta-model. The XMI producer is rarely used
+because Moose favors the CDIF exchange format. This ex-
+plains why its class node is pale.
+The big class (C) is the central repository storing all
+the analyzed models. Moreover it acts as a main entry for
+querying the models. That is why this class is connected
+to all the classes modelling the Smalltalk source code. The
+medium sized dark class node (D) is the CDIF scanner that
+is mainly invoked by an importer class (E) which loads
+models into memory. The importer has the responsibility
+to populate a model and as such to transform textual rep-
+resentations (from a CDIF text file) into objects. Note that
+the Moose developers learned that this class was also in-
+voked by another one as shown in Figure 4. The big class
+(F) represents the class MSEClass that models classes in
+Moose. The class (G) is the class representing the meta-
+meta-model of Moose which is then instantiated to repre-
+sent the FAMIX meta-model. This class is used by all the
+FAMIX classes as they describe themselves automatically
+and by the input/output tools as they provide meta-model
+independent functionality.
+Discussion. The Communication Interaction view iden-
+tifies heavily invoked classes, but it is less scalable than In-
+stance Usage Overview because when the classes commu-
+nicate heavily a naive embedded spring layout has difficul-
+ties to create well identifiable groups of classes. Note also
+that in our approach we took into account as invocations
+self sends between classes and subclasses which make the
+underlying view much denser. Another way to reduce such
+a high degree of coupling would be to group all the classes
+within a common hierarchy.
+</bodyText>
+<subsectionHeader confidence="0.770535">
+4.4 The Creation Interaction View
+Creation Interaction Description
+Layout Embedded Spring Layout
+Nodes Classes
+</subsectionHeader>
+<table confidence="0.76976275">
+Edges Instantiation
+Scope Full system
+Metric Scale Logarithmic
+Node Width NCO (Number of created objects by the class)
+Node Height NCI (Number of created instances)
+Node Color NCI (Number of created instances)
+Edge Width Number of Creation Between two Classes
+Figure Figure 5
+</table>
+<listItem confidence="0.801841085714286">
+View Intention. The Creation Interaction view shows
+the instance creations between classes of the system dur-
+ing the execution. As described above the width and the
+color of a class node represents the number of instances
+created by the class and the height represents the number
+of instances of the represented class. The Creation Inter-
+action view also takes advantage of the embedded spring
+layout by weighting the springs so that classes heavily in-
+stantiating each other classes will aggregate themselves. In
+addition, the width of the edges represents the number of
+class-to-class instantiations.
+Revealing Symptoms. This view only considers instance
+level object creations, and may contain:
+• Unconnected, tiny, square nodes representing classes
+that have not been instantiated, and have therefore not
+been used during the system’s execution.
+• Connected, tiny, white, square nodes represent classes
+with few instances. Note that such classes can still in-
+stantiate other classes.
+• Flat, lightly colored nodes represent classes that heav-
+ily create instances, but are not often instantiated them-
+selves. A few objects of these classes create a lot of
+other objects. Note that we can have an abstract class
+that still creates a lot of objects simply due to the fact
+that its methods are used by instance subclasses.
+• Narrow, dark nodes represent classes that have been in-
+stantiated many times, but whose instances create only
+few other instances.
+• Wide, dark nodes represent classes that have been
+heavily instantiated and used as the number of meth-
+ods used and the number of invocations are high.
+Case Study. Figure 5 shows the application of the Cre-
+ation Interaction view on an execution of our case study.
+Four big groups of classes are identifiable:
+1. The group on the top of the view, which is composed
+</listItem>
+<bodyText confidence="0.87529803125">
+of a narrow dark node (A) and some flat nodes (B), has
+an interesting shape. The narrow class node represents
+the class AttributeDescription, a meta-meta-model en-
+tity which has been instantiated during the initializa-
+tion of the system by all the FAMIX meta-model enti-
+ties. The small flat nodes represent the FAMIX meta-
+model classes that are not Smalltalk specific but that
+still have been creating instances of the class Attribut-
+eDescription to represent themselves during the cre-
+ation of the FAMIX meta-model.
+2. Extracting a source code model is done in two different
+phases by two different entities: (1) the VWImporter
+(C) which uses the reflective API of Smalltalk to query
+simple structural information such as classes, meth-
+ods, attributes, and (2) VWParseTreeEnumerator (D)
+which is a visitor extracting from the abstract syntax
+tree (AST) more detailed information.
+3. The group on the top left of the view represents the first
+extraction phase where we identify the fact that the big
+class (C) creates a lot of entities of the surrounding
+classes (E). The opposite group in the view describes
+the second phase where the VWParseTreeEnumerator
+(D) creates a lot of instances of the Access and Invoca-
+tion classes (F) which are among the most numerous
+entities in our meta-model.
+4. Finally the group on the bottom left reveals an interest-
+ing aspect of the system. The big dark node (G) rep-
+resents the class Measurement. Measurements which
+represents source code metrics are the most numerous
+entities created during a model analysis. As such they
+are not represented in memory, but they are stored on
+file. Instances of Measurement are then created during
+</bodyText>
+<figureCaption confidence="0.818367">
+Figure 5. The Creation Interaction view.
+</figureCaption>
+<bodyText confidence="0.997932071428571">
+the loading of a file like the other entities but a sec-
+ond phase removes them from memory by means of
+garbage collection. What the picture shows is the fact
+that during the loading/saving of a source code model,
+instances of Measurement are created. The classes sur-
+rounding it are the various classes responsible for the
+loading and saving (H).
+Discussion. The view Creation Interaction is clearly
+more scalable than the Communication Interaction view.
+This is normal as a class has a higher probability to invoke
+more other classes than to create instances of other classes.
+The view is useful, as it allows us to classify classes ac-
+cording to their behaviour in terms of the creation of other
+objects.
+</bodyText>
+<sectionHeader confidence="0.996073" genericHeader="method">
+5 Discussion
+</sectionHeader>
+<bodyText confidence="0.999500884615385">
+The approach while based on a condensed set of run-time
+information has proven to be successful to provide insights
+about the behaviour of an application at run-time. The pre-
+sented views are rich as they have multiple facets revealing
+different kinds of information. The approach by its reduc-
+tion of dynamic information is also applicable to systems
+that should not be disturbed and for which generating a
+trace would lead to extremely huge amounts of data. The
+approach is also incremental in the sense that the collected
+information can be cumulated. Finally the views provide
+overviews as well as in some cases more fine-grained infor-
+mation. Our approach could also be plugged dynamically
+while a system is running. Note that it is linked to the wrap-
+ping technology but also to the minimal set of run-time in-
+formation it requires. Our tool, DIVOOR, uses the Method
+Wrappers [2] that allows one to dynamically and safely con-
+trol any method without method recompilation or byte-code
+modification.
+The drawbacks of the approach are that it does not pro-
+vide fine-grained run-time information at the level of se-
+quence of interactions like sequence diagrams, as done by
+De Pauw [24] and that it requires the viewer to interact
+with the view to gather the relevant information. Moreover,
+our current implementation of the embedded spring layout
+shows some limits when being applied on densely commu-
+nicating systems.
+</bodyText>
+<sectionHeader confidence="0.999468" genericHeader="method">
+6 Related Work
+</sectionHeader>
+<bodyText confidence="0.999670985074627">
+In the past, a great body of research has been conducted
+to support the understanding of object-oriented applications
+[12] [17] [21]. Among the various approaches to support
+the understanding of software behavior that have been pro-
+posed in the literature, graphical representations of software
+execution have long been accepted as comprehension aids.
+Various tools provide quite different software execution vi-
+sualizations.
+Murphy et al. have developed, in AVID, an approach that
+allows software engineers to specify a high-level model of
+a system [31]. The software execution can be visualized
+using these models. Their visualization is oriented towards
+the liveness of objects and their number. Their work is di-
+rected more towards static, architectural models, while our
+work is more focused on the visualization of different kinds
+of interactions between classes of a software system during
+its execution. In a recent version they introduces sampling
+of events to reduce the information [3].
+Systä and Shimba [28] [29] [30] mix static and dynamic
+information to support program understanding. Shimba
+uses traces of Java programs and extracts automatically sce-
+nario diagrams but also state diagrams representing the run-
+time of the system based on SCED [15]. Shimba provides
+also string matching algorithms for recognizing patterns in
+event traces.
+Lange et al. with their Program Explorer are focused on
+views of classes and objects [17] [16]. The authors have de-
+veloped a system for tracking function invocation, object in-
+stantiation, and attribute access. The views show class and
+instance relationships (usually focused on a particular in-
+stance or class), and short method-invocation histories. It is
+not intended as a global understanding tool. The users must
+know what they are interested in before they start, whereas
+our approach is made for covering a complete system.
+Jerding et al. have created their own interaction dia-
+grams to visualize the entire software execution [10] [11].
+The purpose of their tool ISVis is to be able to visualize all
+the method calls between the classes. They can extract and
+recognize execution patterns, but its drawback is a certain
+lack of flexibility in the analysis: It has a good scalability
+for large numbers of messages, but not for a huge number
+of classes. In the latter case the visualization becomes less
+useful.
+De Pauw et al. presented two different approaches. In
+their tool Jinsight, they are focused on interaction diagrams
+[24]. This way, all messages between objects can be visual-
+ized. The extraction of execution patterns is also one of the
+main purposes. However, with a large execution trace it be-
+comes difficult to understand class roles during execution.
+Earlier on, De Pauw, with its class call clusters and class
+call matrix [22] [23], was closer to our approach. These
+visualizations are simple, they have a good scalability, but
+they only present a facet of an object-oriented application.
+Except the last approach, all of them have in common
+that they visualize program executions by applying sophis-
+ticated diagrams to keep the whole execution trace. In con-
+trast, we extract from the execution trace information which
+we then condense into a few measurements to enrich our vi-
+sualizations.
+A dynamic program slice [13] is an executable part of
+a program whose behavior is identical, for the same pro-
+gram input, to that of an original program with respect to a
+variable(s) of interest at some execution position. Dynamic
+slicing has been used to support the understanding of pro-
+gram [14]. In a similar way, CodeSurfer [1] supports the
+understanding by using hypertext facilities but not full visu-
+alization support.
+</bodyText>
+<sectionHeader confidence="0.99431" genericHeader="conclusions">
+7 Conclusions and Future Work
+</sectionHeader>
+<bodyText confidence="0.995533625">
+In this paper we presented a new way of presenting run-
+time information that is not based on a trace of a system, but
+on a condensed and compact set of information, i.e., mea-
+surements, extracted during its execution. The measure-
+ments are then used to generate run-time polymetric views,
+simple visualizations enriched with measurements [20].
+The views proposed, while being based on simple princi-
+ples and a condensed set of run-time information, still pro-
+vide rich insights and highlight multiple facets of the run-
+time behavior of a system. The advantages of our approach
+is the fact that it can be applied to systems for which a
+trace generation would be difficult to extract or too big to
+efficiently analyze such as webservers or other applications
+running 24 hours a day.
+In the future we plan to extend our current approach in
+the following ways:
+</bodyText>
+<listItem confidence="0.997307571428572">
+• Attribute dynamics. Understanding how attributes are
+used during the lifetime of an object or a class and their
+usage frequency is an axis we want to explore.
+• Object lifetime. Objects do not have the same lifetime
+over an execution and it would be interesting to iden-
+tify the different kind of objects.
+• Test coverage. Understanding and assessing tests
+</listItem>
+<bodyText confidence="0.889835">
+is a problem that with the emergence of test-driven
+methodologies is getting more and more crucial. We
+plan to apply our approach to understand and estimate
+tests and their quality. We also think we could verify
+the coverage of tests and infer which parts of a system
+are covered by how many tests.
+</bodyText>
+<listItem confidence="0.848354">
+• Large systems. We also want to assess whether this
+</listItem>
+<bodyText confidence="0.8989395">
+approach scales up to deal with traces of very large
+systems, where the scalability problem is not given by
+the trace itself, but by the number of involved objects,
+which has an impact on the visualizations.
+Acknowledgments. We acknowledge the financial sup-
+port of the Swiss National Science Foundation for the
+</bodyText>
+<reference confidence="0.74919325">
+projects “Tools and Techniques for Decomposing and Com-
+posing Software” (SNF Project No. 2000-067855.02) and
+Recast: Evolution of Object-Oriented Applications (SNF
+Project No. 2000-061655.00/1).
+</reference>
+<sectionHeader confidence="0.721657" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.999829215686274">
+[1] P. Anderson and T. Teitelbaum. Software inspection using
+codesurfer. In Proceedings of WISE’01 (International Work-
+shop on Inspection in Software Engineering), 2001.
+[2] J. Brant, B. Foote, R. Johnson, and D. Roberts. Wrappers
+to the Rescue. In Proceedings ECOOP ’98, LNCS 1445, pp
+396–417. Springer-Verlag, 1998.
+[3] A. Chan, R. Holmes, G. C. Murphy, and A. T. Ying. Scal-
+ing an object-oriented system execution visualizer through
+sampling. In International Workshop on Program Compre-
+hension, 2003.
+[4] T. Corbi. Program understanding: Challenge for the 1990’s.
+IBM Systems Journal, 28(2):294–306, 1989.
+[5] A. M. Davis. 201 Principles of Software Development.
+McGraw-Hill, 1995.
+[6] S. Demeyer, S. Ducasse, and S. Tichelaar. Why unified is
+not universal. UML shortcomings for coping with round-trip
+engineering. In Proceedings UML ’99, LNCS 1723, Oct.
+1999. Springer-Verlag.
+[7] S. Demeyer, S. Tichelaar, and S. Ducasse. FAMIX 2.1 — the
+FAMOOS information exchange model. Technical report,
+University of Bern, 2001.
+[8] S. Ducasse. Evaluating message passing control techniques
+in Smalltalk. Journal of Object-Oriented Programming,
+12(6):39–44, June 1999.
+[9] S. Ducasse, M. Lanza, and S. Tichelaar. Moose: an exten-
+sible language-independent environment for reengineering
+object-oriented systems. In Proceedings of the Second Inter-
+national Symposium on Constructing Software Engineering
+Tools (CoSET 2000), June 2000.
+[10] D. Jerding and S. Rugaber. Using Visualization for Archi-
+tectural Localization and Extraction. In Proceedings WCRE,
+pp 56 — 65. IEEE, 1997.
+[11] D. F. Jerding, J. T. Stasko, and T. Ball. Visualizing Message
+Patterns in Object-Oriented Program Executions. Technical
+Report GIT-GVU-96-15, Georgia Institute of Technology,
+May 1996.
+[12] M. F. Kleyn and P. C. Gingrich. Graphtrace — understand-
+ing object-oriented systems using concurrently animated
+views. In Proceedings OOPSLA ’88, volume 23, pp 191–
+205, Nov. 1988.
+[13] B. Korel and J. Laski. Dynamic program slicing. Informa-
+tion Processing Letters, 29(3):155–163, 1988.
+[14] B. Korel and J. Rilling. Dynamic program slicing in under-
+standing of program execution. In 5th International Work-
+shop on Program Comprehension (WPC ’97), pp 80–85,
+1997.
+[15] K. Koskimies, T. Systä, J. Tuomi, and T. Männistoö. Au-
+tomated support for modeling oo software. IEEE Software,
+15(1):87–94, Jan. 1998.
+[16] D. Lange and Y. Nakamura. Program explorer: A program
+visualizer for C++. In Proceedings of Usenix Conference on
+Object-Oriented Technologies, pp 39–54, 1995.
+[17] D. B. Lange and Y. Nakamura. Interactive visualization
+of design patterns can help in framework understanding.
+In Proceedings of OOPSLA ’95, pp 342–357. ACM Press,
+1995.
+[18] M. Lanza. Codecrawler — lessons learned in building a soft-
+ware visualization tool. In Proceedings of CSMR 2003, pp
+409–418. IEEE Press, 2003.
+[19] M. Lanza. Object-Oriented Reverse Engineering — Coarse-
+grained, Fine-grained, and Evolutionary Software Visual-
+ization. PhD thesis, University of Berne, May 2003. Recipi-
+ent of the Denert-Stiftung Software Engineering Prize 2003.
+[20] M. Lanza and S. Ducasse. Polymetric views — a lightweight
+visual approach to reverse engineering. IEEE Transactions
+on Software Engineering, 29(9):782–795, Sept. 2003.
+[21] A. Mendelzon and J. Sametinger. Reverse engineering by
+visualizing and querying. Software — Concepts and Tools,
+16:170–182, 1995.
+[22] W. D. Pauw, R. Helm, D. Kimelman, and J. Vlissides. Visu-
+alizing the behavior of object-oriented systems. In Proceed-
+ings OOPSLA ’93, pp 326–337, Oct. 1993.
+[23] W. D. Pauw, D. Kimelman, and J. Vlissides. Modeling
+object-oriented program execution. In Proceedings ECOOP
+’94, LNCS 821, pp 163–182, July 1994. Springer-Verlag.
+[24] W. D. Pauw, D. Lorenz, J. Vlissides, and M. Wegman. Ex-
+ecution patterns in object-oriented visualization. In COOTS
+’98, pp 219–234, 1998.
+[25] T. Richner and S. Ducasse. Using dynamic information for
+the iterative recovery of collaborations and roles. In Pro-
+ceedings of ICSM ’2002, Oct. 2002.
+[26] R. Smith and B. Korel. Slicing event traces of large soft-
+ware systems. In AADebug 2000 International Workshop on
+Automated Debugging, 2000. Demo.
+[27] I. Sommerville. Software Engineering. Addison Wesley,
+sixth edition, 2000.
+[28] T. Systä. Static and Dynamic Reverse Engineering Tech-
+niques for Java Software Systems. PhD thesis, University of
+Tampere, 2000.
+[29] T. Systä. Understanding the behavior of java programs. In
+Proceedings of the 7th Working Conference on Reverse En-
+gineering (WCRE 2000), pp 214–223, 2000.
+[30] T. Systä, K. Koskimies, and H. Müller. Shimba — an envi-
+ronment for reverse engineering java software systems. Soft-
+ware — Practice and Experience, 1(1), Jan. 2001.
+[31] R. J. Walker, G. C. Murphy, B. Freeman-Benson, D. Wright,
+D. Swanson, and J. Isaak. Visualizing dynamic software sys-
+tem information through high-level models. In Proceedings
+OOPSLA ’98, pp 271–283. ACM, Oct. 1998.
+[32] N. Wilde and R. Huitt. Maintenance support for object-
+oriented programs. IEEE Transactions on Software Engi-
+neering, SE-18(12):1038–1044, Dec. 1992.
+</reference>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.265870">
+<title confidence="0.999922">High-Level Polymetric Views of Condensed Run-time Information</title>
+<author confidence="0.948327">Stéphane Ducasse</author>
+<affiliation confidence="0.902851">Software Composition Group University of Bern, Switzerland</affiliation>
+<email confidence="0.939082">ducasse@iam.unibe.ch</email>
+<author confidence="0.999927">Michele Lanza</author>
+<affiliation confidence="0.9494885">Software Composition Group University of Bern, Switzerland</affiliation>
+<email confidence="0.937015">lanza@iam.unibe.ch</email>
+<author confidence="0.998896">Roland Bertuli</author>
+<affiliation confidence="0.998047">I3S Laboratory</affiliation>
+<address confidence="0.917604">Sophia-Antipolis, France</address>
+<email confidence="0.998099">bertuli@essi.fr</email>
+<abstract confidence="0.99997525">Understanding the run-time behavior of object-oriented legacy systems is a complex task due to factors such as late binding and polymorphism. Current approaches extract and use information from the complete execution trace of a system. The sheer size and complexity of such traces make their handling, storage, and analysis difficult. Current software systems which run almost non-stop do not permit such a full analysis. In this paper we present a lightweight approach based on the extraction of a condensed amount of information, e.g., measurements, that does not require a full trace. Using this condensed information, we propose a visualization approach which allows us to identify and understand certain aspects of the objects’ lifetime such as their role played in the creation of other objects and the communication architecture they support.</abstract>
+<keyword confidence="0.759783666666667">Keywords: software visualization, reverse engineering, run-time information, object-oriented programming, program understanding</keyword>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="false">
+<authors>
+<author>projects “Tools</author>
+</authors>
+<title>and Techniques for Decomposing and Composing Software”</title>
+<booktitle>(SNF Project No. 2000-067855.02) and Recast: Evolution of Object-Oriented Applications (SNF Project No.</booktitle>
+<pages>2000--061655</pages>
+<marker>“Tools, </marker>
+<rawString> projects “Tools and Techniques for Decomposing and Composing Software” (SNF Project No. 2000-067855.02) and Recast: Evolution of Object-Oriented Applications (SNF Project No. 2000-061655.00/1).</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>P Anderson</author>
+<author>T Teitelbaum</author>
+</authors>
+<title>Software inspection using codesurfer.</title>
+<date>2001</date>
+<booktitle>In Proceedings of WISE’01 (International Workshop on Inspection in Software Engineering),</booktitle>
+<contexts>
+<context position="33102" citStr="[1]" startWordPosition="5303" endWordPosition="5303">ll of them have in common that they visualize program executions by applying sophisticated diagrams to keep the whole execution trace. In contrast, we extract from the execution trace information which we then condense into a few measurements to enrich our visualizations. A dynamic program slice [13] is an executable part of a program whose behavior is identical, for the same program input, to that of an original program with respect to a variable(s) of interest at some execution position. Dynamic slicing has been used to support the understanding of program [14]. In a similar way, CodeSurfer [1] supports the understanding by using hypertext facilities but not full visualization support. 7 Conclusions and Future Work In this paper we presented a new way of presenting runtime information that is not based on a trace of a system, but on a condensed and compact set of information, i.e., measurements, extracted during its execution. The measurements are then used to generate run-time polymetric views, simple visualizations enriched with measurements [20]. The views proposed, while being based on simple principles and a condensed set of run-time information, still provide rich insights and</context>
+</contexts>
+<marker>[1]</marker>
+<rawString>P. Anderson and T. Teitelbaum. Software inspection using codesurfer. In Proceedings of WISE’01 (International Workshop on Inspection in Software Engineering), 2001.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Brant</author>
+<author>B Foote</author>
+<author>R Johnson</author>
+<author>D Roberts</author>
+</authors>
+<title>Wrappers to the Rescue.</title>
+<date>1998</date>
+<booktitle>In Proceedings ECOOP ’98, LNCS 1445,</booktitle>
+<pages>396--417</pages>
+<publisher>Springer-Verlag,</publisher>
+<contexts>
+<context position="10235" citStr="[2]" startWordPosition="1605" endWordPosition="1605">height represents the number of used methods during the execution. The color tone represents the number of method calls. For example the flat dark node at the bottom of one the hierarchies represents a class which is heavily instantiated (the node width is remarkable compared to the other nodes), but who seems, once instantiated, to perform little behaviour (the node has a small height), i.e., only few methods of this class have been invoked during the analysed run-time. 3.2 Run-Time Information Collection Run-time information collection is a rich domain that goes from the wrapping of methods [2] and the control of objects [8] to the instrumentation of virtual machines. A great body of work has been done on run-time information in terms of a trace of events [10] [11] [24]. This trace represents valuable information but is space-consuming and complex and therefore requires additional abstractions and manipulations to extract the wanted information. Our approach focuses on collecting a reduced amount of information, namely measurements, during the execution, such as the number of invocations, number of object creations, number of used classes/methods, the number of method calls on a cla</context>
+<context position="28967" citStr="[2]" startWordPosition="4639" endWordPosition="4639">ch by its reduction of dynamic information is also applicable to systems that should not be disturbed and for which generating a trace would lead to extremely huge amounts of data. The approach is also incremental in the sense that the collected information can be cumulated. Finally the views provide overviews as well as in some cases more fine-grained information. Our approach could also be plugged dynamically while a system is running. Note that it is linked to the wrapping technology but also to the minimal set of run-time information it requires. Our tool, DIVOOR, uses the Method Wrappers [2] that allows one to dynamically and safely control any method without method recompilation or byte-code modification. The drawbacks of the approach are that it does not provide fine-grained run-time information at the level of sequence of interactions like sequence diagrams, as done by De Pauw [24] and that it requires the viewer to interact with the view to gather the relevant information. Moreover, our current implementation of the embedded spring layout shows some limits when being applied on densely communicating systems. 6 Related Work In the past, a great body of research has been conduc</context>
+</contexts>
+<marker>[2]</marker>
+<rawString>J. Brant, B. Foote, R. Johnson, and D. Roberts. Wrappers to the Rescue. In Proceedings ECOOP ’98, LNCS 1445, pp 396–417. Springer-Verlag, 1998.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Chan</author>
+<author>R Holmes</author>
+<author>G C Murphy</author>
+<author>A T Ying</author>
+</authors>
+<title>Scaling an object-oriented system execution visualizer through sampling.</title>
+<date>2003</date>
+<booktitle>In International Workshop on Program Comprehension,</booktitle>
+<contexts>
+<context position="3228" citStr="[3]" startWordPosition="492" endWordPosition="492"> thousands of events. Moreover, the lowlevel nature of the information contained in such a trace makes it hard for a software engineer to infer higher-level information about a software system. For example, he may want to know which other objects a certain object is sending messages to, but he does not want to have to analyse and verify every single method invocation contained in the trace. Many approaches based on run-time information have therefore as primary goal the reduction of the complexity of the trace in order to reveal certain aspects like the collaboration between classes [17] [25] [3]. Our approach is based on a condensed set of information, i.e., we do not keep and analyze the complete trace, we rather compute simple run-time metrics by counting certain events. For example, we count how many methods of a class are invoked during the program execution. Then we visualize this value, representing the number of the invoked methods of a class, in a run-time polymetric view. Polymetric views, presented by Lanza and Ducasse [19] [20], are visualisations enriched with software metrics. These views allow us to support the understanding of the run-time behaviour of a large, complex</context>
+<context position="6236" citStr="[3]" startWordPosition="963" endWordPosition="963">s is important information. • How do classes communicate with each other? • Which percentage of the methods defined in a class are actually used? 2.1 Challenges and Constraints The run-time analysis of object-oriented systems is challenging because of the following constraints: • Amount and density of information. The execution traces generated for run-time analysis are packed with very large amounts of low-level information. Therefore they must be analysed using techniques which reduce their complexity, such as filtering, clustering, slicing, concept analysis, or visualization [28] [26] [13] [3]. • Granularity of information. Execution traces contain large amounts of low-level information, e.g., which methods invoke which methods, which methods access which attributes, which objects are created at what time, etc. It is difficult, using such small pieces of information, to gain an understanding at a higher level. 3. Our Approach In a run-time context numerous classes, complex inheritance and containment hierarchies, and diverse patterns of dynamic interaction all contribute to difficulties in understanding, reusing, debugging, and tuning large objectoriented systems. Many of these dif</context>
+<context position="30507" citStr="[3]" startWordPosition="4878" endWordPosition="4878">oftware execution visualizations. Murphy et al. have developed, in AVID, an approach that allows software engineers to specify a high-level model of a system [31]. The software execution can be visualized using these models. Their visualization is oriented towards the liveness of objects and their number. Their work is directed more towards static, architectural models, while our work is more focused on the visualization of different kinds of interactions between classes of a software system during its execution. In a recent version they introduces sampling of events to reduce the information [3]. Systa and Shimba [28] [29] [30] mix static and dynamic information to support program understanding. Shimba uses traces of Java programs and extracts automatically scenario diagrams but also state diagrams representing the runtime of the system based on SCED [15]. Shimba provides also string matching algorithms for recognizing patterns in event traces. Lange et al. with their Program Explorer are focused on views of classes and objects [17] [16]. The authors have developed a system for tracking function invocation, object instantiation, and attribute access. The views show class and instanc</context>
+</contexts>
+<marker>[3]</marker>
+<rawString>A. Chan, R. Holmes, G. C. Murphy, and A. T. Ying. Scaling an object-oriented system execution visualizer through sampling. In International Workshop on Program Comprehension, 2003.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>T Corbi</author>
+</authors>
+<title>Program understanding: Challenge for the 1990’s.</title>
+<date>1989</date>
+<journal>IBM Systems Journal,</journal>
+<volume>28</volume>
+<issue>2</issue>
+<contexts>
+<context position="1335" citStr="[4]" startWordPosition="182" endWordPosition="182">such a full analysis. In this paper we present a lightweight approach based on the extraction of a condensed amount of information, e.g., measurements, that does not require a full trace. Using this condensed information, we propose a visualization approach which allows us to identify and understand certain aspects of the objects’ lifetime such as their role played in the creation of other objects and the communication architecture they support. Keywords: software visualization, reverse engineering, run-time information, object-oriented programming, program understanding 1. Introduction Corbi [4] reported that during maintenance professionals spend at least half of their time analyzing software to understand it. Moreover, Sommerville [27] and Davis [5] estimate that the cost of software maintenance accounts for 50% to 75% of the overall cost of a software system. These facts show that understanding applications is one of the hardest tasks in the maintenance of software systems. One approach is to support the understanding of objectoriented systems using dynamic information. An extensive amount of research has already been dedicated to this research field [12] [21] [31] [22] [17] [14] </context>
+</contexts>
+<marker>[4]</marker>
+<rawString>T. Corbi. Program understanding: Challenge for the 1990’s. IBM Systems Journal, 28(2):294–306, 1989.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A M Davis</author>
+</authors>
+<date>1995</date>
+<booktitle>201 Principles of Software Development.</booktitle>
+<publisher>McGraw-Hill,</publisher>
+<contexts>
+<context position="1494" citStr="[5]" startWordPosition="206" endWordPosition="206">es not require a full trace. Using this condensed information, we propose a visualization approach which allows us to identify and understand certain aspects of the objects’ lifetime such as their role played in the creation of other objects and the communication architecture they support. Keywords: software visualization, reverse engineering, run-time information, object-oriented programming, program understanding 1. Introduction Corbi [4] reported that during maintenance professionals spend at least half of their time analyzing software to understand it. Moreover, Sommerville [27] and Davis [5] estimate that the cost of software maintenance accounts for 50% to 75% of the overall cost of a software system. These facts show that understanding applications is one of the hardest tasks in the maintenance of software systems. One approach is to support the understanding of objectoriented systems using dynamic information. An extensive amount of research has already been dedicated to this research field [12] [21] [31] [22] [17] [14] [25] which is mostly based on extracting information generated during the execution of a software system. To do so people instrument the source code using vari</context>
+</contexts>
+<marker>[5]</marker>
+<rawString>A. M. Davis. 201 Principles of Software Development. McGraw-Hill, 1995.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Demeyer</author>
+<author>S Ducasse</author>
+<author>S Tichelaar</author>
+</authors>
+<title>Why unified is not universal. UML shortcomings for coping with round-trip engineering.</title>
+<date>1999</date>
+<booktitle>In Proceedings UML ’99, LNCS 1723,</booktitle>
+<publisher>Springer-Verlag.</publisher>
+<contexts>
+<context position="13052" citStr="[6]" startWordPosition="2069" endWordPosition="2069">ware system used in our experiment is the Moose reengineering environment that is developed by our group [9]. Moose is a relatively small case study consisting of 137 classes and 2093 methods of Smalltalk code. It serves as a foundation for other reverse engineering tools. It provides a language independent representation and manipulation of source code written in C++, Java, Cobol, and Smalltalk. To achieve this language independence it is based on the FAMIX meta-model [7], which describes how elementary source code elements such as attributes, methods, classes, and namespaces are represented [6]. Moreover, Moose describes meta-models as instances of its own meta-meta-model. This explicit description of meta-models supports the creation of generic model reader and writers. To parse the source code of applications of Java or C++, Moose interprets CDIF or XMI compliant files, while for extracting Smalltalk applications, Moose uses its own parser and analyzes the resulting abstract syntax trees to generate Moose models. Run-time scenario. We run the Moose system for the analysis of a Smalltalk application: therefore a meta-model is created, a Smalltalk-specific source code model of the a</context>
+</contexts>
+<marker>[6]</marker>
+<rawString>S. Demeyer, S. Ducasse, and S. Tichelaar. Why unified is not universal. UML shortcomings for coping with round-trip engineering. In Proceedings UML ’99, LNCS 1723, Oct. 1999. Springer-Verlag.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Demeyer</author>
+<author>S Tichelaar</author>
+<author>S Ducasse</author>
+</authors>
+<date>2001</date>
+<booktitle>FAMIX 2.1 — the FAMOOS information exchange model.</booktitle>
+<tech>Technical report,</tech>
+<institution>University of Bern,</institution>
+<contexts>
+<context position="12926" citStr="[7]" startWordPosition="2050" endWordPosition="2050">ds have been invoked 500 times, then NCM equals to 3 while NMI equals to 500. 4.1 Case Study in a Nutshell The particular software system used in our experiment is the Moose reengineering environment that is developed by our group [9]. Moose is a relatively small case study consisting of 137 classes and 2093 methods of Smalltalk code. It serves as a foundation for other reverse engineering tools. It provides a language independent representation and manipulation of source code written in C++, Java, Cobol, and Smalltalk. To achieve this language independence it is based on the FAMIX meta-model [7], which describes how elementary source code elements such as attributes, methods, classes, and namespaces are represented [6]. Moreover, Moose describes meta-models as instances of its own meta-meta-model. This explicit description of meta-models supports the creation of generic model reader and writers. To parse the source code of applications of Java or C++, Moose interprets CDIF or XMI compliant files, while for extracting Smalltalk applications, Moose uses its own parser and analyzes the resulting abstract syntax trees to generate Moose models. Run-time scenario. We run the Moose system f</context>
+</contexts>
+<marker>[7]</marker>
+<rawString>S. Demeyer, S. Tichelaar, and S. Ducasse. FAMIX 2.1 — the FAMOOS information exchange model. Technical report, University of Bern, 2001.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Ducasse</author>
+</authors>
+<title>Evaluating message passing control techniques in Smalltalk.</title>
+<date>1999</date>
+<journal>Journal of Object-Oriented Programming,</journal>
+<volume>12</volume>
+<issue>6</issue>
+<contexts>
+<context position="10266" citStr="[8]" startWordPosition="1611" endWordPosition="1611"> used methods during the execution. The color tone represents the number of method calls. For example the flat dark node at the bottom of one the hierarchies represents a class which is heavily instantiated (the node width is remarkable compared to the other nodes), but who seems, once instantiated, to perform little behaviour (the node has a small height), i.e., only few methods of this class have been invoked during the analysed run-time. 3.2 Run-Time Information Collection Run-time information collection is a rich domain that goes from the wrapping of methods [2] and the control of objects [8] to the instrumentation of virtual machines. A great body of work has been done on run-time information in terms of a trace of events [10] [11] [24]. This trace represents valuable information but is space-consuming and complex and therefore requires additional abstractions and manipulations to extract the wanted information. Our approach focuses on collecting a reduced amount of information, namely measurements, during the execution, such as the number of invocations, number of object creations, number of used classes/methods, the number of method calls on a class during the execution, etc.).</context>
+</contexts>
+<marker>[8]</marker>
+<rawString>S. Ducasse. Evaluating message passing control techniques in Smalltalk. Journal of Object-Oriented Programming, 12(6):39–44, June 1999.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Ducasse</author>
+<author>M Lanza</author>
+<author>S Tichelaar</author>
+</authors>
+<title>Moose: an extensible language-independent environment for reengineering object-oriented systems.</title>
+<date>2000</date>
+<booktitle>In Proceedings of the Second International Symposium on Constructing Software Engineering Tools (CoSET</booktitle>
+<contexts>
+<context position="12557" citStr="[9]" startWordPosition="1989" endWordPosition="1989"> experience, we run the application on a scenario covering its different aspects. 1At first sight the difference between NCM and NMI can be delicate to grasp. NCM represents the number of called methods of a class, while NMI represents the number of invocations on the methods of a class. For example, if a class has 5 methods and during the execution 3 different methods have been invoked 500 times, then NCM equals to 3 while NMI equals to 500. 4.1 Case Study in a Nutshell The particular software system used in our experiment is the Moose reengineering environment that is developed by our group [9]. Moose is a relatively small case study consisting of 137 classes and 2093 methods of Smalltalk code. It serves as a foundation for other reverse engineering tools. It provides a language independent representation and manipulation of source code written in C++, Java, Cobol, and Smalltalk. To achieve this language independence it is based on the FAMIX meta-model [7], which describes how elementary source code elements such as attributes, methods, classes, and namespaces are represented [6]. Moreover, Moose describes meta-models as instances of its own meta-meta-model. This explicit descriptio</context>
+</contexts>
+<marker>[9]</marker>
+<rawString>S. Ducasse, M. Lanza, and S. Tichelaar. Moose: an extensible language-independent environment for reengineering object-oriented systems. In Proceedings of the Second International Symposium on Constructing Software Engineering Tools (CoSET 2000), June 2000.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Jerding</author>
+<author>S Rugaber</author>
+</authors>
+<title>Using Visualization for Architectural Localization and Extraction.</title>
+<date>1997</date>
+<booktitle>In Proceedings WCRE, pp 56 — 65.</booktitle>
+<publisher>IEEE,</publisher>
+<contexts>
+<context position="10404" citStr="[10]" startWordPosition="1637" endWordPosition="1637"> one the hierarchies represents a class which is heavily instantiated (the node width is remarkable compared to the other nodes), but who seems, once instantiated, to perform little behaviour (the node has a small height), i.e., only few methods of this class have been invoked during the analysed run-time. 3.2 Run-Time Information Collection Run-time information collection is a rich domain that goes from the wrapping of methods [2] and the control of objects [8] to the instrumentation of virtual machines. A great body of work has been done on run-time information in terms of a trace of events [10] [11] [24]. This trace represents valuable information but is space-consuming and complex and therefore requires additional abstractions and manipulations to extract the wanted information. Our approach focuses on collecting a reduced amount of information, namely measurements, during the execution, such as the number of invocations, number of object creations, number of used classes/methods, the number of method calls on a class during the execution, etc.). We constrain ourselves to use only relatively simple measurements. Class Run-Time Measurements Name Description NCM Number of called meth</context>
+<context position="31500" citStr="[10]" startWordPosition="5034" endWordPosition="5034"> Explorer are focused on views of classes and objects [17] [16]. The authors have developed a system for tracking function invocation, object instantiation, and attribute access. The views show class and instance relationships (usually focused on a particular instance or class), and short method-invocation histories. It is not intended as a global understanding tool. The users must know what they are interested in before they start, whereas our approach is made for covering a complete system. Jerding et al. have created their own interaction diagrams to visualize the entire software execution [10] [11]. The purpose of their tool ISVis is to be able to visualize all the method calls between the classes. They can extract and recognize execution patterns, but its drawback is a certain lack of flexibility in the analysis: It has a good scalability for large numbers of messages, but not for a huge number of classes. In the latter case the visualization becomes less useful. De Pauw et al. presented two different approaches. In their tool Jinsight, they are focused on interaction diagrams [24]. This way, all messages between objects can be visualized. The extraction of execution patterns is a</context>
+</contexts>
+<marker>[10]</marker>
+<rawString>D. Jerding and S. Rugaber. Using Visualization for Architectural Localization and Extraction. In Proceedings WCRE, pp 56 — 65. IEEE, 1997.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D F Jerding</author>
+<author>J T Stasko</author>
+<author>T Ball</author>
+</authors>
+<title>Visualizing Message Patterns in Object-Oriented Program Executions.</title>
+<date>1996</date>
+<tech>Technical Report GIT-GVU-96-15,</tech>
+<institution>Georgia Institute of Technology,</institution>
+<contexts>
+<context position="10409" citStr="[11]" startWordPosition="1638" endWordPosition="1638">the hierarchies represents a class which is heavily instantiated (the node width is remarkable compared to the other nodes), but who seems, once instantiated, to perform little behaviour (the node has a small height), i.e., only few methods of this class have been invoked during the analysed run-time. 3.2 Run-Time Information Collection Run-time information collection is a rich domain that goes from the wrapping of methods [2] and the control of objects [8] to the instrumentation of virtual machines. A great body of work has been done on run-time information in terms of a trace of events [10] [11] [24]. This trace represents valuable information but is space-consuming and complex and therefore requires additional abstractions and manipulations to extract the wanted information. Our approach focuses on collecting a reduced amount of information, namely measurements, during the execution, such as the number of invocations, number of object creations, number of used classes/methods, the number of method calls on a class during the execution, etc.). We constrain ourselves to use only relatively simple measurements. Class Run-Time Measurements Name Description NCM Number of called methods R</context>
+<context position="31505" citStr="[11]" startWordPosition="5035" endWordPosition="5035">orer are focused on views of classes and objects [17] [16]. The authors have developed a system for tracking function invocation, object instantiation, and attribute access. The views show class and instance relationships (usually focused on a particular instance or class), and short method-invocation histories. It is not intended as a global understanding tool. The users must know what they are interested in before they start, whereas our approach is made for covering a complete system. Jerding et al. have created their own interaction diagrams to visualize the entire software execution [10] [11]. The purpose of their tool ISVis is to be able to visualize all the method calls between the classes. They can extract and recognize execution patterns, but its drawback is a certain lack of flexibility in the analysis: It has a good scalability for large numbers of messages, but not for a huge number of classes. In the latter case the visualization becomes less useful. De Pauw et al. presented two different approaches. In their tool Jinsight, they are focused on interaction diagrams [24]. This way, all messages between objects can be visualized. The extraction of execution patterns is also o</context>
+</contexts>
+<marker>[11]</marker>
+<rawString>D. F. Jerding, J. T. Stasko, and T. Ball. Visualizing Message Patterns in Object-Oriented Program Executions. Technical Report GIT-GVU-96-15, Georgia Institute of Technology, May 1996.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M F Kleyn</author>
+<author>P C Gingrich</author>
+</authors>
+<title>Graphtrace — understanding object-oriented systems using concurrently animated views.</title>
+<date>1988</date>
+<booktitle>In Proceedings OOPSLA ’88,</booktitle>
+<volume>23</volume>
+<pages>191--205</pages>
+<contexts>
+<context position="1909" citStr="[12]" startWordPosition="273" endWordPosition="273">ding 1. Introduction Corbi [4] reported that during maintenance professionals spend at least half of their time analyzing software to understand it. Moreover, Sommerville [27] and Davis [5] estimate that the cost of software maintenance accounts for 50% to 75% of the overall cost of a software system. These facts show that understanding applications is one of the hardest tasks in the maintenance of software systems. One approach is to support the understanding of objectoriented systems using dynamic information. An extensive amount of research has already been dedicated to this research field [12] [21] [31] [22] [17] [14] [25] which is mostly based on extracting information generated during the execution of a software system. To do so people instrument the source code using various techniques (method wrapping, logging, extended virtual machines) and then run the system. The instrumented source code generates an execution trace, which contains information about the run-time behavior of the system, e.g., which method is calling which other methods, which objects are created at which time by which other objects, etc. The problem is that often the event trace for large, complex, long-runni</context>
+<context position="29636" citStr="[12]" startWordPosition="4746" endWordPosition="4746">hout method recompilation or byte-code modification. The drawbacks of the approach are that it does not provide fine-grained run-time information at the level of sequence of interactions like sequence diagrams, as done by De Pauw [24] and that it requires the viewer to interact with the view to gather the relevant information. Moreover, our current implementation of the embedded spring layout shows some limits when being applied on densely communicating systems. 6 Related Work In the past, a great body of research has been conducted to support the understanding of object-oriented applications [12] [17] [21]. Among the various approaches to support the understanding of software behavior that have been proposed in the literature, graphical representations of software execution have long been accepted as comprehension aids. Various tools provide quite different software execution visualizations. Murphy et al. have developed, in AVID, an approach that allows software engineers to specify a high-level model of a system [31]. The software execution can be visualized using these models. Their visualization is oriented towards the liveness of objects and their number. Their work is directed mo</context>
+</contexts>
+<marker>[12]</marker>
+<rawString>M. F. Kleyn and P. C. Gingrich. Graphtrace — understanding object-oriented systems using concurrently animated views. In Proceedings OOPSLA ’88, volume 23, pp 191– 205, Nov. 1988.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>B Korel</author>
+<author>J Laski</author>
+</authors>
+<title>Dynamic program slicing.</title>
+<date>1988</date>
+<journal>Information Processing Letters,</journal>
+<volume>29</volume>
+<issue>3</issue>
+<contexts>
+<context position="6232" citStr="[13]" startWordPosition="962" endWordPosition="962">tories is important information. • How do classes communicate with each other? • Which percentage of the methods defined in a class are actually used? 2.1 Challenges and Constraints The run-time analysis of object-oriented systems is challenging because of the following constraints: • Amount and density of information. The execution traces generated for run-time analysis are packed with very large amounts of low-level information. Therefore they must be analysed using techniques which reduce their complexity, such as filtering, clustering, slicing, concept analysis, or visualization [28] [26] [13] [3]. • Granularity of information. Execution traces contain large amounts of low-level information, e.g., which methods invoke which methods, which methods access which attributes, which objects are created at what time, etc. It is difficult, using such small pieces of information, to gain an understanding at a higher level. 3. Our Approach In a run-time context numerous classes, complex inheritance and containment hierarchies, and diverse patterns of dynamic interaction all contribute to difficulties in understanding, reusing, debugging, and tuning large objectoriented systems. Many of these</context>
+<context position="32800" citStr="[13]" startWordPosition="5250" endWordPosition="5250">rstand class roles during execution. Earlier on, De Pauw, with its class call clusters and class call matrix [22] [23], was closer to our approach. These visualizations are simple, they have a good scalability, but they only present a facet of an object-oriented application. Except the last approach, all of them have in common that they visualize program executions by applying sophisticated diagrams to keep the whole execution trace. In contrast, we extract from the execution trace information which we then condense into a few measurements to enrich our visualizations. A dynamic program slice [13] is an executable part of a program whose behavior is identical, for the same program input, to that of an original program with respect to a variable(s) of interest at some execution position. Dynamic slicing has been used to support the understanding of program [14]. In a similar way, CodeSurfer [1] supports the understanding by using hypertext facilities but not full visualization support. 7 Conclusions and Future Work In this paper we presented a new way of presenting runtime information that is not based on a trace of a system, but on a condensed and compact set of information, i.e., meas</context>
+</contexts>
+<marker>[13]</marker>
+<rawString>B. Korel and J. Laski. Dynamic program slicing. Information Processing Letters, 29(3):155–163, 1988.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>B Korel</author>
+<author>J Rilling</author>
+</authors>
+<title>Dynamic program slicing in understanding of program execution.</title>
+<date>1997</date>
+<booktitle>In 5th International Workshop on Program Comprehension (WPC ’97),</booktitle>
+<pages>80--85</pages>
+<contexts>
+<context position="1934" citStr="[14]" startWordPosition="278" endWordPosition="278">i [4] reported that during maintenance professionals spend at least half of their time analyzing software to understand it. Moreover, Sommerville [27] and Davis [5] estimate that the cost of software maintenance accounts for 50% to 75% of the overall cost of a software system. These facts show that understanding applications is one of the hardest tasks in the maintenance of software systems. One approach is to support the understanding of objectoriented systems using dynamic information. An extensive amount of research has already been dedicated to this research field [12] [21] [31] [22] [17] [14] [25] which is mostly based on extracting information generated during the execution of a software system. To do so people instrument the source code using various techniques (method wrapping, logging, extended virtual machines) and then run the system. The instrumented source code generates an execution trace, which contains information about the run-time behavior of the system, e.g., which method is calling which other methods, which objects are created at which time by which other objects, etc. The problem is that often the event trace for large, complex, long-running systems is voluminous </context>
+<context position="33068" citStr="[14]" startWordPosition="5297" endWordPosition="5297">cation. Except the last approach, all of them have in common that they visualize program executions by applying sophisticated diagrams to keep the whole execution trace. In contrast, we extract from the execution trace information which we then condense into a few measurements to enrich our visualizations. A dynamic program slice [13] is an executable part of a program whose behavior is identical, for the same program input, to that of an original program with respect to a variable(s) of interest at some execution position. Dynamic slicing has been used to support the understanding of program [14]. In a similar way, CodeSurfer [1] supports the understanding by using hypertext facilities but not full visualization support. 7 Conclusions and Future Work In this paper we presented a new way of presenting runtime information that is not based on a trace of a system, but on a condensed and compact set of information, i.e., measurements, extracted during its execution. The measurements are then used to generate run-time polymetric views, simple visualizations enriched with measurements [20]. The views proposed, while being based on simple principles and a condensed set of run-time informatio</context>
+</contexts>
+<marker>[14]</marker>
+<rawString>B. Korel and J. Rilling. Dynamic program slicing in understanding of program execution. In 5th International Workshop on Program Comprehension (WPC ’97), pp 80–85, 1997.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>K Koskimies</author>
+<author>T Systa</author>
+<author>J Tuomi</author>
+<author>T Mannistoo</author>
+</authors>
+<title>Automated support for modeling oo software.</title>
+<date>1998</date>
+<journal>IEEE Software,</journal>
+<volume>15</volume>
+<issue>1</issue>
+<contexts>
+<context position="30773" citStr="[15]" startWordPosition="4920" endWordPosition="4920">the liveness of objects and their number. Their work is directed more towards static, architectural models, while our work is more focused on the visualization of different kinds of interactions between classes of a software system during its execution. In a recent version they introduces sampling of events to reduce the information [3]. Systa and Shimba [28] [29] [30] mix static and dynamic information to support program understanding. Shimba uses traces of Java programs and extracts automatically scenario diagrams but also state diagrams representing the runtime of the system based on SCED [15]. Shimba provides also string matching algorithms for recognizing patterns in event traces. Lange et al. with their Program Explorer are focused on views of classes and objects [17] [16]. The authors have developed a system for tracking function invocation, object instantiation, and attribute access. The views show class and instance relationships (usually focused on a particular instance or class), and short method-invocation histories. It is not intended as a global understanding tool. The users must know what they are interested in before they start, whereas our approach is made for coverin</context>
+</contexts>
+<marker>[15]</marker>
+<rawString>K. Koskimies, T. Systä, J. Tuomi, and T. Männistoö. Automated support for modeling oo software. IEEE Software, 15(1):87–94, Jan. 1998.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Lange</author>
+<author>Y Nakamura</author>
+</authors>
+<title>Program explorer: A program visualizer for C++.</title>
+<date>1995</date>
+<booktitle>In Proceedings of Usenix Conference on Object-Oriented Technologies,</booktitle>
+<pages>39--54</pages>
+<contexts>
+<context position="30959" citStr="[16]" startWordPosition="4949" endWordPosition="4949">ractions between classes of a software system during its execution. In a recent version they introduces sampling of events to reduce the information [3]. Systa and Shimba [28] [29] [30] mix static and dynamic information to support program understanding. Shimba uses traces of Java programs and extracts automatically scenario diagrams but also state diagrams representing the runtime of the system based on SCED [15]. Shimba provides also string matching algorithms for recognizing patterns in event traces. Lange et al. with their Program Explorer are focused on views of classes and objects [17] [16]. The authors have developed a system for tracking function invocation, object instantiation, and attribute access. The views show class and instance relationships (usually focused on a particular instance or class), and short method-invocation histories. It is not intended as a global understanding tool. The users must know what they are interested in before they start, whereas our approach is made for covering a complete system. Jerding et al. have created their own interaction diagrams to visualize the entire software execution [10] [11]. The purpose of their tool ISVis is to be able to vis</context>
+</contexts>
+<marker>[16]</marker>
+<rawString>D. Lange and Y. Nakamura. Program explorer: A program visualizer for C++. In Proceedings of Usenix Conference on Object-Oriented Technologies, pp 39–54, 1995.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D B Lange</author>
+<author>Y Nakamura</author>
+</authors>
+<title>Interactive visualization of design patterns can help in framework understanding.</title>
+<date>1995</date>
+<booktitle>In Proceedings of OOPSLA ’95,</booktitle>
+<pages>342--357</pages>
+<publisher>ACM Press,</publisher>
+<contexts>
+<context position="1929" citStr="[17]" startWordPosition="277" endWordPosition="277"> Corbi [4] reported that during maintenance professionals spend at least half of their time analyzing software to understand it. Moreover, Sommerville [27] and Davis [5] estimate that the cost of software maintenance accounts for 50% to 75% of the overall cost of a software system. These facts show that understanding applications is one of the hardest tasks in the maintenance of software systems. One approach is to support the understanding of objectoriented systems using dynamic information. An extensive amount of research has already been dedicated to this research field [12] [21] [31] [22] [17] [14] [25] which is mostly based on extracting information generated during the execution of a software system. To do so people instrument the source code using various techniques (method wrapping, logging, extended virtual machines) and then run the system. The instrumented source code generates an execution trace, which contains information about the run-time behavior of the system, e.g., which method is calling which other methods, which objects are created at which time by which other objects, etc. The problem is that often the event trace for large, complex, long-running systems is volumi</context>
+<context position="3219" citStr="[17]" startWordPosition="490" endWordPosition="490">es tens of thousands of events. Moreover, the lowlevel nature of the information contained in such a trace makes it hard for a software engineer to infer higher-level information about a software system. For example, he may want to know which other objects a certain object is sending messages to, but he does not want to have to analyse and verify every single method invocation contained in the trace. Many approaches based on run-time information have therefore as primary goal the reduction of the complexity of the trace in order to reveal certain aspects like the collaboration between classes [17] [25] [3]. Our approach is based on a condensed set of information, i.e., we do not keep and analyze the complete trace, we rather compute simple run-time metrics by counting certain events. For example, we count how many methods of a class are invoked during the program execution. Then we visualize this value, representing the number of the invoked methods of a class, in a run-time polymetric view. Polymetric views, presented by Lanza and Ducasse [19] [20], are visualisations enriched with software metrics. These views allow us to support the understanding of the run-time behaviour of a large</context>
+<context position="29641" citStr="[17]" startWordPosition="4747" endWordPosition="4747">method recompilation or byte-code modification. The drawbacks of the approach are that it does not provide fine-grained run-time information at the level of sequence of interactions like sequence diagrams, as done by De Pauw [24] and that it requires the viewer to interact with the view to gather the relevant information. Moreover, our current implementation of the embedded spring layout shows some limits when being applied on densely communicating systems. 6 Related Work In the past, a great body of research has been conducted to support the understanding of object-oriented applications [12] [17] [21]. Among the various approaches to support the understanding of software behavior that have been proposed in the literature, graphical representations of software execution have long been accepted as comprehension aids. Various tools provide quite different software execution visualizations. Murphy et al. have developed, in AVID, an approach that allows software engineers to specify a high-level model of a system [31]. The software execution can be visualized using these models. Their visualization is oriented towards the liveness of objects and their number. Their work is directed more to</context>
+<context position="30954" citStr="[17]" startWordPosition="4948" endWordPosition="4948"> interactions between classes of a software system during its execution. In a recent version they introduces sampling of events to reduce the information [3]. Systa and Shimba [28] [29] [30] mix static and dynamic information to support program understanding. Shimba uses traces of Java programs and extracts automatically scenario diagrams but also state diagrams representing the runtime of the system based on SCED [15]. Shimba provides also string matching algorithms for recognizing patterns in event traces. Lange et al. with their Program Explorer are focused on views of classes and objects [17] [16]. The authors have developed a system for tracking function invocation, object instantiation, and attribute access. The views show class and instance relationships (usually focused on a particular instance or class), and short method-invocation histories. It is not intended as a global understanding tool. The users must know what they are interested in before they start, whereas our approach is made for covering a complete system. Jerding et al. have created their own interaction diagrams to visualize the entire software execution [10] [11]. The purpose of their tool ISVis is to be able t</context>
+</contexts>
+<marker>[17]</marker>
+<rawString>D. B. Lange and Y. Nakamura. Interactive visualization of design patterns can help in framework understanding. In Proceedings of OOPSLA ’95, pp 342–357. ACM Press, 1995.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Lanza</author>
+</authors>
+<title>Codecrawler — lessons learned in building a software visualization tool.</title>
+<date>2003</date>
+<booktitle>In Proceedings of CSMR</booktitle>
+<pages>409--418</pages>
+<publisher>IEEE Press,</publisher>
+<contexts>
+<context position="4330" citStr="[18]" startWordPosition="671" endWordPosition="671">trics. These views allow us to support the understanding of the run-time behaviour of a large, complex, and long-running systems. This allows us to reduce the amount of information to a few metrics, while still obtaining and visualising valuable information about the run-time behaviour of the system. In this article we first discuss the problems and challenges that the run-time analysis of object-oriented applications poses (Section 2). We then present our approach in detail (Section 3), before presenting and analyzing a case study performed using our tool, DIVOOR, an extension of CodeCrawler [18], with different run-time polymetric views (Section 4). We conclude the paper with a discussion of our findings (Section 5), a look at the related work (Section 6), and an outlook on our future work (Section 7). 2. Run-time Analysis Problems Wilde and Huitt [32] assessed that understanding objectoriented applications is difficult because of several reasons, such as: • Polymorphism and late-binding make traditional tool analyzers like program slicers inadequate. Data-flow analysers are more complex to build especially in presence of dynamically typed languages. • The use of inheritance and incr</context>
+<context position="7316" citStr="[18]" startWordPosition="1134" endWordPosition="1134"> contribute to difficulties in understanding, reusing, debugging, and tuning large objectoriented systems. Many of these difficulties are due to the amount and quality of the data that can be gathered using execution traces. The relevant information we are looking for is often hidden in huge amounts of data that must first be filtered and analysed. Our approach uses a condensed set of information to support the understanding of the run-time behavior of an application. 3.1 The Principle of a Polymetric View The baseline of our work is based upon the approach implemented in the tool CodeCrawler [18] [19] [20]. It implements the polymetric views, software visualizations enriched with software metrics, described by Lanza [19], which we mainly used to support the understanding of software systems with static analysis. In Figure 1 we see that, given two-dimensional nodes representing entities (e.g., software artifacts) and edges representing relationships, we enrich these simple visualizations with up to 5 metrics on these node characteristics: Width Metric Height Metric Color Metric Entity Relationship Position Metrics (x,y) Figure 1. The principle of a polymetric view. • Node Size. The wid</context>
+<context position="21145" citStr="[18]" startWordPosition="3338" endWordPosition="3338"> by other methods. • Connected, tiny, square nodes represent classes whose methods are rarely invoked. Note that such classes can still have methods heavily invoking other methods, represented as a dark class node. • Large, white, square nodes represent classes having a considerable number of method used but which are rarely invoked during the execution. • Dark, square nodes represent heavily used classes. Small, dark, square nodes in addition represent classes whose few methods are heavily used. • Groups of nodes loosely connected to the view core represent classes communicating via a funnel [18] [20] to the rest of the system. Case Study. Figure 4 shows the application of the Communication Interaction view on our case study. A group of classes is clearly disconnected from the rest of the core of the view, while it joins the biggest part of the view through the class annotated as A. This group of classes implements the XMI file production based on a MOF compliant interface and is disconnected from the rest because the XMI/MOF production is an independent package used by Moose to produce XMI model files. The big class (B) is the XMI producer which uses MOF interface objects that commun</context>
+</contexts>
+<marker>[18]</marker>
+<rawString>M. Lanza. Codecrawler — lessons learned in building a software visualization tool. In Proceedings of CSMR 2003, pp 409–418. IEEE Press, 2003.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Lanza</author>
+</authors>
+<title>Object-Oriented Reverse Engineering — Coarsegrained, Fine-grained, and Evolutionary Software Visualization.</title>
+<date>2003</date>
+<booktitle>Recipient of the Denert-Stiftung Software Engineering Prize</booktitle>
+<tech>PhD thesis,</tech>
+<institution>University of Berne,</institution>
+<contexts>
+<context position="3675" citStr="[19]" startWordPosition="569" endWordPosition="569">herefore as primary goal the reduction of the complexity of the trace in order to reveal certain aspects like the collaboration between classes [17] [25] [3]. Our approach is based on a condensed set of information, i.e., we do not keep and analyze the complete trace, we rather compute simple run-time metrics by counting certain events. For example, we count how many methods of a class are invoked during the program execution. Then we visualize this value, representing the number of the invoked methods of a class, in a run-time polymetric view. Polymetric views, presented by Lanza and Ducasse [19] [20], are visualisations enriched with software metrics. These views allow us to support the understanding of the run-time behaviour of a large, complex, and long-running systems. This allows us to reduce the amount of information to a few metrics, while still obtaining and visualising valuable information about the run-time behaviour of the system. In this article we first discuss the problems and challenges that the run-time analysis of object-oriented applications poses (Section 2). We then present our approach in detail (Section 3), before presenting and analyzing a case study performed u</context>
+<context position="7321" citStr="[19]" startWordPosition="1135" endWordPosition="1135">ribute to difficulties in understanding, reusing, debugging, and tuning large objectoriented systems. Many of these difficulties are due to the amount and quality of the data that can be gathered using execution traces. The relevant information we are looking for is often hidden in huge amounts of data that must first be filtered and analysed. Our approach uses a condensed set of information to support the understanding of the run-time behavior of an application. 3.1 The Principle of a Polymetric View The baseline of our work is based upon the approach implemented in the tool CodeCrawler [18] [19] [20]. It implements the polymetric views, software visualizations enriched with software metrics, described by Lanza [19], which we mainly used to support the understanding of software systems with static analysis. In Figure 1 we see that, given two-dimensional nodes representing entities (e.g., software artifacts) and edges representing relationships, we enrich these simple visualizations with up to 5 metrics on these node characteristics: Width Metric Height Metric Color Metric Entity Relationship Position Metrics (x,y) Figure 1. The principle of a polymetric view. • Node Size. The width an</context>
+</contexts>
+<marker>[19]</marker>
+<rawString>M. Lanza. Object-Oriented Reverse Engineering — Coarsegrained, Fine-grained, and Evolutionary Software Visualization. PhD thesis, University of Berne, May 2003. Recipient of the Denert-Stiftung Software Engineering Prize 2003.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Lanza</author>
+<author>S Ducasse</author>
+</authors>
+<title>Polymetric views — a lightweight visual approach to reverse engineering.</title>
+<date>2003</date>
+<journal>IEEE Transactions on Software Engineering,</journal>
+<volume>29</volume>
+<issue>9</issue>
+<contexts>
+<context position="3680" citStr="[20]" startWordPosition="570" endWordPosition="570">ore as primary goal the reduction of the complexity of the trace in order to reveal certain aspects like the collaboration between classes [17] [25] [3]. Our approach is based on a condensed set of information, i.e., we do not keep and analyze the complete trace, we rather compute simple run-time metrics by counting certain events. For example, we count how many methods of a class are invoked during the program execution. Then we visualize this value, representing the number of the invoked methods of a class, in a run-time polymetric view. Polymetric views, presented by Lanza and Ducasse [19] [20], are visualisations enriched with software metrics. These views allow us to support the understanding of the run-time behaviour of a large, complex, and long-running systems. This allows us to reduce the amount of information to a few metrics, while still obtaining and visualising valuable information about the run-time behaviour of the system. In this article we first discuss the problems and challenges that the run-time analysis of object-oriented applications poses (Section 2). We then present our approach in detail (Section 3), before presenting and analyzing a case study performed using </context>
+<context position="7326" citStr="[20]" startWordPosition="1136" endWordPosition="1136">e to difficulties in understanding, reusing, debugging, and tuning large objectoriented systems. Many of these difficulties are due to the amount and quality of the data that can be gathered using execution traces. The relevant information we are looking for is often hidden in huge amounts of data that must first be filtered and analysed. Our approach uses a condensed set of information to support the understanding of the run-time behavior of an application. 3.1 The Principle of a Polymetric View The baseline of our work is based upon the approach implemented in the tool CodeCrawler [18] [19] [20]. It implements the polymetric views, software visualizations enriched with software metrics, described by Lanza [19], which we mainly used to support the understanding of software systems with static analysis. In Figure 1 we see that, given two-dimensional nodes representing entities (e.g., software artifacts) and edges representing relationships, we enrich these simple visualizations with up to 5 metrics on these node characteristics: Width Metric Height Metric Color Metric Entity Relationship Position Metrics (x,y) Figure 1. The principle of a polymetric view. • Node Size. The width and hei</context>
+<context position="8613" citStr="[20]" startWordPosition="1341" endWordPosition="1341">and the higher the node, the bigger the measurements its size is reflecting. • Node Color. The color interval between white and black can display a measurement. Here the convention is that the higher the measurement the darker the node is. Thus light gray represents a smaller metric measurement than dark gray. • Node Position. The X and Y coordinates of the position of a node can reflect two other measurements. This requires the presence of an absolute origin within a fixed coordinate system, therefore not all layouts can exploit this dimension, particularly tree layouts. In our previous work [20] we only made use of static information and software metrics which could be gathered from the static analysis of a software system. In this article we also make use of the thickness of the edges to render measurements. This gives us information about the weight of an edge between two entities, e.g., a thick invocation edge between two classes signifies there are many invocations between the two classes. Note that since run-time information tends to be nonlinear and with huge differences in scale (for example, a method can be invoked 10 times, while another one 50’000 times), some of the views </context>
+<context position="21150" citStr="[20]" startWordPosition="3339" endWordPosition="3339">ther methods. • Connected, tiny, square nodes represent classes whose methods are rarely invoked. Note that such classes can still have methods heavily invoking other methods, represented as a dark class node. • Large, white, square nodes represent classes having a considerable number of method used but which are rarely invoked during the execution. • Dark, square nodes represent heavily used classes. Small, dark, square nodes in addition represent classes whose few methods are heavily used. • Groups of nodes loosely connected to the view core represent classes communicating via a funnel [18] [20] to the rest of the system. Case Study. Figure 4 shows the application of the Communication Interaction view on our case study. A group of classes is clearly disconnected from the rest of the core of the view, while it joins the biggest part of the view through the class annotated as A. This group of classes implements the XMI file production based on a MOF compliant interface and is disconnected from the rest because the XMI/MOF production is an independent package used by Moose to produce XMI model files. The big class (B) is the XMI producer which uses MOF interface objects that communicate</context>
+<context position="33565" citStr="[20]" startWordPosition="5377" endWordPosition="5377">rest at some execution position. Dynamic slicing has been used to support the understanding of program [14]. In a similar way, CodeSurfer [1] supports the understanding by using hypertext facilities but not full visualization support. 7 Conclusions and Future Work In this paper we presented a new way of presenting runtime information that is not based on a trace of a system, but on a condensed and compact set of information, i.e., measurements, extracted during its execution. The measurements are then used to generate run-time polymetric views, simple visualizations enriched with measurements [20]. The views proposed, while being based on simple principles and a condensed set of run-time information, still provide rich insights and highlight multiple facets of the runtime behavior of a system. The advantages of our approach is the fact that it can be applied to systems for which a trace generation would be difficult to extract or too big to efficiently analyze such as webservers or other applications running 24 hours a day. In the future we plan to extend our current approach in the following ways: • Attribute dynamics. Understanding how attributes are used during the lifetime of an ob</context>
+</contexts>
+<marker>[20]</marker>
+<rawString>M. Lanza and S. Ducasse. Polymetric views — a lightweight visual approach to reverse engineering. IEEE Transactions on Software Engineering, 29(9):782–795, Sept. 2003.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Mendelzon</author>
+<author>J Sametinger</author>
+</authors>
+<title>Reverse engineering by visualizing and querying.</title>
+<date>1995</date>
+<booktitle>Software — Concepts and Tools,</booktitle>
+<pages>16--170</pages>
+<contexts>
+<context position="1914" citStr="[21]" startWordPosition="274" endWordPosition="274">1. Introduction Corbi [4] reported that during maintenance professionals spend at least half of their time analyzing software to understand it. Moreover, Sommerville [27] and Davis [5] estimate that the cost of software maintenance accounts for 50% to 75% of the overall cost of a software system. These facts show that understanding applications is one of the hardest tasks in the maintenance of software systems. One approach is to support the understanding of objectoriented systems using dynamic information. An extensive amount of research has already been dedicated to this research field [12] [21] [31] [22] [17] [14] [25] which is mostly based on extracting information generated during the execution of a software system. To do so people instrument the source code using various techniques (method wrapping, logging, extended virtual machines) and then run the system. The instrumented source code generates an execution trace, which contains information about the run-time behavior of the system, e.g., which method is calling which other methods, which objects are created at which time by which other objects, etc. The problem is that often the event trace for large, complex, long-running sy</context>
+<context position="29646" citStr="[21]" startWordPosition="4748" endWordPosition="4748">d recompilation or byte-code modification. The drawbacks of the approach are that it does not provide fine-grained run-time information at the level of sequence of interactions like sequence diagrams, as done by De Pauw [24] and that it requires the viewer to interact with the view to gather the relevant information. Moreover, our current implementation of the embedded spring layout shows some limits when being applied on densely communicating systems. 6 Related Work In the past, a great body of research has been conducted to support the understanding of object-oriented applications [12] [17] [21]. Among the various approaches to support the understanding of software behavior that have been proposed in the literature, graphical representations of software execution have long been accepted as comprehension aids. Various tools provide quite different software execution visualizations. Murphy et al. have developed, in AVID, an approach that allows software engineers to specify a high-level model of a system [31]. The software execution can be visualized using these models. Their visualization is oriented towards the liveness of objects and their number. Their work is directed more towards</context>
+</contexts>
+<marker>[21]</marker>
+<rawString>A. Mendelzon and J. Sametinger. Reverse engineering by visualizing and querying. Software — Concepts and Tools, 16:170–182, 1995.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>W D Pauw</author>
+<author>R Helm</author>
+<author>D Kimelman</author>
+<author>J Vlissides</author>
+</authors>
+<title>Visualizing the behavior of object-oriented systems.</title>
+<date>1993</date>
+<booktitle>In Proceedings OOPSLA ’93,</booktitle>
+<pages>326--337</pages>
+<contexts>
+<context position="1924" citStr="[22]" startWordPosition="276" endWordPosition="276">ction Corbi [4] reported that during maintenance professionals spend at least half of their time analyzing software to understand it. Moreover, Sommerville [27] and Davis [5] estimate that the cost of software maintenance accounts for 50% to 75% of the overall cost of a software system. These facts show that understanding applications is one of the hardest tasks in the maintenance of software systems. One approach is to support the understanding of objectoriented systems using dynamic information. An extensive amount of research has already been dedicated to this research field [12] [21] [31] [22] [17] [14] [25] which is mostly based on extracting information generated during the execution of a software system. To do so people instrument the source code using various techniques (method wrapping, logging, extended virtual machines) and then run the system. The instrumented source code generates an execution trace, which contains information about the run-time behavior of the system, e.g., which method is calling which other methods, which objects are created at which time by which other objects, etc. The problem is that often the event trace for large, complex, long-running systems is v</context>
+<context position="32309" citStr="[22]" startWordPosition="5171" endWordPosition="5171">ity in the analysis: It has a good scalability for large numbers of messages, but not for a huge number of classes. In the latter case the visualization becomes less useful. De Pauw et al. presented two different approaches. In their tool Jinsight, they are focused on interaction diagrams [24]. This way, all messages between objects can be visualized. The extraction of execution patterns is also one of the main purposes. However, with a large execution trace it becomes difficult to understand class roles during execution. Earlier on, De Pauw, with its class call clusters and class call matrix [22] [23], was closer to our approach. These visualizations are simple, they have a good scalability, but they only present a facet of an object-oriented application. Except the last approach, all of them have in common that they visualize program executions by applying sophisticated diagrams to keep the whole execution trace. In contrast, we extract from the execution trace information which we then condense into a few measurements to enrich our visualizations. A dynamic program slice [13] is an executable part of a program whose behavior is identical, for the same program input, to that of an or</context>
+</contexts>
+<marker>[22]</marker>
+<rawString>W. D. Pauw, R. Helm, D. Kimelman, and J. Vlissides. Visualizing the behavior of object-oriented systems. In Proceedings OOPSLA ’93, pp 326–337, Oct. 1993.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>W D Pauw</author>
+<author>D Kimelman</author>
+<author>J Vlissides</author>
+</authors>
+<title>Modeling object-oriented program execution.</title>
+<date>1994</date>
+<booktitle>In Proceedings ECOOP ’94, LNCS 821,</booktitle>
+<pages>163--182</pages>
+<publisher>Springer-Verlag.</publisher>
+<contexts>
+<context position="32314" citStr="[23]" startWordPosition="5172" endWordPosition="5172">n the analysis: It has a good scalability for large numbers of messages, but not for a huge number of classes. In the latter case the visualization becomes less useful. De Pauw et al. presented two different approaches. In their tool Jinsight, they are focused on interaction diagrams [24]. This way, all messages between objects can be visualized. The extraction of execution patterns is also one of the main purposes. However, with a large execution trace it becomes difficult to understand class roles during execution. Earlier on, De Pauw, with its class call clusters and class call matrix [22] [23], was closer to our approach. These visualizations are simple, they have a good scalability, but they only present a facet of an object-oriented application. Except the last approach, all of them have in common that they visualize program executions by applying sophisticated diagrams to keep the whole execution trace. In contrast, we extract from the execution trace information which we then condense into a few measurements to enrich our visualizations. A dynamic program slice [13] is an executable part of a program whose behavior is identical, for the same program input, to that of an origina</context>
+</contexts>
+<marker>[23]</marker>
+<rawString>W. D. Pauw, D. Kimelman, and J. Vlissides. Modeling object-oriented program execution. In Proceedings ECOOP ’94, LNCS 821, pp 163–182, July 1994. Springer-Verlag.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>W D Pauw</author>
+<author>D Lorenz</author>
+<author>J Vlissides</author>
+<author>M Wegman</author>
+</authors>
+<title>Execution patterns in object-oriented visualization.</title>
+<date>1998</date>
+<booktitle>In COOTS ’98,</booktitle>
+<pages>219--234</pages>
+<contexts>
+<context position="10414" citStr="[24]" startWordPosition="1639" endWordPosition="1639">ierarchies represents a class which is heavily instantiated (the node width is remarkable compared to the other nodes), but who seems, once instantiated, to perform little behaviour (the node has a small height), i.e., only few methods of this class have been invoked during the analysed run-time. 3.2 Run-Time Information Collection Run-time information collection is a rich domain that goes from the wrapping of methods [2] and the control of objects [8] to the instrumentation of virtual machines. A great body of work has been done on run-time information in terms of a trace of events [10] [11] [24]. This trace represents valuable information but is space-consuming and complex and therefore requires additional abstractions and manipulations to extract the wanted information. Our approach focuses on collecting a reduced amount of information, namely measurements, during the execution, such as the number of invocations, number of object creations, number of used classes/methods, the number of method calls on a class during the execution, etc.). We constrain ourselves to use only relatively simple measurements. Class Run-Time Measurements Name Description NCM Number of called methods RCM Ra</context>
+<context position="29266" citStr="[24]" startWordPosition="4688" endWordPosition="4688">ide overviews as well as in some cases more fine-grained information. Our approach could also be plugged dynamically while a system is running. Note that it is linked to the wrapping technology but also to the minimal set of run-time information it requires. Our tool, DIVOOR, uses the Method Wrappers [2] that allows one to dynamically and safely control any method without method recompilation or byte-code modification. The drawbacks of the approach are that it does not provide fine-grained run-time information at the level of sequence of interactions like sequence diagrams, as done by De Pauw [24] and that it requires the viewer to interact with the view to gather the relevant information. Moreover, our current implementation of the embedded spring layout shows some limits when being applied on densely communicating systems. 6 Related Work In the past, a great body of research has been conducted to support the understanding of object-oriented applications [12] [17] [21]. Among the various approaches to support the understanding of software behavior that have been proposed in the literature, graphical representations of software execution have long been accepted as comprehension aids. V</context>
+<context position="31999" citStr="[24]" startWordPosition="5119" endWordPosition="5119">erding et al. have created their own interaction diagrams to visualize the entire software execution [10] [11]. The purpose of their tool ISVis is to be able to visualize all the method calls between the classes. They can extract and recognize execution patterns, but its drawback is a certain lack of flexibility in the analysis: It has a good scalability for large numbers of messages, but not for a huge number of classes. In the latter case the visualization becomes less useful. De Pauw et al. presented two different approaches. In their tool Jinsight, they are focused on interaction diagrams [24]. This way, all messages between objects can be visualized. The extraction of execution patterns is also one of the main purposes. However, with a large execution trace it becomes difficult to understand class roles during execution. Earlier on, De Pauw, with its class call clusters and class call matrix [22] [23], was closer to our approach. These visualizations are simple, they have a good scalability, but they only present a facet of an object-oriented application. Except the last approach, all of them have in common that they visualize program executions by applying sophisticated diagrams </context>
+</contexts>
+<marker>[24]</marker>
+<rawString>W. D. Pauw, D. Lorenz, J. Vlissides, and M. Wegman. Execution patterns in object-oriented visualization. In COOTS ’98, pp 219–234, 1998.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>T Richner</author>
+<author>S Ducasse</author>
+</authors>
+<title>Using dynamic information for the iterative recovery of collaborations and roles.</title>
+<date>2002</date>
+<booktitle>In Proceedings of ICSM ’2002,</booktitle>
+<contexts>
+<context position="1939" citStr="[25]" startWordPosition="279" endWordPosition="279"> reported that during maintenance professionals spend at least half of their time analyzing software to understand it. Moreover, Sommerville [27] and Davis [5] estimate that the cost of software maintenance accounts for 50% to 75% of the overall cost of a software system. These facts show that understanding applications is one of the hardest tasks in the maintenance of software systems. One approach is to support the understanding of objectoriented systems using dynamic information. An extensive amount of research has already been dedicated to this research field [12] [21] [31] [22] [17] [14] [25] which is mostly based on extracting information generated during the execution of a software system. To do so people instrument the source code using various techniques (method wrapping, logging, extended virtual machines) and then run the system. The instrumented source code generates an execution trace, which contains information about the run-time behavior of the system, e.g., which method is calling which other methods, which objects are created at which time by which other objects, etc. The problem is that often the event trace for large, complex, long-running systems is voluminous [26].</context>
+<context position="3224" citStr="[25]" startWordPosition="491" endWordPosition="491">ns of thousands of events. Moreover, the lowlevel nature of the information contained in such a trace makes it hard for a software engineer to infer higher-level information about a software system. For example, he may want to know which other objects a certain object is sending messages to, but he does not want to have to analyse and verify every single method invocation contained in the trace. Many approaches based on run-time information have therefore as primary goal the reduction of the complexity of the trace in order to reveal certain aspects like the collaboration between classes [17] [25] [3]. Our approach is based on a condensed set of information, i.e., we do not keep and analyze the complete trace, we rather compute simple run-time metrics by counting certain events. For example, we count how many methods of a class are invoked during the program execution. Then we visualize this value, representing the number of the invoked methods of a class, in a run-time polymetric view. Polymetric views, presented by Lanza and Ducasse [19] [20], are visualisations enriched with software metrics. These views allow us to support the understanding of the run-time behaviour of a large, com</context>
+</contexts>
+<marker>[25]</marker>
+<rawString>T. Richner and S. Ducasse. Using dynamic information for the iterative recovery of collaborations and roles. In Proceedings of ICSM ’2002, Oct. 2002.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R Smith</author>
+<author>B Korel</author>
+</authors>
+<title>Slicing event traces of large software systems.</title>
+<date>2000</date>
+<booktitle>In AADebug 2000 International Workshop on Automated Debugging,</booktitle>
+<publisher>Demo.</publisher>
+<contexts>
+<context position="2538" citStr="[26]" startWordPosition="373" endWordPosition="373"> [25] which is mostly based on extracting information generated during the execution of a software system. To do so people instrument the source code using various techniques (method wrapping, logging, extended virtual machines) and then run the system. The instrumented source code generates an execution trace, which contains information about the run-time behavior of the system, e.g., which method is calling which other methods, which objects are created at which time by which other objects, etc. The problem is that often the event trace for large, complex, long-running systems is voluminous [26]. Our experience shows that collecting a trace of a couple of seconds generates tens of thousands of events. Moreover, the lowlevel nature of the information contained in such a trace makes it hard for a software engineer to infer higher-level information about a software system. For example, he may want to know which other objects a certain object is sending messages to, but he does not want to have to analyse and verify every single method invocation contained in the trace. Many approaches based on run-time information have therefore as primary goal the reduction of the complexity of the tra</context>
+<context position="6227" citStr="[26]" startWordPosition="961" endWordPosition="961">t factories is important information. • How do classes communicate with each other? • Which percentage of the methods defined in a class are actually used? 2.1 Challenges and Constraints The run-time analysis of object-oriented systems is challenging because of the following constraints: • Amount and density of information. The execution traces generated for run-time analysis are packed with very large amounts of low-level information. Therefore they must be analysed using techniques which reduce their complexity, such as filtering, clustering, slicing, concept analysis, or visualization [28] [26] [13] [3]. • Granularity of information. Execution traces contain large amounts of low-level information, e.g., which methods invoke which methods, which methods access which attributes, which objects are created at what time, etc. It is difficult, using such small pieces of information, to gain an understanding at a higher level. 3. Our Approach In a run-time context numerous classes, complex inheritance and containment hierarchies, and diverse patterns of dynamic interaction all contribute to difficulties in understanding, reusing, debugging, and tuning large objectoriented systems. Many of </context>
+</contexts>
+<marker>[26]</marker>
+<rawString>R. Smith and B. Korel. Slicing event traces of large software systems. In AADebug 2000 International Workshop on Automated Debugging, 2000. Demo.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>I Sommerville</author>
+</authors>
+<title>Software Engineering.</title>
+<date>2000</date>
+<publisher>Addison Wesley,</publisher>
+<note>sixth edition,</note>
+<contexts>
+<context position="1480" citStr="[27]" startWordPosition="203" endWordPosition="203">ements, that does not require a full trace. Using this condensed information, we propose a visualization approach which allows us to identify and understand certain aspects of the objects’ lifetime such as their role played in the creation of other objects and the communication architecture they support. Keywords: software visualization, reverse engineering, run-time information, object-oriented programming, program understanding 1. Introduction Corbi [4] reported that during maintenance professionals spend at least half of their time analyzing software to understand it. Moreover, Sommerville [27] and Davis [5] estimate that the cost of software maintenance accounts for 50% to 75% of the overall cost of a software system. These facts show that understanding applications is one of the hardest tasks in the maintenance of software systems. One approach is to support the understanding of objectoriented systems using dynamic information. An extensive amount of research has already been dedicated to this research field [12] [21] [31] [22] [17] [14] [25] which is mostly based on extracting information generated during the execution of a software system. To do so people instrument the source c</context>
+</contexts>
+<marker>[27]</marker>
+<rawString>I. Sommerville. Software Engineering. Addison Wesley, sixth edition, 2000.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>T Systa</author>
+</authors>
+<title>Static and Dynamic Reverse Engineering Techniques for Java Software Systems.</title>
+<date>2000</date>
+<tech>PhD thesis,</tech>
+<institution>University of Tampere,</institution>
+<contexts>
+<context position="6222" citStr="[28]" startWordPosition="960" endWordPosition="960">object factories is important information. • How do classes communicate with each other? • Which percentage of the methods defined in a class are actually used? 2.1 Challenges and Constraints The run-time analysis of object-oriented systems is challenging because of the following constraints: • Amount and density of information. The execution traces generated for run-time analysis are packed with very large amounts of low-level information. Therefore they must be analysed using techniques which reduce their complexity, such as filtering, clustering, slicing, concept analysis, or visualization [28] [26] [13] [3]. • Granularity of information. Execution traces contain large amounts of low-level information, e.g., which methods invoke which methods, which methods access which attributes, which objects are created at what time, etc. It is difficult, using such small pieces of information, to gain an understanding at a higher level. 3. Our Approach In a run-time context numerous classes, complex inheritance and containment hierarchies, and diverse patterns of dynamic interaction all contribute to difficulties in understanding, reusing, debugging, and tuning large objectoriented systems. Man</context>
+<context position="30531" citStr="[28]" startWordPosition="4882" endWordPosition="4882">lizations. Murphy et al. have developed, in AVID, an approach that allows software engineers to specify a high-level model of a system [31]. The software execution can be visualized using these models. Their visualization is oriented towards the liveness of objects and their number. Their work is directed more towards static, architectural models, while our work is more focused on the visualization of different kinds of interactions between classes of a software system during its execution. In a recent version they introduces sampling of events to reduce the information [3]. Systa and Shimba [28] [29] [30] mix static and dynamic information to support program understanding. Shimba uses traces of Java programs and extracts automatically scenario diagrams but also state diagrams representing the runtime of the system based on SCED [15]. Shimba provides also string matching algorithms for recognizing patterns in event traces. Lange et al. with their Program Explorer are focused on views of classes and objects [17] [16]. The authors have developed a system for tracking function invocation, object instantiation, and attribute access. The views show class and instance relationships (usually</context>
+</contexts>
+<marker>[28]</marker>
+<rawString>T. Systä. Static and Dynamic Reverse Engineering Techniques for Java Software Systems. PhD thesis, University of Tampere, 2000.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>T Systa</author>
+</authors>
+<title>Understanding the behavior of java programs.</title>
+<date>2000</date>
+<booktitle>In Proceedings of the 7th Working Conference on Reverse Engineering (WCRE</booktitle>
+<pages>214--223</pages>
+<contexts>
+<context position="30536" citStr="[29]" startWordPosition="4883" endWordPosition="4883">ions. Murphy et al. have developed, in AVID, an approach that allows software engineers to specify a high-level model of a system [31]. The software execution can be visualized using these models. Their visualization is oriented towards the liveness of objects and their number. Their work is directed more towards static, architectural models, while our work is more focused on the visualization of different kinds of interactions between classes of a software system during its execution. In a recent version they introduces sampling of events to reduce the information [3]. Systa and Shimba [28] [29] [30] mix static and dynamic information to support program understanding. Shimba uses traces of Java programs and extracts automatically scenario diagrams but also state diagrams representing the runtime of the system based on SCED [15]. Shimba provides also string matching algorithms for recognizing patterns in event traces. Lange et al. with their Program Explorer are focused on views of classes and objects [17] [16]. The authors have developed a system for tracking function invocation, object instantiation, and attribute access. The views show class and instance relationships (usually focu</context>
+</contexts>
+<marker>[29]</marker>
+<rawString>T. Systä. Understanding the behavior of java programs. In Proceedings of the 7th Working Conference on Reverse Engineering (WCRE 2000), pp 214–223, 2000.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>T Systa</author>
+<author>K Koskimies</author>
+<author>H Muller</author>
+</authors>
+<title>Shimba — an environment for reverse engineering java software systems.</title>
+<date>2001</date>
+<journal>Software — Practice and Experience,</journal>
+<volume>1</volume>
+<issue>1</issue>
+<contexts>
+<context position="30541" citStr="[30]" startWordPosition="4884" endWordPosition="4884"> Murphy et al. have developed, in AVID, an approach that allows software engineers to specify a high-level model of a system [31]. The software execution can be visualized using these models. Their visualization is oriented towards the liveness of objects and their number. Their work is directed more towards static, architectural models, while our work is more focused on the visualization of different kinds of interactions between classes of a software system during its execution. In a recent version they introduces sampling of events to reduce the information [3]. Systa and Shimba [28] [29] [30] mix static and dynamic information to support program understanding. Shimba uses traces of Java programs and extracts automatically scenario diagrams but also state diagrams representing the runtime of the system based on SCED [15]. Shimba provides also string matching algorithms for recognizing patterns in event traces. Lange et al. with their Program Explorer are focused on views of classes and objects [17] [16]. The authors have developed a system for tracking function invocation, object instantiation, and attribute access. The views show class and instance relationships (usually focused o</context>
+</contexts>
+<marker>[30]</marker>
+<rawString>T. Systä, K. Koskimies, and H. Müller. Shimba — an environment for reverse engineering java software systems. Software — Practice and Experience, 1(1), Jan. 2001.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R J Walker</author>
+<author>G C Murphy</author>
+<author>B Freeman-Benson</author>
+<author>D Wright</author>
+<author>D Swanson</author>
+<author>J Isaak</author>
+</authors>
+<title>Visualizing dynamic software system information through high-level models.</title>
+<date>1998</date>
+<booktitle>In Proceedings OOPSLA ’98,</booktitle>
+<pages>271--283</pages>
+<publisher>ACM,</publisher>
+<contexts>
+<context position="1919" citStr="[31]" startWordPosition="275" endWordPosition="275">troduction Corbi [4] reported that during maintenance professionals spend at least half of their time analyzing software to understand it. Moreover, Sommerville [27] and Davis [5] estimate that the cost of software maintenance accounts for 50% to 75% of the overall cost of a software system. These facts show that understanding applications is one of the hardest tasks in the maintenance of software systems. One approach is to support the understanding of objectoriented systems using dynamic information. An extensive amount of research has already been dedicated to this research field [12] [21] [31] [22] [17] [14] [25] which is mostly based on extracting information generated during the execution of a software system. To do so people instrument the source code using various techniques (method wrapping, logging, extended virtual machines) and then run the system. The instrumented source code generates an execution trace, which contains information about the run-time behavior of the system, e.g., which method is calling which other methods, which objects are created at which time by which other objects, etc. The problem is that often the event trace for large, complex, long-running systems</context>
+<context position="30066" citStr="[31]" startWordPosition="4810" endWordPosition="4810">ed on densely communicating systems. 6 Related Work In the past, a great body of research has been conducted to support the understanding of object-oriented applications [12] [17] [21]. Among the various approaches to support the understanding of software behavior that have been proposed in the literature, graphical representations of software execution have long been accepted as comprehension aids. Various tools provide quite different software execution visualizations. Murphy et al. have developed, in AVID, an approach that allows software engineers to specify a high-level model of a system [31]. The software execution can be visualized using these models. Their visualization is oriented towards the liveness of objects and their number. Their work is directed more towards static, architectural models, while our work is more focused on the visualization of different kinds of interactions between classes of a software system during its execution. In a recent version they introduces sampling of events to reduce the information [3]. Systa and Shimba [28] [29] [30] mix static and dynamic information to support program understanding. Shimba uses traces of Java programs and extracts automa</context>
+</contexts>
+<marker>[31]</marker>
+<rawString>R. J. Walker, G. C. Murphy, B. Freeman-Benson, D. Wright, D. Swanson, and J. Isaak. Visualizing dynamic software system information through high-level models. In Proceedings OOPSLA ’98, pp 271–283. ACM, Oct. 1998.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>N Wilde</author>
+<author>R Huitt</author>
+</authors>
+<title>Maintenance support for objectoriented programs.</title>
+<date>1992</date>
+<journal>IEEE Transactions on Software Engineering,</journal>
+<volume>18</volume>
+<issue>12</issue>
+<contexts>
+<context position="4592" citStr="[32]" startWordPosition="715" endWordPosition="715">t the run-time behaviour of the system. In this article we first discuss the problems and challenges that the run-time analysis of object-oriented applications poses (Section 2). We then present our approach in detail (Section 3), before presenting and analyzing a case study performed using our tool, DIVOOR, an extension of CodeCrawler [18], with different run-time polymetric views (Section 4). We conclude the paper with a discussion of our findings (Section 5), a look at the related work (Section 6), and an outlook on our future work (Section 7). 2. Run-time Analysis Problems Wilde and Huitt [32] assessed that understanding objectoriented applications is difficult because of several reasons, such as: • Polymorphism and late-binding make traditional tool analyzers like program slicers inadequate. Data-flow analysers are more complex to build especially in presence of dynamically typed languages. • The use of inheritance and incremental class definitions, together with the dynamic semantics of self and this, make applications more difficult to understand. • The domain model of the applications is spread over classes residing in different hierarchies and/or subsystems and it is difficult</context>
+</contexts>
+<marker>[32]</marker>
+<rawString>N. Wilde and R. Huitt. Maintenance support for objectoriented programs. IEEE Transactions on Software Engineering, SE-18(12):1038–1044, Dec. 1992.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

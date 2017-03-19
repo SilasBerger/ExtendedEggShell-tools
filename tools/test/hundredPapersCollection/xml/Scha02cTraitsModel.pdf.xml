@@ -1,0 +1,831 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.000000">
+<title confidence="0.477479">
+Traits: The Formal Model?
+</title>
+<author confidence="0.7406205">
+Nathanael Schärli, Oscar Nierstrasz, Stéphane Ducasse, Roel Wuyts, and
+Andrew Black
+</author>
+<affiliation confidence="0.798032">
+Software Composition Group, University of Bern, Switzerland
+OGI School of Science &amp; Engineering, Oregon Health and Science University
+</affiliation>
+<email confidence="0.799297">
+{schaerli, oscar, ducasse, wuyts}@iam.unibe.ch, black@cse.ogi.edu
+</email>
+<bodyText confidence="0.9996975">
+Abstract. Traits are reusable units of behaviour that provide a level
+of structuring for object-oriented programs above the level of methods
+but below the level of classes. Structuring classes with single-inheritance
+alone can lead to duplicated code when different branches of the hi-
+erarchy need to use the same feature. Multiple-inheritance and mixins
+alleviate this problem, but lead to other difficulties in the face of evolu-
+tion: changes to classes or mixins can break code lower in the hierarchy
+in unexpected ways.
+Traits solve both problems by factoring out shared behaviour as sets of
+methods that do not depend on state. Trait composition is symmetric
+and conflicts must be managed explicitly; this means that changes in the
+components do not lead to unexpected side effects.
+This paper presents a formal model of traits, and defines some basic
+properties of traits and classes. We also model the internal dependencies
+created by self and super-sends so that we can specify precisely when
+two classes are equivalent.
+</bodyText>
+<sectionHeader confidence="0.99833" genericHeader="abstract">
+1 Introduction
+</sectionHeader>
+<bodyText confidence="0.9519496">
+Traits provide a mechanism that can be used to factor out shared behaviour from
+classes. The purpose of this paper is to provide a formal basis for understanding
+and reasoning about traits; it is not intended to be self-contained. A companion
+paper, which we will refer to as the “traits paper” [SDNB02], shows that traits
+overcome many difficulties with single and multiple inheritance, and with mixins.
+We have also reported on the use of an experimental implementation to refactor
+a part of the Smalltalk collections hierarchy [BSD02].
+The semantics of single inheritance is well understood and it is described by
+several operational and denotational formalizations [GR83,CP89]. For concise-
+ness, we do not repeat any details of these formalizations. Instead we focus on
+two contributions. First, we define traits and the various operators that can be
+used to combine traits into compound traits, and ultimately into classes. Sec-
+ond, we make precise the internal dependencies within a class that are created
+when methods send messages to self and super. This enables us to specify when
+? −Id: model3.tex,v 1.40 2003/02/24 16:43:37 oscar Exp −
+</bodyText>
+<sectionHeader confidence="0.602204" genericHeader="keywords">
+2 Nathanael Schärli et al.
+</sectionHeader>
+<bodyText confidence="0.902751">
+different ways of composing a class are equivalent from the perspective of pro-
+vided and required services. Depending on the programmer’s goals, equivalent
+classes might be regarded as legal refactorings, or as alternative views on a more
+abstract form of the program.
+</bodyText>
+<sectionHeader confidence="0.957989" genericHeader="introduction">
+2 The Traits Language
+</sectionHeader>
+<bodyText confidence="0.965359422222222">
+While developing traits we have not focussed on issues of concrete syntax. In
+fact, because our initial implementation is part of the Smalltalk interactive devel-
+opment environment, we have been able to defer syntactic considerations almost
+entirely: traits are created and manipulated by the traits browser using method
+templates and menu selections. However, we have found that readers grasp the
+essentials of traits more quickly if they can see the various forms displayed as a
+grammar, so in the traits paper we presented an abstract syntax for the princi-
+pal operations on traits [SDNB02, section 4]. Here we reproduce that grammar,
+and expand it to include constructs for method dictionaries, for the inheritance
+operation on classes, and for definitions that give names to classes and traits.
+method dictionary: D ::= {}  |{x1 7→ m1, . . . , xn 7→ mn}
+trait expression: T ::= NT  |T + T  |T − x  |T [x→y]
+trait definition: TDef ::= NT = D  |NT = D with T
+fields: F ::= {}  |{f1, f2, . . . , fn}
+class expression: C ::= nil  |NC  |F in D extends NC
+ |F in D with T extends NC
+class definition: CDef ::= NC = C
+D denotes a method dictionary, which is either empty or contains a finite
+number of services (i.e., bindings of labels to methods) in which all of the labels
+xi are distinct. T denotes a trait expression, which can be a named trait NT ,
+the symmetric composition T + T of two traits, or a trait that is subject to an
+exclusion T − x or an alias T [x→y]. A trait definition binds a trait name NT
+to one of two forms: D, a method dictionary, or NT = D with T , a method
+dictionary that adds methods to (and possibly overrides methods from) a trait.
+F is a possibly empty set of variable (or field) names; it is not important
+for our purposes whether these are instance variables, class variables, or static
+variables. C denotes a class, which can be nil, a named class NC , or a con-
+ventional class F in D extends NC , which consists of some fields F , a method
+dictionary D, and a named superclass NC . In addition, a class can be structured
+F in D with T extends NC ; the structured class acquires methods from the trait
+T augmented (and possibly overridden) by those from the explicit method dic-
+tionary D. Finally, a class definition CDef is simply a binding of a class name
+NC to a class C.
+Since it is context free, this abstract syntax does not capture several context
+conditions. These are that a name NT cannot be used as a trait expression until
+it has been defined (and similarly for NC). Also, the form F in D places the fields
+Traits: The Formal Model 3
+defined in F in scope within the method bodiesmi that appear in D. Conversely,
+no fields are in scope in D in the forms NT = D and NT = D with T .
+The syntax does capture some important restrictions that the traits browser
+imposes for reasons of human engineering. The with keyword, which allows
+method overriding, is second class. It can appear only in the definition of a
+named trait or class, and only with a literal method dictionary on the left hand
+side: these restrictions help to ensure that all overriding of services in a trait is
+explicit.
+</bodyText>
+<sectionHeader confidence="0.989319" genericHeader="method">
+3 A Model for Traits
+</sectionHeader>
+<subsectionHeader confidence="0.854857">
+3.1 Informal Introduction
+</subsectionHeader>
+<bodyText confidence="0.999261484848485">
+Because it is not important for the semantics of traits, we do not represent
+the internal structure of methods in our model. Instead, we model methods as
+atomic values in a set M, augmented with top and bottom elements to create
+a flat lattice; ⊥ represents “no method” and &amp;gt; stands for a “method conflict”.
+This also means that our model is independent of any particular programming
+language.
+Methods should be thought of as implementations, or code sequences. All we
+assume about methods is that we can ascertain when they may send messages
+to instances of their class. Such message sends are of two kinds: self-sends and
+super-sends. Whereas self-sends employ the usual message lookup that starts in
+the class of the current instance, super-sends cause the message lookup to start
+in the superclass of the class that defines the method containing the super-send.
+Traits are essentially sets of bindings of labels to methods; the labels name
+the methods. We call these bindings services. Traits both provide services (i.e.,
+the methods implemented) and require services (i.e., those that are invoked by
+self- and super-sends). When we say that a class or a trait provides a service
+with a particular label we mean that a binding of that label to a method exists.
+When we say that a service with a particular label is required, we mean that a
+binding of that label to a method needs to exist.
+We introduce summation (+), exclusion (−), aliasing (→) and overriding (B)
+as mechanisms for composing and modifying traits. When traits are composed
+with +, labels that are bound to different methods will conflict ; we represent
+this by binding the label to &amp;gt; in the sum. The B operation is intended to be
+used to override these bindings to &amp;gt; with proper methods.
+Traits are subordinate to classes in several ways. Unlike classes, traits bind
+neither self nor super. Classes can contain fields, and methods in classes can
+refer to those fields, so it is possible for classes to provide accessor methods
+(also known assetters and getters). In contrast, traits do not contain fields, and
+as a consequence methods in traits cannot refer to fields. However, because the
+requirements of a trait method can be met by accessor methods, a trait method
+can access state indirectly.
+A class is built up from traits, methods, and a single superclass using single
+inheritance. If the traits conflict, the class can eliminate the conflict by overriding
+</bodyText>
+<sectionHeader confidence="0.928367" genericHeader="method">
+4 Nathanael Schärli et al.
+</sectionHeader>
+<bodyText confidence="0.999405833333333">
+the conflicting methods. super is bound only at the point that a class is composed,
+and self refers to an instance of a composed class.
+The labels required by a class consist of the set of self-sends made by all
+the methods reachable by the super-send chain, minus the set of labels of the
+provided services. A class is concrete if all its requirements are fulfilled, otherwise
+it is abstract. A class is well-founded if the super-sends are properly bound; note
+that a well-founded class can still be abstract. Two classes are equivalent if they
+provide the same set of services, and all the methods reachable by sequences of
+self- and super-sends are the same.
+In the remainder of this section we make this model formally precise. In
+section 4 we consider several examples from the traits paper, and show how they
+are represented in the model.
+</bodyText>
+<subsectionHeader confidence="0.996671">
+3.2 Methods
+</subsectionHeader>
+<bodyText confidence="0.980696">
+The primitive elements of our model are the following disjoint sets:
+</bodyText>
+<listItem confidence="0.906309333333333">
+– M, a countable set of methods,
+– L, a countable set of method labels, and
+– F , a countable set of field labels.
+</listItem>
+<bodyText confidence="0.994129">
+Because of the context restriction mentioned in section 2, trait methods can-
+not access fields directly. In contrast, class methods can access fields, and the
+method dictionaries of classes can define accessor methods that can be used by
+trait methods to access fields indirectly. We do not make this distinction explicit
+in the model by partitioning M. Instead, it will be sufficient to model methods
+as atomic elements, and not to consider their internal structure. For instance,
+we make no assumption on how equality of methods is tested in an actual lan-
+guage: m1 = m2 might be equality of strings, of syntax trees, of bytecode, or of
+something else.
+We are, however, interested in which other methods are required by a given
+method. We therefore model:
+– selfSends :M→ 2L, the set of labels used in self-sends, and
+– superSends :M→ 2L, the set of labels used in super-sends.
+We extend selfSends and superSends to sets of methods by union:
+</bodyText>
+<equation confidence="0.988803">
+– selfSends : 2M → 2L
+selfSends(µ) =
+⋃
+m∈µ
+selfSends(m)
+– superSends : 2M → 2L
+superSends(µ) =
+⋃
+m∈µ
+superSends(m)
+</equation>
+<bodyText confidence="0.82893155">
+Traits: The Formal Model 5
+Note that the precise definitions of selfSends and superSends are language-
+dependent. For example, consider the method
+fasten
+— anObject — self hook.
+anObject := self.
+anObject button.
+self class new clip.
+It is clear that hook should be recognized as a self-send. What about button? A
+little local static anaylsis ought to be able to show that this is also a self-send.
+Is clip a self-send? We avoid answering this question! clip is a requirment on the
+class, but whether it is recognized as such depends on how thorough an analysis
+is carried out by the tools. We assume only that selfSends(m) provides a lower
+bound on the set of messages that an object might send to instances of its class
+while executing m. Other messages might be sent through indirect paths that
+are hard to discover.
+We extend the set of methodsM to a flat latticeM?, with ⊥ @ m ∈M @ &amp;gt;,
+and in which all other elements are incomparable. We will use ⊥ to represent
+undefined and &amp;gt; to represent a method conflict. Thus, the least upper bound or
+join operator t for M? is as shown:
+</bodyText>
+<equation confidence="0.956876833333333">
+t ⊥ m1 m2 &amp;gt;
+⊥ ⊥ m1 m2 &amp;gt;
+m1 m1 m1 &amp;gt; &amp;gt;
+m2 m2 &amp;gt; m2 &amp;gt;
+&amp;gt; &amp;gt; &amp;gt; &amp;gt; &amp;gt;
+where m1 6= m2
+</equation>
+<construct confidence="0.886036666666667">
+@@ add the lattice digram to the right of this table @@
+Definition 1. A service is a partial function binding a single method label to a
+particular method. We use the notation:
+x 7→ m
+for the service that binds the label x ∈ L to the method m ∈M, and
+x 7→ &amp;gt;
+</construct>
+<bodyText confidence="0.804711">
+to indicate that label x is in conflict.
+</bodyText>
+<subsectionHeader confidence="0.910622">
+3.3 Traits
+</subsectionHeader>
+<construct confidence="0.822473">
+Definition 2. A trait, t ∈ T , is a finite set of services, i.e., a function,
+</construct>
+<equation confidence="0.486207">
+t : L →M?
+where {l ∈ L  |t(l) 6= ⊥} is a finite set.
+6 Nathanael Schärli et al.
+</equation>
+<bodyText confidence="0.803338">
+Since traits are finite, we will always specify them extensionally, listing only
+bindings to elements M and &amp;gt;. For example,
+</bodyText>
+<equation confidence="0.907684">
+t = {x 7→ m1, y 7→ m2, z 7→ &amp;gt;}
+</equation>
+<bodyText confidence="0.95347575">
+defines a trait t that maps label x to method m1, label y to label m2, and for
+which label z has a conflict.
+By convention, selfSends and superSends of &amp;gt; and ⊥ are all ∅. We extend
+selfSends and superSends to traits in the obvious way:
+</bodyText>
+<equation confidence="0.98238575">
+– selfSends : T → 2L
+selfSends(t) def= selfSends(t(L))
+– superSends : T → 2L
+superSends(t) def= superSends(t(L))
+</equation>
+<bodyText confidence="0.858623">
+Since traits are just finite mappings, two traits are equal when these mappings
+are equal, that is, when equal labels map to equal methods.
+Definition 3. The conflicts, conflicts : T → 2L, of a trait t are defined by:
+</bodyText>
+<equation confidence="0.87047">
+conflicts(t)
+def
+= {l  |t(l) = &amp;gt;}
+</equation>
+<construct confidence="0.321785">
+Definition 4. A method dictionary d is a conflict-free trait, that is, a trait d
+</construct>
+<bodyText confidence="0.8493572">
+such that conflicts(d) = ∅.
+Conflict-free traits model the literal method dictionaries D of the traits language
+(see section 2).
+Definition 5. The provided labels, provided : T → 2L, of a trait t are defined
+as:
+</bodyText>
+<equation confidence="0.939715666666667">
+provided(t)
+def
+= {l ∈ L  |t(l) ∈M}
+</equation>
+<bodyText confidence="0.940431">
+i.e., the set of all labels that t does not map to ⊥ or &amp;gt;.
+Definition 6. The required labels, required : T → 2L, of a trait t are defined
+as:
+</bodyText>
+<equation confidence="0.976916">
+required(t)
+def
+= selfSends(t) \ provided(t)
+</equation>
+<bodyText confidence="0.8436255">
+Notice that the required labels of a trait do not consider super-sends. However,
+when we compose classes from traits we must take super-sends into account in
+order to determine the required labels of the class (cf. Definition 17).
+Traits: The Formal Model 7
+</bodyText>
+<subsectionHeader confidence="0.815572">
+3.4 Trait Operations
+</subsectionHeader>
+<bodyText confidence="0.958885">
+Traits can either be specified directly, as lists of services, or they may be com-
+posed from other traits, by means of summation (+ : T × T → T ), exclu-
+</bodyText>
+<equation confidence="0.8236645">
+sion (− : T × L → T ), aliasing ( [ := ] : T × L × L → T ), and overriding
+(B : T × T → T ).
+</equation>
+<bodyText confidence="0.6378855">
+Definition 7. Summation composes two traits, forming the union of non-conflicting
+bindings and “disabling” the conflicting bindings:
+</bodyText>
+<equation confidence="0.879308333333333">
+(t1 + t2)(l)
+def
+= t1(l) t t2(l)
+</equation>
+<figureCaption confidence="0.821889">
+For example:
+{a 7→ m1, b 7→ m2, c 7→ m3}+ {a 7→ m1, b 7→ m3} = {a 7→ m1, b 7→ &amp;gt;, c 7→ m3}
+Proposition 1. Symmetric composition is associative and commutative.
+Proof. Immediate from the definition, since the join operator t is associative
+and commutative.
+Definition 8. Exclusion removes a binding from a trait:
+</figureCaption>
+<equation confidence="0.8986746">
+(t− l)(x) def=
+{
+⊥ if x = l
+t(x) otherwise
+For example:
+{a 7→ m1, b 7→ &amp;gt;} − b = {a 7→ m1}
+Definition 9. Aliasing introduces an additional name for an existing method:
+t[x:=y](l)
+def
+=
+{
+t(y) if l = x
+t(l) otherwise
+For example:
+{a 7→ m1, b 7→ m2}[c:=b] = {a 7→ m1, b 7→ m2, c 7→ m2}
+</equation>
+<bodyText confidence="0.876599333333333">
+These three operations model the +, − and → operations from the language
+syntax of section 2.
+When composing classes or traits, we may need to replace conflicts by proper
+methods. For this reason we introduce the B operator.
+Definition 10. A trait t1 may replace some of the bindings in another trait t2,
+as follows:
+</bodyText>
+<equation confidence="0.981062333333333">
+(t1 B t2)(l)
+def
+=
+{
+t2(l) if t1(l) = ⊥
+t1(l) otherwise
+</equation>
+<bodyText confidence="0.9567516">
+The B operator models the with syntax of the traits language; the trait
+d with t is modeled by d B t. Because B is asymmetric, in our concrete traits
+language its use is limited to definitions of named traits and named classes in
+which literal method definitions appear on the left hand side (see the discussion
+in Section 2).
+</bodyText>
+<sectionHeader confidence="0.646428" genericHeader="method">
+8 Nathanael Schärli et al.
+3.5 Classes
+</sectionHeader>
+<bodyText confidence="0.9832546">
+Whereas traits are just sets of services without any context, a class binds self
+and super for its methods. In addition, a concrete class must provide all its
+required methods. Because the method referred to by a super-send depends on
+which methods are defined by the various superclasses, to define the meaning of
+“required” for a class we must model the entire inheritance chain of the class.
+We do this by representing a class as a sequence of method dictionaries.
+Definition 11. A class, c ∈ C, is either the empty class, nil, or a sequence
+〈φ, t〉·c′, where φ ⊂ F , t ∈ T , and c′ ∈ C.
+If we assume that sm is the model for s, then the conventional class
+φ in d extends s
+is modeled by 〈φ, d〉·sm, and the structured class
+φ in d with t extends s
+is modeled by 〈φ, dB t〉·sm.
+Running Example We will refer to the following example throughout the
+remainder of this section.
+</bodyText>
+<equation confidence="0.995375416666667">
+c = 〈{i}, {a 7→ m6, x 7→ m1, y 7→ m2}〉
+· 〈{j}, {b 7→ m7, x 7→ m3, y 7→ m4}〉
+· 〈∅, {z 7→ m5}〉
+· nil
+where
+selfSends(m1) = {a, y} superSends(m1) = {x}
+selfSends(m2) = ∅ superSends(m2) = ∅
+selfSends(m3) = {b} superSends(m3) = ∅
+selfSends(m4) = {w} superSends(m4) = {z}
+selfSends(m5) = {a} superSends(m5) = ∅
+selfSends(m6) = ∅ superSends(m6) = ∅
+selfSends(m7) = ∅ superSends(m7) = ∅
+</equation>
+<bodyText confidence="0.996246">
+For conciseness, we will in future omit the trailing ·nil from all examples.
+Definition 12. The incremental method dictionary, delta(c), of a class c, is:
+</bodyText>
+<equation confidence="0.983423538461538">
+delta(c)
+def
+=
+{
+{} if c = nil
+d if c = 〈φ, d〉·c′
+Definition 13. The superclass, super(c), of c is:
+super(c)
+def
+=
+{
+nil if c = nil
+c′ if c = 〈φ, d〉·c′
+</equation>
+<bodyText confidence="0.725891666666667">
+Traits: The Formal Model 9
+Definition 14. The flattening of a class c, flatten(c), is the B composition of
+the method dictionaries in its inheritance chain:
+</bodyText>
+<equation confidence="0.981744315789474">
+flatten(c)
+def
+=
+{
+{} if c = nil
+dB flatten(c′) if c = 〈φ, d〉·c′
+Definition 15. The method lookup, c x, of a label x in a class c is:
+c x def= flatten(c)(x)
+For our running example:
+delta(c) = {a 7→ m6, x 7→ m1, y 7→ m2}
+super(c) = 〈{b}, {b 7→ m7, x 7→ m3, y 7→ m4}〉·〈∅, {z 7→ m5}〉
+delta(super(c)) = {b 7→ m7, x 7→ m3, y 7→ m4}
+super(super(c)) = 〈∅, {z 7→ m5}〉
+flatten(c) = {a 7→ m6, b 7→ m7, x 7→ m1, y 7→ m2, z 7→ m5}
+flatten(super(c)) = {b 7→ m7, x 7→ m3, y 7→ m4, z 7→ m5}
+flatten(super(super(c))) = {z 7→ m5}
+c y = m2
+super(c) x = m3
+super(super(c)) x = ⊥
+</equation>
+<bodyText confidence="0.6105725">
+Definition 16. The provided labels, provided : C → 2L, of a class c are defined
+as:
+</bodyText>
+<equation confidence="0.951177">
+provided(c)
+def
+= {l ∈ L  |c l ∈M}
+</equation>
+<bodyText confidence="0.879159384615384">
+i.e., the set of all labels that flatten(c) does not map to ⊥ or &amp;gt;.
+Definition 17. A class c is well-founded if and only if all super-sends in its
+inheritance chain are bound, i.e., if superSends(delta(c)) ⊆ provided(super(c))
+and super(c) is well-founded. nil is well-founded by convention. 1
+For a particular programming language, a class that is not well-founded may
+generate run-time errors, or compile-time errors, depending on the philosphy of
+its designers.
+In the running example:
+provided(c) = {a, b, x, y, z}
+c is well-founded since the super-send to x in m1 is bound in super(c).
+1 This definition is slightly more restrictive than necessary; in fact, it does no harm
+for the superclass to contain a method that has an unbound supersend, provided
+that this method is not reachable. Of course, such a method is of no practical use.
+</bodyText>
+<subsectionHeader confidence="0.6490995">
+10 Nathanael Schärli et al.
+3.6 Superclass Reachability and Class Equivalence
+</subsectionHeader>
+<bodyText confidence="0.997830238095238">
+The required labels of a class are more subtle than those of a trait, because we
+must consider not only self-sends, but also the entire inheritance chain of super-
+sends. In the running example c, it is crucial to capture that the fact that the
+accessor method b is required (and fulfilled) because m3 is reachable through a
+chain of super-sends, whereas w is not required because m4 is not reachable.
+Thus, to determine which methods are reachable, we see that we must con-
+sider not only the methods bound to the provided labels, but methods that may
+be reached by super-sends from the corresponding methods, methods that may
+be reached by super-sends from those methods, and so on. We introduce the
+notation c↑x1x2...xn = 〈m, c′〉 to mean that it is possible for the method bound
+to x1 in class c to perform a super-send to x2, and for the method bound to
+x2 in this context to perform a supersend .... to xn. If this occurs, then xn will
+be bound to method m obtained from c′. For example, c↑x = 〈m1, c〉, since the
+service x 7→ m1 occurs in delta(c), but c↑b = 〈m7, super(c)〉. For convenience,
+we introduce the notation cx̄, which returns just the method reachable by x̄
+without its class, so cx = m1 and cb = m7.
+Reachability for longer chains must take super-sends into account, so c↑xx =
+〈m3, super(c)〉, since m3 is reachable by the super-send chain xx. On the other
+hand, c↑xy = ⊥, since y 6∈ superSends(m1). Note that although m4 is not
+reachable by any super-send chain starting from c, it is reachable from super(c).
+Definition 18. c↑x̄, where c ∈ C and x̄ ∈ L+, is defined recursively, as follows:
+</bodyText>
+<figure confidence="0.529180083333333">
+nil↑x def= 〈⊥, nil〉
+c↑x def=
+{
+〈m, c〉 if m = delta(c)(x) ∈M
+super(c)↑x otherwise
+c↑x̄y def=
+{
+super(c′)↑y if c↑x̄ = 〈m, c′〉 and y ∈ superSends(m)
+〈⊥, nil〉 otherwise
+Definition 19.
+cx̄
+def
+</figure>
+<construct confidence="0.94610925">
+= m, where ∃c′ such that c↑x̄ = 〈m, c′〉
+Theorem 1. For any class c and any single message x, cx = c x
+Proof. By induction on the length of the super-send chain. The base case where
+c = nil is trivial. The induction step has two cases, where x is bound in delta(c)
+and where it is not.
+Definition 20. A method m ∈ M is reachable from class c, if ∃x̄ ∈ L+ such
+that m = cx.
+Definition 21. The set of methods reachable from a class c, is:
+</construct>
+<equation confidence="0.665196333333333">
+reachable(c)
+def
+= {cx̄  |x̄ ∈ L+} \ {⊥}
+</equation>
+<bodyText confidence="0.631221333333333">
+Traits: The Formal Model 11
+In the running example, reachable(c) = {m1,m2,m3,m5,m6,m7}.
+Definition 22. The set of required labels, required(c), of a class c is:
+</bodyText>
+<equation confidence="0.535786666666667">
+required(c)
+def
+= selfSends(reachable(c)) \ provided(c)
+</equation>
+<bodyText confidence="0.841627538461538">
+Note that the required labels include the self-sends, not only of the provided
+methods, but also of all methods reachable through super-sends.
+Definition 23. A class, c ∈ C, is concrete if required(c) = ∅. A class that is
+not concrete is abstract.
+In the example, required(c) = {a, b, y} \ {a, b, x, y, z} = ∅, so c is concrete. In
+contrast, required(super(c)) = {b, w} \ {b, x, y, z} = {w}, so super(c) is abstract.
+Similarly, required(super(super(c))) = {a} \ {y} = {a}, so super(super(c)) is also
+abstract.
+Two classes are equivalent if exactly the same methods are reachable by the
+same super-send chains.
+Definition 24. A class c is equivalent to a class c′, c ≡ c′, iff:
+provided(c) = provided(c′) and ∀x̄ ∈ L+, cx̄ = c′x̄.
+Suppose that:
+</bodyText>
+<equation confidence="0.918270111111111">
+c′ = 〈{a}, {a 7→ m6, x 7→ m1, y 7→ m2, z 7→ m5}〉·〈{b}, {b 7→ m7, x 7→ m3}〉
+Then c ≡ c′ since
+provided(c) = provided(c′) = {a, b, x, y, z}
+cx = c′x = m1
+cy = c′y = m2
+ca = c′a = m6
+cb = c′a = m7
+cz = c′z = m5
+cxx = c′xx = m3
+</equation>
+<bodyText confidence="0.985703">
+and no other methods are reachable.
+</bodyText>
+<sectionHeader confidence="0.994914" genericHeader="method">
+4 Some Examples
+</sectionHeader>
+<bodyText confidence="0.945736">
+In this section, we give the formalizations of some of the examples presented
+in the traits paper [SDNB02]. For conciseness, we omit the methods to which
+labels are bound except when there is a method conflict. For example, rather
+than writing {a 7→ m1, b 7→ m2, c 7→ &amp;gt;} we simply write {a, b, c 7→ &amp;gt;}.
+</bodyText>
+<figure confidence="0.84164">
+12 Nathanael Schärli et al.
+</figure>
+<figureCaption confidence="0.918179">
+Fig. 1. (a) shows how a trait TCircle is composed from a trait TGeometry and a nested
+</figureCaption>
+<bodyText confidence="0.9694582">
+trait TMagnitude, which is again composed from the trait TEquality. Note that the
+provided services of the nested traits are propagated to the composite trait (e.g., max:,
+∼=, and area), and similarly, the unsatisfied requirements of the nested traits (e.g.,
+center and radius:) are turned into required methods of the composite trait. In (b), we
+again use the trait TEquality to specify the comparison behaviour of the trait TColor.
+</bodyText>
+<figure confidence="0.491398625">
+(c) shows how a class Circle is specified by composing the traits TCircle, TColor, and
+TDrawing.
+Traits: The Formal Model 13
+TEquality = {∼=}
+TDrawing = {draw, refresh, refreshOn:}
+TGeometry = {area, bounds, diameter, scaleBy:, . . .}
+TMagnitude = {&amp;lt;=, &amp;gt;, &amp;gt;=, between:and:,max:,min:} with TEquality
+TColor = {red, green, blue, hue, saturation, red:, . . . ,=, hash}
+with TEquality
+TCircle = {&amp;lt;,=, hash} with (TMagnitude+ TGeometry)
+Circle = 〈{center, radius, rgb},
+{center, center:, radius, radius:, rgb, rgb:, initialize,=, hash, drawOn:}
+with (TColor[colorEquals: → =][colorHash → hash]
++ TCircle[circleEquals: → =][circleHash → hash]
++ TDrawing)〉
+extends Object
+</figure>
+<figureCaption confidence="0.952473">
+Fig. 2. Formal definition of the classes and traits shown in figure 1.
+</figureCaption>
+<subsectionHeader confidence="0.995436">
+4.1 Graphical objects
+</subsectionHeader>
+<bodyText confidence="0.9961887">
+In Section 3 of the traits paper [SDNB02, figure 5], we presented an example
+that uses traits to represent graphical objects, such as circles and rectangles, in
+a structured and reusable way. For ease of reference, the figure is reproduced
+here as figure 1. We now show how the traits and classes given in figure 1 are
+expressed in our model.
+Figure 2 presents formalizations of all the traits and classes that are involved
+in this example. The first three traits TEquality, TDrawing, TGeometry are
+“primitive traits”, which means that they do not make use of any other traits.
+None of these traits is complete, because they all send messages that do not
+correspond to provided services. In fact, the required labels of these traits are:
+</bodyText>
+<equation confidence="0.974603333333333">
+required(TEquality) = {=}
+required(TDrawing) = {bounds, drawOn:}
+required(TGeometry) = {center, radius, radius}
+</equation>
+<bodyText confidence="0.98815928">
+The trait TMagnitude uses the trait TEquality, and implements additional
+selectors such as &amp;lt;=, &amp;lt;, &amp;gt;=, etc.. Note that the trait TMagnitude does not pro-
+vide the service = required by the trait TEquality. This requirement is therefore
+propagated to the trait TMagnitude. Since TMagnitude additionally requires the
+service &amp;lt;, the complete set of requirements is required(TMagnitude) = {&amp;lt;,=}.
+The trait TColor also uses the trait TEquality, but unlike TMagnitude, it
+implements a service =, which satisfies the requirement of TEquality. In addition,
+14 Nathanael Schärli et al.
+TColor also implements some color methods such as red, green, red:, etc., which
+require the services rgb and rgb:.
+The trait TCircle is the composition of the traits TMagnitude and TGeom-
+etry. In addition, it implements the methods &amp;lt;,=, hash and thereby satisfies all
+the requirements for TMagnitude. However, it does not satisfy any of the require-
+ments of TGeometry and therefore, required(TCircle) = required(TGeometry).
+Finally, we define the class Circle, making use of the traits TColor, TCircle,
+TDrawing. This means that we combine these three traits by using the symmetric
+composition operator +. Since TColor and TCircle provide different methods
+for = and hash, this means that a conflict arises:
+conflicts(TColor+ TCircle+ TDrawing) = {=, hash}
+The class Circle resolves this conflict by implementing methods for = and
+hash, which replace the conflicting methods. In order to allow these methods
+to access the methods from TColor and TCircle, we use aliasing to make these
+methods available in Circle under unambiguous names.
+Note that the class Circle satisfies all the requirements of the traits that it
+uses by defining methods that access its fields center, radius and rgb.
+</bodyText>
+<sectionHeader confidence="0.70663" genericHeader="method">
+4.2 Read-write synchronization
+</sectionHeader>
+<bodyText confidence="0.882813909090909">
+In Section 5.2 of the traits paper, we describe how we can build a trait that
+implements simple read-write synchronization in a reusable way. The problem
+assumes the existence of two classes, A and B that are not related by inheritance
+and provide unsynchronized read and write methods.
+A = 〈{}, {read,write, . . .}〉 ·A′
+B = 〈{}, {read,write, . . .}〉 ·B′
+Our task is to create synchronized subclasses SyncA and SyncB. This can
+be accomplished by writing a trait TSyncReadWrite, that implements a simple
+synchronization strategy.
+TSyncReadWrite = {read,write, acquireLock, releaseLock}
+The methods read and write are implemented as shown in Figure 1 of the
+</bodyText>
+<reference confidence="0.54988">
+traits paper:
+read
+self acquireLock.
+value := super read.
+self releaseLock.
+↑ value
+write
+self acquireLock.
+value := super write.
+self releaseLock.
+Traits: The Formal Model 15
+</reference>
+<sectionHeader confidence="0.811155" genericHeader="method">
+↑ value
+</sectionHeader>
+<bodyText confidence="0.995478">
+This means that the method read first calls the method acquireLock, then it calls
+the unsynchronized read method by using a super-send, and finally it calls the
+method releaseLock. The method write is similar. Since both acquireLock and
+releaseLock need to access a semaphore, the requirements and super-sends of
+TSyncReadWrite are as follows.
+</bodyText>
+<equation confidence="0.9130752">
+required(TSyncReadWrite) = {semaphore}
+superSends(TSyncReadWrite) = {read,write}
+Now we can use this trait to create subclasses SyncA of A and SyncB of B.
+SyncA = 〈{semaphore}, {semaphore}B TSyncReadWrite〉 ·A
+SyncB = 〈{semaphore}, {semaphore}B TSyncReadWrite〉 · B
+</equation>
+<bodyText confidence="0.8525775">
+Since the superclasses A and B provide methods labeled read and write, the
+classes SyncA and SyncB are well-formed. And because SyncA and SyncB both
+provide an accessor method labeled semaphore (and the corresponding field),
+they are also concrete.
+</bodyText>
+<sectionHeader confidence="0.999008" genericHeader="conclusions">
+5 Summary
+</sectionHeader>
+<bodyText confidence="0.999199166666667">
+This paper has introduced a formal model for the mechanism described in the
+“traits paper” [SDNB02]. It has also formalized the notions of required and
+provided methods in an inheritance chain, and has used these notions to explain
+what is meant by a well-formed class and a concrete class. Notice that these
+definitions are in fact independent of the trait mechanism, and can be applied
+to any single-inheritance language.
+</bodyText>
+<sectionHeader confidence="0.991549" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.9996850625">
+[BSD02] Andrew Black, Nathanael Schärli, and Stéphane Ducasse. Applying traits
+to the Smalltalk collection hierarchy. Technical Report IAM-02-007, Institut
+für Informatik, Universität Bern, Switzerland, November 2002. Also avail-
+able as Technical Report CSE-02-014, OGI School of Science &amp; Engineering,
+Beaverton, Oregon, USA.
+[CP89] William Cook and Jens Palsberg. A denotational semantics of inheritance
+and its correctness. In Proceedings OOPSLA ’89, ACM SIGPLAN Notices,
+pages 433–443, October 1989. Published as Proceedings OOPSLA ’89, ACM
+SIGPLAN Notices, volume 24, number 10.
+[GR83] Adele Goldberg and David Robson. Smalltalk 80: the Language and its
+Implementation. Addison Wesley, Reading, Mass., May 1983.
+[SDNB02] Nathanael Schärli, Stéphane Ducasse, Oscar Nierstrasz, and Andrew Black.
+Traits: Composable units of behavior. Technical Report IAM-02-005, In-
+stitut für Informatik, Universität Bern, Switzerland, November 2002. Also
+available as Technical Report CSE-02-014, OGI School of Science &amp; Engi-
+neering, Beaverton, Oregon, USA.
+</reference>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.241023">
+<title confidence="0.7595655">Traits: The Formal Model? Nathanael Schärli, Oscar Nierstrasz, Stéphane Ducasse, Roel Wuyts, and</title>
+<author confidence="0.7389435">Andrew Black Software Composition Group</author>
+<author confidence="0.7389435">University of Bern</author>
+<author confidence="0.7389435">Switzerland</author>
+<affiliation confidence="0.999355">OGI School of Science &amp; Engineering, Oregon Health and Science University</affiliation>
+<email confidence="0.986333">schaerli@iam.unibe.ch,black@cse.ogi.edu</email>
+<email confidence="0.986333">oscar@iam.unibe.ch,black@cse.ogi.edu</email>
+<email confidence="0.986333">ducasse@iam.unibe.ch,black@cse.ogi.edu</email>
+<email confidence="0.986333">wuyts@iam.unibe.ch,black@cse.ogi.edu</email>
+<abstract confidence="0.9980838125">Traits are reusable units of behaviour that provide a level of structuring for object-oriented programs above the level of methods but below the level of classes. Structuring classes with single-inheritance alone can lead to duplicated code when different branches of the hierarchy need to use the same feature. Multiple-inheritance and mixins alleviate this problem, but lead to other difficulties in the face of evolution: changes to classes or mixins can break code lower in the hierarchy in unexpected ways. Traits solve both problems by factoring out shared behaviour as sets of methods that do not depend on state. Trait composition is symmetric and conflicts must be managed explicitly; this means that changes in the components do not lead to unexpected side effects. This paper presents a formal model of traits, and defines some basic properties of traits and classes. We also model the internal dependencies created by self and super-sends so that we can specify precisely when two classes are equivalent.</abstract>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<title>Traits: The Formal Model 15 [BSD02] Andrew Black, Nathanael Scharli, and Stephane Ducasse. Applying traits to the Smalltalk collection hierarchy.</title>
+<date>2002</date>
+<tech>Technical Report IAM-02-007,</tech>
+<institution>Institut fur Informatik, Universitat Bern, Switzerland,</institution>
+<location>Beaverton, Oregon, USA.</location>
+<marker>2002</marker>
+<rawString>Traits: The Formal Model 15 [BSD02] Andrew Black, Nathanael Schärli, and Stéphane Ducasse. Applying traits to the Smalltalk collection hierarchy. Technical Report IAM-02-007, Institut für Informatik, Universität Bern, Switzerland, November 2002. Also available as Technical Report CSE-02-014, OGI School of Science &amp; Engineering, Beaverton, Oregon, USA.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>William Cook</author>
+<author>Jens Palsberg</author>
+</authors>
+<title>A denotational semantics of inheritance and its correctness.</title>
+<date>1989</date>
+<journal>ACM SIGPLAN Notices,</journal>
+<booktitle>In Proceedings OOPSLA ’89,</booktitle>
+<volume>24</volume>
+<pages>433--443</pages>
+<marker>Cook, Palsberg, 1989</marker>
+<rawString>[CP89] William Cook and Jens Palsberg. A denotational semantics of inheritance and its correctness. In Proceedings OOPSLA ’89, ACM SIGPLAN Notices, pages 433–443, October 1989. Published as Proceedings OOPSLA ’89, ACM SIGPLAN Notices, volume 24, number 10.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Adele Goldberg</author>
+<author>David Robson</author>
+</authors>
+<title>Smalltalk 80: the Language and its Implementation.</title>
+<date>1983</date>
+<publisher>Addison Wesley,</publisher>
+<location>Reading, Mass.,</location>
+<note>[SDNB02] Nathanael Scharli, Stephane</note>
+<marker>Goldberg, Robson, 1983</marker>
+<rawString>[GR83] Adele Goldberg and David Robson. Smalltalk 80: the Language and its Implementation. Addison Wesley, Reading, Mass., May 1983. [SDNB02] Nathanael Schärli, Stéphane Ducasse, Oscar Nierstrasz, and Andrew Black.</rawString>
+</citation>
+<citation valid="true">
+<title>Traits: Composable units of behavior.</title>
+<date>2002</date>
+<tech>Technical Report IAM-02-005,</tech>
+<institution>Institut fur Informatik, Universitat Bern, Switzerland,</institution>
+<location>Beaverton, Oregon, USA.</location>
+<marker>2002</marker>
+<rawString>Traits: Composable units of behavior. Technical Report IAM-02-005, Institut für Informatik, Universität Bern, Switzerland, November 2002. Also available as Technical Report CSE-02-014, OGI School of Science &amp; Engineering, Beaverton, Oregon, USA.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

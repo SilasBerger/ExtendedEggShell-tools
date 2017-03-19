@@ -1,0 +1,741 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.000000">
+<table confidence="0.404671">
+Components for Embedded
+Software — The PECOS
+Approach
+Michael Winter1, Thomas Genßler1, Alexander
+Christoph1, Oscar Nierstrasz2, Stéphane Ducasse2,
+Roel Wuyts2, Gabriela Arévalo2, Peter Müller3,
+Chris Stich3, and Bastiaan Schönhage4
+</table>
+<footnote confidence="0.7979171">
+1
+fwinterjgensslerjchristog@fzi.de, Forschungszentrum
+Informatik (FZI), Germany, http://www.fzi.de
+2 foscarjducassejwuytsjarevalog@iam.unibe.ch, Software
+Composition Group (SCG), University of Bern, Switzerland,
+http://www.iam.uinbe.ch/˜scg
+3 fpeter.o.muellerjchris.stichg@de.abb.com, ABB
+Research Center, Germany, http://www.abb.com
+4 Bastiaan Schonhage@oti.com, Object Technology
+International (OTI), The Netherlands, http://www.oti.com
+</footnote>
+<sectionHeader confidence="0.973242" genericHeader="abstract">
+1 Introduction
+</sectionHeader>
+<bodyText confidence="0.999517526315789">
+This paper presents a domain specific composition
+language called CoCo. The CoCo language has been
+developed in the context of the PECOS project1
+which aims at enabling component–based technol-
+ogy for a certain class of embedded systems called
+”field devices”.
+CoCo is used in PECOS for the specification of
+components and for the composition of components
+to build entire field device applications. Besides this,
+CoCo allows the specification of architectural styles
+and system families and it supports compositional
+reasoning.
+The sequel of the paper is organized as follows: Sec-
+tion 2 gives a brief introduction to the application
+domain of field devices. In section 3, the PECOS
+component model is presented. Section 4 addresses
+the different aspects of the CoCo language men-
+tioned above. Section 5 summarizes the ideas pre-
+sented in this paper and points out future work.
+</bodyText>
+<sectionHeader confidence="0.6784805" genericHeader="keywords">
+2 Case study description
+ABB’s Instruments business unit develops a
+</sectionHeader>
+<bodyText confidence="0.989257066666667">
+large number of different field devices, such as
+temperature–, pressure–, and flow–sensors, actua-
+tors and positioners. A field device is an embedded
+hard real–time system. Field devices use sensors to
+1 Funded by the European Commission under IST Program IST-1999-
+20398 and by the Swiss government as BBW 00.0170. The partners
+are Asea Brown Bovery AG (ABB, Germany), Forschungszentrum In-
+formatik (FZI, Germany), Object Technology International (OTI, The
+Netherlands), and Institut für Informatik und Angewandte Mathematik,
+University of Bern (UNIBE, Switzerland)
+continuously gather data, such as temperature, pres-
+sure or rate of flow. They process this data, and re-
+act by controlling actuators like valves or motors.
+A typical field device may contain a 16–bit micro-
+processor with only 256KB of ROM and 40KB of
+</bodyText>
+<figureCaption confidence="0.629">
+RAM.
+Fig. 1. Pneumatic positioner TZID
+</figureCaption>
+<bodyText confidence="0.999406866666667">
+The software for a typical field device, such as
+the TZID pneumatic positioner shown in Fig. 1, is
+monolithic, and it has to be developed separately for
+each kind of field device. This results in a number
+of well–known problems: There is no or little code
+reuse and the software is hard to maintain, extend or
+customize. This is made even worse by the use of
+hard–coded, cyclic execution schedules.
+The goal of the PECOS project is to develop a
+model-centric CBSE process for embedded compo-
+nent software. This includes the definition of a com-
+ponent model, composition language and develop-
+ment environment, which support reuse of compo-
+nents and device architectures and provide support
+for (semi–)automatic schedule generation.
+</bodyText>
+<subsectionHeader confidence="0.963722">
+2.1 Example Application
+</subsectionHeader>
+<bodyText confidence="0.935829153846154">
+We will use the following example throughout this
+paper to illustrate the PECOS component model
+and composition language. Part of the PECOS case
+study is concerned with setting a valve at a specific
+position between open and closed. Fig. 2 illustrates
+three connected PECOS components that collabo-
+rate to set the valve position; the desired position is
+determined by other components not shown here. In
+order to set and keep the valve at a certain position,
+a control loop is used to continuously monitor and
+adjust the valve.
+– The ModBus component works as an interface
+to a piece of hardware called the frequency con-
+verter, which determines the speed of the motor.
+The frequency to which the motor should be set
+is obtained from the ProcessApplication com-
+ponent. ModBus outputs this value over a serial
+Fig. 2. FQD control loop
+line to the frequency converter using the Mod-
+Bus protocol.
+– The FQD (Fast Quadrature Decoder [2]) com-
+ponent is responsible for capturing events from
+the motor. This component abstracts from a
+micro–controller module that does FQD in
+hardware. It provides the ProcessApplication
+with both the velocity and the position of the
+valve.
+– The component ProcessApplication obtains the
+desired position of the valve (Set–Point) and
+reads the current state of the valve from the
+FQD component. This information is then used
+to compute a frequency for the motor. Once the
+motor has opened the valve sufficiently, ascer-
+tained by the next reading from the FQD, the
+motor must be slowed or stopped. This repeated
+adjustment and monitoring constitutes the con-
+trol loop.
+Besides the tight resource situation, there are addi-
+tional key issues concerning the field device domain:
+</bodyText>
+<listItem confidence="0.878046">
+(1) Cyclic behavior — each component is respon-
+</listItem>
+<bodyText confidence="0.988255363636364">
+sible for a single piece of functionality, which is re-
+peatedly executed (with a specified cycle time) and
+must not take longer than a specified worst–case ex-
+ecution time. (2) Data–flow–oriented interaction
+— components communicate by sending or receiv-
+ing data. The interface of a component consists of
+a set of data ports. (3) Threading — some compo-
+nents are passive (i.e., cyclically invoked by a sched-
+uler), while others (like FQD) have their own thread
+of control in order to react on asynchronous events
+or to perform long computations in the background.
+</bodyText>
+<sectionHeader confidence="0.99458" genericHeader="method">
+3 A Component Model for Embedded
+</sectionHeader>
+<bodyText confidence="0.914284888888889">
+Software
+In order to apply component–based software devel-
+opment to embedded systems software, we must be
+precise about what we mean by a component. In par-
+ticular, we must take care to specify how compo-
+nents are structured and composed, which proper-
+ties of components are important to capture and rea-
+son about, and how a composition of components
+can be interpreted at run–time.
+</bodyText>
+<figureCaption confidence="0.767584">
+Fig. 3. A Component Model for Embedded Software
+</figureCaption>
+<bodyText confidence="0.99814375">
+Here we briefly present a meta–model that reflects
+an architectural style [6] for embedded systems soft-
+ware. We also sketch how compositions of compo-
+nents can be interpreted by means of Petri nets.
+</bodyText>
+<subsectionHeader confidence="0.999286">
+3.1 Model Elements
+</subsectionHeader>
+<bodyText confidence="0.996913714285714">
+Fig. 3 illustrates the key elements of the compo-
+nent model. Components have interfaces defined
+by a number of ports, and may be hierarchically
+composed. So–called leaf components are treated
+as black boxes, and are directly implemented in
+some host programming language. Composite com-
+ponents, on the other hand, are built by connect-
+</bodyText>
+<page confidence="0.972935">
+2
+</page>
+<bodyText confidence="0.980309714285714">
+ing the ports of other, existing components (leaf
+or composite), and expressing which ports of the
+constituent components are exported as ports of the
+composite (See Fig. 4.)
+Ports are shared variables that allow components to
+communicate with each other. Connected ports and
+exported ports therefore represent the same variable.
+Connectors may only connect ports of compatible
+type, direction and range.
+The model expresses three kinds of components rel-
+evant for embedded systems.
+Active Components (e.g., ModBus in figure 2)
+have their own thread of control. Active compo-
+nents are used to model ongoing or long–lived
+activities that cannot complete in a short cycle–
+time. A complete system composed of com-
+ponents is always modeled as a composite ac-
+tive component. Composite active components
+schedule their constituent components in order
+to meet the deadlines imposed by the real–time
+constraints.
+</bodyText>
+<subsubsectionHeader confidence="0.474796">
+Passive Components (e.g., ProcessApplication)
+</subsubsectionHeader>
+<bodyText confidence="0.980193055555556">
+have no own thread of control. They are used
+to encapsulate a piece of behavior that executes
+synchronously and completes in a short cycle
+time. Passive components are scheduled by the
+nearest active parent that contains them.
+Event Components (e.g., FQD) are components
+whose functionality is triggered by an event.
+They are typically used to model hardware el-
+ements that periodically generate events. Typi-
+cal examples are timers, used to keep track of
+deadlines, or devices that emit events encoding
+status information, such as the current rotation
+speed of a motor, the current temperature, and
+so on.
+All three kinds of components can be composite.
+Components are characterized by their properties,
+which encode information such as timing and mem-
+ory usage.
+</bodyText>
+<subsectionHeader confidence="0.997755">
+3.2 Execution model
+</subsectionHeader>
+<bodyText confidence="0.964425777777778">
+In addition to the static structure described above,
+the PECOS model has an execution model that de-
+scribes the behavior of a Field Device. By using
+Petri nets [7] to represent the execution model, we
+intend to reason about real–time constraints and au-
+tomatically generate real–time schedules for soft-
+ware components.
+The execution model deals with the following two
+issues: Synchronization — how to synchronize
+</bodyText>
+<figure confidence="0.95356625">
+leaf components
+connected ports
+exported port
+composite component
+</figure>
+<figureCaption confidence="0.998595">
+Fig. 4. A Composite Component
+</figureCaption>
+<bodyText confidence="0.995282769230769">
+data–flow between components (esp. between com-
+ponents that live in different threads of control) and
+Timing — how to make sure that component’s func-
+tionality is executed according to cycle times and re-
+quired deadlines.
+A composition of components has as many threads
+of control as there are active components. Each ac-
+tive component is responsible for scheduling the
+passive components under its control. We formalize
+the execution semantics by means of a Petri net in-
+terpretation. The details of this formalization, how-
+ever, are beyond the scope of this paper. They are
+described in [4, 3].
+</bodyText>
+<sectionHeader confidence="0.982965" genericHeader="method">
+4 The CoCo Language
+</sectionHeader>
+<bodyText confidence="0.998890045454545">
+In this section we introduce the component compo-
+sition language CoCo. It is the syntactical represen-
+tation of the component model described in section
+3, enhanced with additional features.
+The language is intended to be used for 1) the speci-
+fication of components, 2) the specification of entire
+field device applications as compositions of compo-
+nents 3) the specification of architectures and sys-
+tem families. In addition, CoCo supports reuse of
+components and architectures and supports compo-
+sitional reasoning. Last but not least, CoCo serves
+as input for scheduler computation and code gener-
+ation.
+In the sequel, we present these different aspects
+of the language. First, we describe how develop-
+ers can specify components in terms of their in-
+terfaces. Then, we describe how components are
+composed to build composite components and show
+how CoCo supports the specification of system fam-
+ilies. Finally, we sketch how CoCo specifications
+can be used for reasoning about functional and non–
+functional properties of a system.
+</bodyText>
+<page confidence="0.960559">
+3
+</page>
+<subsectionHeader confidence="0.999076">
+4.1 Specifying Components in CoCo
+</subsectionHeader>
+<bodyText confidence="0.96338975">
+Components represent units of computation and
+are the major means of structuring a CoCo sys-
+tem. CoCo supports all component types of the
+component model. For example, Figures 5 and 6
+show a CoCo specification of our recurring example.
+There we see an active component (marked with the
+keyword active), an event component (keyword
+event) and two passive components.
+In analogy to the OO model, components play the
+role of classes. That means, they define a type and
+scope in the same sense as OO classes do. Compo-
+nents can be instantiated that is, one can create an
+instances of a component with a unique identity. But
+in contrary to object instances, components can not
+be instantiated dynamically at run–time, but all in-
+stances are statically known.
+</bodyText>
+<figure confidence="0.967331157894737">
+event component FQD f
+output float actualPosition;
+output float velocity;
+property cycleTime = 100;
+property execTime = 10;
+g
+active component ModBus f
+input float setFrequency;
+property cycleTime = 100;
+property execTime = 10;
+g
+component ProcessApplication f
+input float setPoint;
+input float actualPosition;
+input float velocity;
+output float setFrequency;
+property cycleTime = 100;
+property execTime = 20;
+g
+</figure>
+<figureCaption confidence="0.999129">
+Fig. 5. The FQD control loop components specified in CoCo
+</figureCaption>
+<bodyText confidence="0.991976424242424">
+Programming in CoCo is data–flow–oriented. Ports
+(e.g., setPoint) denote data flow into or out of a
+component and are the only means of using a com-
+ponent. Ports are assigned both a data flow direc-
+tion (input, output, or in–/output) and a data type.
+A component’s interface does not contain any func-
+tions that my be called, but one may think of a com-
+ponent as a piece of functionality that is executed
+cyclically (passive component) or in response to a
+certain event (event component) in order to compute
+output values depending on the current input values
+and/or the internal state of the component. The ac-
+tual behavior, however, is not specified at the level
+of CoCo specifications but hidden in the implemen-
+tation of the component.
+The only information available about this imple-
+mentation is the worst–case execution time it takes
+to perform the computation (property execTime)
+and the interval between these computations (prop-
+erty cycleTime). These values are specified in
+CoCo as component properties.
+Properties serve to attach functional and non–
+functional features to a component, such as init val-
+ues for ports, memory consumption and worst–case
+execution time. They can be structured in so–called
+property bundles. These bundles group properties
+that semantically belong together, such as schedul-
+ing information (worst–case execution time, cycle
+time). Properties can be used by tools to inspect the
+component in different phases of the development
+process (e.g., when generating a scheduler). Prop-
+erties can be set on a per–component basis and a
+per–instance basis.
+</bodyText>
+<subsectionHeader confidence="0.998848">
+4.2 Composing Components with CoCo
+</subsectionHeader>
+<bodyText confidence="0.996854692307692">
+Components are composite when they contain in-
+stances of other components (see for example
+the component PositionValve in Fig. 6). In
+PECOS, an entire application, such as a field device,
+is modeled as a composite component. Instances of
+components have a component type and a unique
+name within the scope of the enclosing component.
+All instances are created at system start–up, that is
+there is no ”new” statement to dynamically create
+instances during run–time but all possible instances
+are known at compile–time. This allows for a num-
+ber of checks at compile–time as well as for auto-
+mated scheduler generation.
+</bodyText>
+<figure confidence="0.848091818181818">
+component PositionValvef
+ModBus mb;
+FQD fqd;
+ProcessApplication pa;
+input float setPoint;
+connector c1 (setPoint, pa.setPoint);
+connector c2 (fqd.actualPosition,
+pa.actualPosition);
+connector c3 (fqd.velocity, pa.velocity);
+connector c4 (pa.setFrequency, mb.setFrequency);
+g
+</figure>
+<figureCaption confidence="0.975345">
+Fig. 6. The FQD (Fig. 2) control loop itself specified in CoCo
+</figureCaption>
+<bodyText confidence="0.9975505">
+Connection of components is achieved through the
+use of connectors (e.g., connector c1 in component
+PositionValve). Connectors connect a list of
+ports defined either in the current component (like
+</bodyText>
+<page confidence="0.980702">
+4
+</page>
+<bodyText confidence="0.998647">
+port setPoint in connector c1) or by one of the
+contained instances (that is, instances in the same
+scope). Different connectors that share a common
+port represent the same connection. A special case
+of this rule is at the border of composite event and
+active components: as theses components execute in
+their own thread of control, data only bypasses their
+borders during a synchronization step.
+</bodyText>
+<subsectionHeader confidence="0.980688">
+4.3 Specifying software families with CoCo
+</subsectionHeader>
+<bodyText confidence="0.99897375">
+Components serve to specify concrete pieces of a
+system. But it is often desirable to be able to spec-
+ify architectural styles or families of components or
+families of entire applications (devices). CoCo pro-
+vides the concept of abstract components for this
+purpose. By means of abstract components one can
+specify a template of a system that can later be filled
+in with concrete components. Abstract components
+do not have a representation in the model as they do
+not contribute to the run–time behavior of field de-
+vice software. They are merely a technique to sim-
+plify specification and to enable the reuse of designs.
+</bodyText>
+<figure confidence="0.978382473684211">
+abstract component PecosControlLoopf
+role AbstractProcessApplication PecosPA;
+role AbstractControlDevice PecosCtrl;
+role AbstractFeedBackDevice PecosFdbck;
+input float setPoint;
+connector setPoint(setPoint, PecosPA.setPoint);
+connector feedback1(PecosPA.actualPosition,
+PecosFdbck.actualPosition);
+connector feedback2(PecosPA.velocity,
+PecosFdbck.velocity);
+connector control(PecosPA.setFrequency,
+PecosCtrl.setFrequency);
+g
+[...]
+component PositionValve is PecosControlLoopf
+ProcessApplication pa is PecosPA;
+ModBus mb is PecosCtrl;
+FQD fqd is PecosFdbck;
+g
+</figure>
+<figureCaption confidence="0.995122">
+Fig. 7. Using abstract components to specify system families
+</figureCaption>
+<bodyText confidence="0.98018003125">
+Besides the elements known from normal com-
+ponents, abstract components can define so–called
+roles. Roles are typed variation points or holes in a
+(micro–)architecture. Fig. 7 shows the specification
+of an architectural style for control loops.
+We assume that a PecosControlLoop should
+always have an instance of sub–type of Ab-
+stractProcessApplication that plays the
+role PecosPA in our valve controller architecture.
+AbstractProcessApplication again is an
+abstract component that defines a certain interface
+(i.e., ports, properties) every process application
+component has to conform to. Thus, roles serve as
+placeholders for instances. These placeholders can
+also be connected by connectors as if they were
+normal instances. This way a developer is able to
+specify an entire family of applications that share
+a common architecture in terms of the components
+involved and their data–flow dependencies. To cre-
+ate a specific member of this family, a component
+has to implement the respective abstract compo-
+nent. Implementing an abstract component means
+that all roles defined by this abstract component
+have to be bound to suitable instances and that all
+connectors, instances, ports, and properties defined
+in this abstract component become now part of the
+implementing component. In our example the role
+PecosPA is bound to an instance of component
+ProcessApplication. The component Pro-
+cessApplication on the other hand is required
+to implement the abstract component Abstract-
+ProcessApplication.
+</bodyText>
+<subsectionHeader confidence="0.998524">
+4.4 Composition checking
+</subsectionHeader>
+<bodyText confidence="0.999621642857143">
+In this section we briefly sketch how compositions
+can be reasoned about.
+In order to make a composition valid, certain rules
+must be followed. There are simple syntactic rules
+and rules originating from the static semantics of
+CoCo which are checked by the composition lan-
+guage compiler.These rules express requirements,
+that emerge from the component model. Examples
+for such rules are “if a component implements an
+abstract component, it must bind all roles” or “all
+mandatory ports must be bound”, etc.
+In addition we allow the specifaction and checking
+of company-, product-line- or product-specific se-
+mantic rules. We employ first-order predicate logic
+for this purpose. The PECOS composition tool is
+able to generate a database of Prolog facts out of a
+composition specification. These facts describe the
+whole system, together with all included compo-
+nents, their ports, properties, and connections. Se-
+mantic rules are formulated as Prolog queries (or in
+the form of Horn clauses) and are checked against
+the generated facts. Examples for this type of rules
+are fulfillment test of specific requirements for de-
+bugging, release versions of the software, dependen-
+cies between components, platform specific prop-
+erty settings, such as in “...in this product line, a
+particular type of components must always be used
+together with another particular component type...´´.
+</bodyText>
+<page confidence="0.865379">
+5
+</page>
+<subsectionHeader confidence="0.734431">
+4.5 Code Generation: from CoCo to C++ and
+Java
+</subsectionHeader>
+<bodyText confidence="0.99951645">
+A system specified in CoCo can be easily translated
+into target languages such as C++ or Java. The com-
+ponent structure from the CoCo specification can be
+mapped directly to an identical class structure in the
+target language. Any local functionality of compo-
+nents, as specified by the user in the target language,
+can be simply incorporated. Instances map to stati-
+cally initialized instance variables, and connectors
+represent shared instance variables in the enclosing
+object. Ports map to set– and get–methods that read
+from or write to these shared instance variables, as
+determined by the connectors. Every read/write op-
+eration to the same data location is serialized so
+there is no need for locking. When generating code
+from a CoCo specification, special attention needs
+to be given to the efficiency, measured both in exe-
+cution time and in memory consumption, because
+of the requirements imposed by the field device
+domain. More information on these issues can be
+found in the relevant PECOS deliverable [5].
+</bodyText>
+<sectionHeader confidence="0.999158" genericHeader="conclusions">
+5 Summary
+</sectionHeader>
+<bodyText confidence="0.974706111111111">
+In this paper, we have presented the domain specific
+composition language CoCo as part of the PECOS
+project. The two main characteristics of the lan-
+guage are its data–flow oriented composition style
+and the support for non–functional properties (most
+importantly timing information as input for schedule
+generation).
+The different purposes of CoCo have been pre-
+sented: it serves for defining component interfaces
+and composite2 components. Furthermore, it has
+been shown, how CoCo allows to define system
+architectures in the form of abstract components.
+Finally, it has been indicated, how compositional
+reasoning is supported and how the mapping from
+CoCo to C++ and Java is handled.
+In order to prove the usefulness of the CoCo lan-
+guage, ABB is currently carrying out a number of
+case–studies. One of these has been sketched in sec-
+tion 2.
+In order to facilitate the application of the PECOS
+approach, tool support for CoCo is currently un-
+der development in form of an Eclipse [1] plug–in,
+which groups together, amongst other things, an ed-
+itor, a code and schedule generator and project man-
+agement facilities.
+2 As we have seen, entire PECOS applications are a spe-
+cial case of those.
+</bodyText>
+<sectionHeader confidence="0.900028" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.992809736842105">
+1. Eclipse project home page.
+2. Fast Quadrature Decode TPU Function (FQD). Semi-
+conductor Motorola Programming Note. TPUPN02/D.
+3. Stéphane Ducasse and Roel Wuyts (editors). Field-
+device component model. Technical Report Deliver-
+able D2.2.8, Pecos, 2001. www.pecos-project.org.
+4. O. Nierstrasz, S. Ducasse, R. Wuyts, Gabriela Arévalo,
+A. Black, P. Müller, C. Zeidler, T. Genssler, and
+R. van den Born. A component model for field devices.
+In To Appear: Second Conference on Component De-
+ployment, 2002.
+5. Bastiaan Schönhaage. Model mapping to C++ or Java-
+based ultra-light environment. Technical Report Deliv-
+erable D2.2.9-1, Pecos, 2001. www.pecos-project.org.
+6. M. Shaw and D. Garlan. Software Architecture – Per-
+spectives on an Emerging Discipline. Prentice Hall,
+1996.
+7. Jiacun Wang. Timed Petri Nets. Kluwer Academic
+Publishers, 1998.
+</reference>
+<page confidence="0.991786">
+6
+</page>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.046438">
+<title confidence="0.928425666666667">Components for Embedded Software — The PECOS Approach</title>
+<author confidence="0.842615">Michael Winter</author>
+<author confidence="0.842615">Thomas Genßler</author>
+<author confidence="0.842615">Alexander</author>
+<note confidence="0.659150125">Christoph1, Oscar Nierstrasz2, Stéphane Ducasse2, Roel Wuyts2, Gabriela Arévalo2, Peter Müller3, Chris Stich3, and Bastiaan Schönhage4 1 fwinterjgensslerjchristog@fzi.de, Forschungszentrum Informatik (FZI), Germany, http://www.fzi.de 2 foscarjducassejwuytsjarevalog@iam.unibe.ch, Software Composition Group (SCG), University of Bern, Switzerland,</note>
+<web confidence="0.927054">http://www.iam.uinbe.ch/˜scg</web>
+<note confidence="0.7744015">3 fpeter.o.muellerjchris.stichg@de.abb.com, ABB Research Center, Germany, http://www.abb.com 4 Bastiaan Schonhage@oti.com, Object Technology International (OTI), The Netherlands, http://www.oti.com</note>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="false">
+<title>Eclipse project home</title>
+<pages>page.</pages>
+<contexts>
+<context position="4937" citStr="(1)" startWordPosition="748" endWordPosition="748">essApplication with both the velocity and the position of the valve. – The component ProcessApplication obtains the desired position of the valve (Set–Point) and reads the current state of the valve from the FQD component. This information is then used to compute a frequency for the motor. Once the motor has opened the valve sufficiently, ascertained by the next reading from the FQD, the motor must be slowed or stopped. This repeated adjustment and monitoring constitutes the control loop. Besides the tight resource situation, there are additional key issues concerning the field device domain: (1) Cyclic behavior — each component is responsible for a single piece of functionality, which is repeatedly executed (with a specified cycle time) and must not take longer than a specified worst–case execution time. (2) Data–flow–oriented interaction — components communicate by sending or receiving data. The interface of a component consists of a set of data ports. (3) Threading — some components are passive (i.e., cyclically invoked by a scheduler), while others (like FQD) have their own thread of control in order to react on asynchronous events or to perform long computations in the background</context>
+</contexts>
+<marker>1.</marker>
+<rawString>Eclipse project home page.</rawString>
+</citation>
+<citation valid="false">
+<title>Fast Quadrature Decode TPU Function (FQD). Semiconductor Motorola Programming Note.</title>
+<tech>TPUPN02/D.</tech>
+<contexts>
+<context position="4167" citStr="[2]" startWordPosition="625" endWordPosition="625">on; the desired position is determined by other components not shown here. In order to set and keep the valve at a certain position, a control loop is used to continuously monitor and adjust the valve. – The ModBus component works as an interface to a piece of hardware called the frequency converter, which determines the speed of the motor. The frequency to which the motor should be set is obtained from the ProcessApplication component. ModBus outputs this value over a serial Fig. 2. FQD control loop line to the frequency converter using the ModBus protocol. – The FQD (Fast Quadrature Decoder [2]) component is responsible for capturing events from the motor. This component abstracts from a micro–controller module that does FQD in hardware. It provides the ProcessApplication with both the velocity and the position of the valve. – The component ProcessApplication obtains the desired position of the valve (Set–Point) and reads the current state of the valve from the FQD component. This information is then used to compute a frequency for the motor. Once the motor has opened the valve sufficiently, ascertained by the next reading from the FQD, the motor must be slowed or stopped. This repe</context>
+</contexts>
+<marker>2.</marker>
+<rawString>Fast Quadrature Decode TPU Function (FQD). Semiconductor Motorola Programming Note. TPUPN02/D.</rawString>
+</citation>
+<citation valid="true">
+<date>2001</date>
+<booktitle>Stephane Ducasse and Roel Wuyts (editors). Fielddevice component model. Technical Report Deliverable D2.2.8,</booktitle>
+<location>Pecos,</location>
+<note>www.pecos-project.org.</note>
+<contexts>
+<context position="9374" citStr="[4, 3]" startWordPosition="1457" endWordPosition="1458">posite Component data–flow between components (esp. between components that live in different threads of control) and Timing — how to make sure that component’s functionality is executed according to cycle times and required deadlines. A composition of components has as many threads of control as there are active components. Each active component is responsible for scheduling the passive components under its control. We formalize the execution semantics by means of a Petri net interpretation. The details of this formalization, however, are beyond the scope of this paper. They are described in [4, 3]. 4 The CoCo Language In this section we introduce the component composition language CoCo. It is the syntactical representation of the component model described in section 3, enhanced with additional features. The language is intended to be used for 1) the specification of components, 2) the specification of entire field device applications as compositions of components 3) the specification of architectures and system families. In addition, CoCo supports reuse of components and architectures and supports compositional reasoning. Last but not least, CoCo serves as input for scheduler computati</context>
+</contexts>
+<marker>3.</marker>
+<rawString>Stéphane Ducasse and Roel Wuyts (editors). Fielddevice component model. Technical Report Deliverable D2.2.8, Pecos, 2001. www.pecos-project.org.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>O Nierstrasz</author>
+<author>S Ducasse</author>
+<author>R Wuyts</author>
+<author>Gabriela Arevalo</author>
+<author>A Black</author>
+<author>P Muller</author>
+<author>C Zeidler</author>
+<author>T Genssler</author>
+<author>R van den Born</author>
+</authors>
+<title>A component model for field devices.</title>
+<date>2002</date>
+<booktitle>In To Appear: Second Conference on Component Deployment,</booktitle>
+<contexts>
+<context position="9374" citStr="[4, 3]" startWordPosition="1457" endWordPosition="1458">posite Component data–flow between components (esp. between components that live in different threads of control) and Timing — how to make sure that component’s functionality is executed according to cycle times and required deadlines. A composition of components has as many threads of control as there are active components. Each active component is responsible for scheduling the passive components under its control. We formalize the execution semantics by means of a Petri net interpretation. The details of this formalization, however, are beyond the scope of this paper. They are described in [4, 3]. 4 The CoCo Language In this section we introduce the component composition language CoCo. It is the syntactical representation of the component model described in section 3, enhanced with additional features. The language is intended to be used for 1) the specification of components, 2) the specification of entire field device applications as compositions of components 3) the specification of architectures and system families. In addition, CoCo supports reuse of components and architectures and supports compositional reasoning. Last but not least, CoCo serves as input for scheduler computati</context>
+</contexts>
+<marker>4.</marker>
+<rawString>O. Nierstrasz, S. Ducasse, R. Wuyts, Gabriela Arévalo, A. Black, P. Müller, C. Zeidler, T. Genssler, and R. van den Born. A component model for field devices. In To Appear: Second Conference on Component Deployment, 2002.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Bastiaan Schonhaage</author>
+</authors>
+<title>Model mapping to C++ or Javabased ultra-light environment.</title>
+<date>2001</date>
+<tech>Technical Report Deliverable D2.2.9-1,</tech>
+<location>Pecos,</location>
+<note>www.pecos-project.org.</note>
+<contexts>
+<context position="20080" citStr="[5]" startWordPosition="3096" endWordPosition="3096">ctors represent shared instance variables in the enclosing object. Ports map to set– and get–methods that read from or write to these shared instance variables, as determined by the connectors. Every read/write operation to the same data location is serialized so there is no need for locking. When generating code from a CoCo specification, special attention needs to be given to the efficiency, measured both in execution time and in memory consumption, because of the requirements imposed by the field device domain. More information on these issues can be found in the relevant PECOS deliverable [5]. 5 Summary In this paper, we have presented the domain specific composition language CoCo as part of the PECOS project. The two main characteristics of the language are its data–flow oriented composition style and the support for non–functional properties (most importantly timing information as input for schedule generation). The different purposes of CoCo have been presented: it serves for defining component interfaces and composite2 components. Furthermore, it has been shown, how CoCo allows to define system architectures in the form of abstract components. Finally, it has been indicated, h</context>
+</contexts>
+<marker>5.</marker>
+<rawString>Bastiaan Schönhaage. Model mapping to C++ or Javabased ultra-light environment. Technical Report Deliverable D2.2.9-1, Pecos, 2001. www.pecos-project.org.</rawString>
+</citation>
+<citation valid="false">
+<authors>
+<author>M Shaw</author>
+<author>D Garlan</author>
+</authors>
+<title>Software Architecture – Perspectives on an Emerging Discipline.</title>
+<publisher>Prentice Hall,</publisher>
+<contexts>
+<context position="6075" citStr="[6]" startWordPosition="938" endWordPosition="938">chronous events or to perform long computations in the background. 3 A Component Model for Embedded Software In order to apply component–based software development to embedded systems software, we must be precise about what we mean by a component. In particular, we must take care to specify how components are structured and composed, which properties of components are important to capture and reason about, and how a composition of components can be interpreted at run–time. Fig. 3. A Component Model for Embedded Software Here we briefly present a meta–model that reflects an architectural style [6] for embedded systems software. We also sketch how compositions of components can be interpreted by means of Petri nets. 3.1 Model Elements Fig. 3 illustrates the key elements of the component model. Components have interfaces defined by a number of ports, and may be hierarchically composed. So–called leaf components are treated as black boxes, and are directly implemented in some host programming language. Composite components, on the other hand, are built by connect2 ing the ports of other, existing components (leaf or composite), and expressing which ports of the constituent components are </context>
+</contexts>
+<marker>6.</marker>
+<rawString>M. Shaw and D. Garlan. Software Architecture – Perspectives on an Emerging Discipline. Prentice Hall,</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Jiacun Wang</author>
+</authors>
+<title>Timed Petri Nets.</title>
+<date>1998</date>
+<publisher>Kluwer Academic Publishers,</publisher>
+<contexts>
+<context position="8440" citStr="[7]" startWordPosition="1312" endWordPosition="1312"> to model hardware elements that periodically generate events. Typical examples are timers, used to keep track of deadlines, or devices that emit events encoding status information, such as the current rotation speed of a motor, the current temperature, and so on. All three kinds of components can be composite. Components are characterized by their properties, which encode information such as timing and memory usage. 3.2 Execution model In addition to the static structure described above, the PECOS model has an execution model that describes the behavior of a Field Device. By using Petri nets [7] to represent the execution model, we intend to reason about real–time constraints and automatically generate real–time schedules for software components. The execution model deals with the following two issues: Synchronization — how to synchronize leaf components connected ports exported port composite component Fig. 4. A Composite Component data–flow between components (esp. between components that live in different threads of control) and Timing — how to make sure that component’s functionality is executed according to cycle times and required deadlines. A composition of components has as m</context>
+</contexts>
+<marker>7.</marker>
+<rawString>Jiacun Wang. Timed Petri Nets. Kluwer Academic Publishers, 1998.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

@@ -1,0 +1,1854 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.000000">
+<title confidence="0.978411">
+A Calculus for Modeling Software Components ?
+</title>
+<author confidence="0.702391">
+Oscar Nierstrasz and Franz Achermann
+</author>
+<affiliation confidence="0.8139325">
+Software Composition Group
+University of Bern, Switzerland
+</affiliation>
+<email confidence="0.744771">
+http://www.iam.unibe.ch/∼scg
+</email>
+<bodyText confidence="0.9967560625">
+Abstract. Many competing definitions of software components have
+been proposed over the years, but still today there is only partial agree-
+ment over such basic issues as granularity (are components bigger or
+smaller than objects, packages, or application?), instantiation (do com-
+ponents exist at run-time or only at compile-time?), and state (should
+we distinguish between components and “instances” of components?).
+We adopt a minimalist view in which components can be distinguished
+by composable interfaces. We have identified a number of key features
+and mechanisms for expressing composable software, and propose a cal-
+culus for modeling components, based on the asynchronous π calculus
+extended with explicit namespaces, or “forms”. This calculus serves as
+a semantic foundation and an executable abstract machine for Piccola,
+an experimental composition language. The calculus also enables reason-
+ing about compositional styles and evaluation strategies for Piccola. We
+present the design rationale for the Piccola calculus, and briefly outline
+some of the results obtained.
+</bodyText>
+<sectionHeader confidence="0.991536" genericHeader="abstract">
+1 Introduction
+</sectionHeader>
+<bodyText confidence="0.97993275">
+What is a software component? What are the essential aspects of Component-
+Based Software Development? What is a suitable foundation for modeling and
+reasoning about CBSD?
+To the first question, one of the most robust and appealing answers has been:
+“A software component is a unit of independent deployment without
+state.” [43]
+This simple definition captures much that is important, though it leaves some
+very important aspects implicit. First, CBSD attempts to streamline software
+development and evolution by separating what is stable from what is not. That is,
+components are not just “independently deployable”, but they must encapsulate
+a stable unit of functionality. This, of course, begs the question, “If components
+are the stable stuff, what makes up the rest?”
+Second, “independent deployment” of components actually entails compli-
+ance with some well-defined component model in which components present
+their services as a set of interfaces or “plugs”:
+? FMCO 2002 Proceedings, LNCS, vol. 2852, Springer-Verlag, 2003, pp. 339-360.
+</bodyText>
+<sectionHeader confidence="0.700497" genericHeader="keywords">
+2 Oscar Nierstrasz and Franz Achermann
+</sectionHeader>
+<bodyText confidence="0.994144">
+“A software component is a static abstraction with plugs.” [31]
+This leads us to answer the question, “What makes up the rest?” as follows:
+</bodyText>
+<subsubsectionHeader confidence="0.736354">
+Applications = Components + Scripts [6]
+</subsubsectionHeader>
+<bodyText confidence="0.999719724137931">
+that is, component-based applications are (ideally) made up of stable, off-the-
+shelf components, and scripts that plug them together. Scripts (ideally) make
+use of high-level connectors that coordinate the services of various components
+[3, 29, 42]. Furthermore, complex applications may need services of components
+that depend on very different architectural assumptions [16]. In these cases, glue
+code is needed to adapt components to different architectural styles [40, 41].
+Returning to our original questions, then, we conclude that it is not really
+possible to define software components without taking these complementary as-
+pects of CBSD into account. At a purely technical level, i.e., ignoring method-
+ological and software process aspects, these aspects include styles (plugs and
+connectors), scripts, coordination and glue code. A formal foundation for any
+reasonable notion of software components must address these aspects.
+We claim that most of these aspects can be adequately addressed by the
+notion of forms — first-class, extensible namespaces. The missing aspect (co-
+ordination) can be addressed by agents and channels. We propose, therefore, a
+calculus for modeling composable software which is based on the asynchronous
+π calculus [25, 36] extended with first-class namespaces [5].
+This calculus serves both as the semantic target and as an executable ab-
+stract machine for Piccola, an experimental composition language for implement-
+ing styles, scripts, coordination abstractions and glue code [4, 6]. The Piccola
+calculus is described in greater detail in Achermann’s PhD dissertation [2]. In
+this paper we first motivate the calculus by establishing a set of requirements
+for modeling composition of software components in section 2. Next, we address
+these requirements by presenting the syntax and semantics of the Piccola calculus
+in section 3. In section 4 we provide a brief overview of Piccola, and summarize
+how the calculus helps us to define its semantics, reason about composition, and
+optimize the language bridge by partial evaluation while preserving its seman-
+tics. Finally, we conclude with a few remarks about related and ongoing work in
+sections 5 and 6.
+</bodyText>
+<sectionHeader confidence="0.989257" genericHeader="introduction">
+2 Modeling Software Composition
+</sectionHeader>
+<bodyText confidence="0.882152">
+As we have seen, a foundation for modeling software components must also be
+suitable for expressing compositional styles, scripts, coordination abstractions
+and glue code. Let us examine each of these in turn to see which requirements
+they pose.
+Figure 1 summarizes these requirements, and illustrates how Piccola and the
+Piccola calculus support them.
+A Calculus for Modeling Software Components 3
+</bodyText>
+<listItem confidence="0.961688346153846">
+Piccola
+• extensible, immutable records
+• first-class, monadic services
+• language bridging
+• introspection
+• explicit namespaces
+• services as operators
+• dynamic scoping on demand
+• agents &amp; channels
+Styles
+• primitive neutral object model
+• meta-objects
+• HO plugs &amp; connectors
+• default arguments
+• encapsulation
+• component algebras
+Glue
+• generic wrappers
+• component packaging
+• generic adaptors
+Coordination
+• coordination abstractions
+Scripts
+• sandboxes
+• composition expressions
+• context-dependent policies
+</listItem>
+<figureCaption confidence="0.787717">
+Fig. 1. How Piccola supports composition
+</figureCaption>
+<subsectionHeader confidence="0.966436">
+2.1 Compositional Styles
+</subsectionHeader>
+<bodyText confidence="0.797637809523809">
+A compositional style allows us to express the structure of a software application
+in terms of components, connectors and rules governing their composition (cf.
+“architectural style” [42]).
+– Neutral object model: There exists a wide variety of different object and
+component models. Components may also be bigger or smaller than objects.
+As a consequence, a general foundation for modeling components should
+make as few assumptions about objects, classes and inheritance as possible,
+namely, objects provide services, they may be instantiated, and their internal
+structure is hidden.
+– Meta-objects: On the other hand, many component models depend on run-
+time reflection, so it must be possible to express dynamic generation of meta-
+objects.
+– Higher-order plugs and connectors: In general, connectors can be seen as
+higher-order operators over components and other connectors.
+– Default arguments: Flexibility in plugging together components is achieved if
+interface dependencies are minimized. Keyword-based rather than positional
+arguments to services enable both flexibility and extensibility.
+– Encapsulation: Components are black-box entities that, like objects, provide
+services, without exposing their structure. At the same time, the components
+and connectors of a particular style can be encapsulated as a module, or
+namespace within which components may be scripted.
+</bodyText>
+<sectionHeader confidence="0.63063" genericHeader="method">
+4 Oscar Nierstrasz and Franz Achermann
+</sectionHeader>
+<figureCaption confidence="0.707358">
+Fig. 2. Evaluating the helloButton script
+</figureCaption>
+<listItem confidence="0.653048">
+– Component algebras: Compositional styles are most expressive when com-
+</listItem>
+<bodyText confidence="0.965196230769231">
+positions of components and connectors again yield components (or connec-
+tors). (The composition of two filters is again a filter.)
+Based on these requirements, we conclude that we need (at least) records
+(to model objects and components), higher-order functions, reflection, and (at
+some level) overloading of operators. Services may be monadic, taking records
+as arguments, rather than polyadic. To invoke a service, we just apply it to a
+record which bundles together all the required arguments, and possibly some
+optional ones.
+These same records can serve as first-class namespaces which encapsulate
+the plugs and connectors of a given style. For this reason we unify records and
+namespaces, and call them “forms”, to emphasize their special role.
+A “form” is essentially a nested record, which binds labels to values. Consider,
+for example, the following JPiccola script [30]:
+</bodyText>
+<equation confidence="0.939985">
+makeFrame
+title = &quot;AWT Demo&quot;
+x = 200
+y = 100
+hello = &quot;hello world&quot;
+sayHello: println hello
+component = Button.new(text=hello) ? ActionPerformed sayHello
+</equation>
+<bodyText confidence="0.9997205">
+This script invokes an abstraction makeFrame, passing it a form containing bind-
+ings for the labels title, x, and so on. The script makes use of a compositional
+style in which GUI components (i.e., the Button) can be bound to events (i.e.,
+ActionPerformed) and actions (i.e., sayHello) by means of the ? connector.
+When we evaluate this code, it generates the button we see in figure 2. When
+we click on the button, hello world is printed on the Java console.
+</bodyText>
+<subsectionHeader confidence="0.991035">
+2.2 Glue
+</subsectionHeader>
+<bodyText confidence="0.963348">
+Glue code is needed to package, wrap or adapt code to fit into a compositional
+style.
+– Generic wrappers: Wrappers are often needed to introduce specific policies
+(such as thread-safe synchronization). Generic wrappers are hard to specify
+A Calculus for Modeling Software Components 5
+for general, polyadic services, but are relatively straightforward if all services
+are monadic.
+</bodyText>
+<listItem confidence="0.6377756">
+– Component packaging: Glue code is sometimes needed to package existing
+code to conform to a particular component model or style. For this purpose, a
+language bridge is needed to map existing language constructs to the formal
+component model.
+– Generic adaptors: Adaptation of interfaces can also be specified generically
+</listItem>
+<bodyText confidence="0.991841">
+with the help of reflective or introspective features, which allow components
+to be inspected before they are adapted.
+The JPiccola helloButton script only works because Java GUI components
+are wrapped to fit into our compositional style.
+In addition to records and higher-order functions over records, we see that
+some form of language bridging will be needed, perhaps not at the level of the
+formal model, but certainly for a practical language or system based on the
+model.
+</bodyText>
+<subsectionHeader confidence="0.99647">
+2.3 Scripts
+</subsectionHeader>
+<bodyText confidence="0.982580882352941">
+Scripts configure and compose components using the connectors defined for a
+style.
+– Sandboxes: For various reasons we may wish to instantiate components only
+in a controlled environment. We do not necessarily trust third-party com-
+ponents. Sometimes we would like to adapt components only within a local
+context. For these and other reasons it is convenient to be able to instantiate
+and compose namespaces which serve as sandboxes for executing scripts.
+– Composition expressions: Scripts instantiate and connect components. A
+practical language might conveniently represent connectors as operators.
+Pipes and filters connections are well-known, but this idea extends well to
+other domains.
+– Context-dependent policies: Very often, components must be prepared to em-
+ploy services of the dynamic context. Transaction services, synchronization
+or communication primitives may depend on the context. For this reason,
+pure static scoping may not be enough, and dynamic scoping on demand
+will be needed for certain kinds of component models.
+So, we see that explicit, manipulable namespaces become more important.
+</bodyText>
+<subsectionHeader confidence="0.992671">
+2.4 Coordination
+</subsectionHeader>
+<bodyText confidence="0.991747166666667">
+CBSD is especially relevant in concurrent and distributed contexts. For this
+reason, a foundation for composition must be able to express coordination of
+interdependent tasks.
+– Coordination abstractions: Both connectors and glue code may need to ex-
+press coordination of concurrent activities. Consider a readers/writers syn-
+chronization policy as a generic wrapper.
+</bodyText>
+<sectionHeader confidence="0.800567" genericHeader="method">
+6 Oscar Nierstrasz and Franz Achermann
+</sectionHeader>
+<bodyText confidence="0.993633666666667">
+We conclude that we not only need higher-order functions over first-class
+namespaces (with introspection), but also a way of expressing concurrency and
+communication [40].
+</bodyText>
+<sectionHeader confidence="0.994688" genericHeader="method">
+3 The Piccola Calculus
+</sectionHeader>
+<bodyText confidence="0.999572909090909">
+As a consequence of the requirements we have identified above, we propose as a
+foundation a process calculus based on the higher-order asynchronous π calculus
+[25, 36] in which tuple-based communication is replaced by communication of ex-
+tensible records, or forms [5]. Furthermore, forms serve as first-class namespaces
+and support a simple kind of introspection.
+The design of the Piccola calculus strikes a balance between minimalism and
+expressiveness. As a calculus it is rather large. In fact, it would be possible to
+express everything we want with the π calculus alone, but the semantic gap
+between concepts we wish to model and the terms of the calculus would be
+rather large. With the Piccola calculus we are aiming for the smallest calculus
+with which we can conveniently express components, connectors and scripts.
+</bodyText>
+<subsectionHeader confidence="0.99817">
+3.1 Syntax
+</subsectionHeader>
+<bodyText confidence="0.994194111111111">
+The Piccola calculus is given by agents A,B,C that range over the set of agents
+A in 1. There are two categories of identifiers: labels and channels. The set of
+labels L is ranged over by x, y, z. (We use the term “variables” and “labels”
+interchangeably.) Specific labels are also written in the italic text font. Channels
+are denoted by a, b, c, d ∈ N . Labels are bound with bindings and λ-abstractions,
+and channels are bound by ν-restrictions.
+The operators have the following precedence:
+application &gt; extension &gt; restriction, abstraction &gt; sandbox &gt; parallel
+Agent expressions are reduced to static form values or simply forms.
+Forms are ranged over by F,G,H. Notice that the set of forms is a subset
+of all agents. Forms are the first-class citizens of the Piccola calculus, i.e., they
+are the values that get communicated between agents and are used to invoke
+services. Forms are sets of bindings and services.
+The set of forms is denoted by F . Certain forms play the role of services.
+We use S to range over services. User-defined services are closures. Primitive
+services are inspect, the bind and hide primitives, and the output service.
+Before considering the formal reduction relation, we first give an informal
+description of the different agent expressions and how they reduce.
+</bodyText>
+<listItem confidence="0.9557325">
+– The empty form, , does not reduce further. It denotes a form without any
+binding.
+– The current root agent, R, denotes the current lexical scope.
+– A sandbox A;B evaluates the agent B in the root context given by A. A
+</listItem>
+<bodyText confidence="0.301092666666667">
+binds all free labels in B. If B is a label x, we say that A;x is a projection
+on x in A.
+A Calculus for Modeling Software Components 7
+</bodyText>
+<equation confidence="0.943702583333333">
+A,B,C ::=  empty form  |R current root
+ |A;B sandbox  |x variable
+ |x7→ bind  |hidex hide
+ |L inspect  |A ·B extension
+ |λx.A abstraction  |AB application
+ |νc.A restriction  |A  |B parallel
+ |c? input  |c output
+F,G,H ::=  empty form  |S service
+ |x7→F binding  |F ·G extension
+S ::= F ;λx.A closure  |L inspect
+ |x7→ bind  |hidex hide
+ |c output
+</equation>
+<tableCaption confidence="0.989193">
+Table 1. Syntax of the Piccola Calculus
+</tableCaption>
+<listItem confidence="0.9109132">
+– A label, x, denotes the value bound by x in the current root context.
+– The primitive service bind creates bindings. If A reduces to F , then x7→A
+reduces to the binding x7→F .
+– The primitive service hidex removes bindings. So, hidex(x7→ · y 7→) reduces
+to y 7→.
+– The inspect service, L, can be used to interate over the bindings and services
+of an arbitrary form F . The result of LF is a service that takes as its argu-
+ment a form that binds the labels isEmpty , isService and isLabel to services.
+One of these three services will then be selected, depending on whether F is
+, contains some bindings, or is only a service.
+– The values of two agents are concatenated by extension. In the value of A ·B
+the bindings of B override those for the same label in A.
+– An abstraction λx.A abstracts x in A.
+– The application AB denotes the result of applying A to B. Piccola uses a
+call-by-value reduction order. In order to reduce AB, A must reduce to a
+service and B to a form.
+– The expression νc.A restricts the visibility of the channel name c to the
+agent expression A, as in the π calculus.
+– A  |B spawns off the agent A asynchronously and yields the value of B. Unlike
+in the π calculus, the parallel composition operator is not commutative, since
+we do not wish parallel agents to reduce to non-deterministic values.
+– The agent c? inputs a form from channel c and reduces to that value. The
+reader familiar with the π-calculus will notice a difference with the input
+prefix. Since we have explicit substitution in our calculus it is simpler to
+specify the input by c? and use the context to bind the received value instead
+of defining a prefix syntax c(X).A as in the π-calculus.
+– The channel c is a primitive output service. If A reduces to F , then cA reduces
+to the message cF . The value of a message is the empty form . (The value
+F is only obtained by a corresponding input c? in another agent.)
+8 Oscar Nierstrasz and Franz Achermann
+</listItem>
+<equation confidence="0.999886428571428">
+fc() = ∅ fc(R) = ∅
+fc(x) = ∅ fc(L) = ∅
+fc(x7→) = ∅ fc(hidex) = ∅
+fc(A;B) = fc(A) ∪ fc(B) fc(A ·B) = fc(A) ∪ fc(B)
+fc(λx.A) = fc(A) fc(AB) = fc(A) ∪ fc(B)
+fc(νc.A) = fc(A)\{c} fc(A  |B) = fc(A) ∪ fc(B)
+fc(c?) = {c} fc(c) = {c}
+</equation>
+<tableCaption confidence="0.981414">
+Table 2. Free Channels
+</tableCaption>
+<subsectionHeader confidence="0.982713">
+3.2 Free Channels and Closed Agents
+</subsectionHeader>
+<bodyText confidence="0.988476">
+As in the π-calculus, forms may contain free channel names. An agent may create
+a new channel, and communicate this new name to another agent in a separate
+lexical scope.
+The free channels fc(A) of an agent A are defined inductively in table 2. α-
+conversion (of channels) is defined in the usual way. We identify agent expressions
+up to α-conversion.
+We omit a definition of free variables. Since Piccola is a calculus with explicit
+environments, we cannot easily define α-conversion on variables. Such a defini-
+tion would have to include the special nature of R. Instead, we define a closed
+agent where all variables, root expressions, and abstractions occur beneath a
+</bodyText>
+<construct confidence="0.4784175">
+sandbox:
+Definition 1. The following agents A are closed:
+</construct>
+<listItem confidence="0.97348">
+– , x7→, hidex,L, c and c? are closed.
+– If A and B are closed then also A ·B,AB,A  |B and νc.A are closed.
+– If A is closed, then also A;B is also closed for any agent B.
+</listItem>
+<bodyText confidence="0.9792512">
+Observe that any form F is closed by the above definition. An agent is open
+if it is not closed. Open agents are R, variables x, abstractions λx.A and com-
+positions thereof. Any agent can be closed by putting it into a sandbox with a
+closed context. Sandbox agents are closed if the root context is closed. In lemma
+1 we show that the property of being closed is preserved by reduction.
+</bodyText>
+<subsectionHeader confidence="0.999399">
+3.3 Congruence and Pre-forms
+</subsectionHeader>
+<bodyText confidence="0.939920777777778">
+As in the π calculus, we introduce structural congruence over agent expressions
+to simplify the reduction relation. The congruence allows us to rewrite agent ex-
+pressions to bring communicating agents into juxtapositions, as in the Chemical
+Abstract Machine of Berry and Boudol [8].
+The congruence rules constitute three groups (see table 3). The first group
+(from ext empty right to single service) deals with congruence over forms. It
+specifies that extension is idempotent and associative on forms.
+A Calculus for Modeling Software Components 9
+≡ is the smallest congruence satisfying the following axioms:
+</bodyText>
+<equation confidence="0.98224375">
+F ·  ≡ F (ext empty right)
+ · F ≡ F (ext empty left)
+(F ·G) ·H ≡ F · (G ·H) (ext assoc)
+S · (x7→F ) ≡ (x7→F ) · S (ext service commute)
+x 6= y implies x7→F · y 7→G ≡ y 7→G · x7→F (ext bind commute)
+x7→F · x7→G ≡ x7→G (single binding)
+S · S′ ≡ S′ (single service)
+F ;A ·B ≡ (F ;A) · (F ;B) (sandbox ext)
+F ;AB ≡ (F ;A)(F ;B) (sandbox app)
+A; (B;C) ≡ (A;B);C (sandbox assoc)
+F ;G ≡ G (sandbox value)
+F ;R ≡ F (sandbox root)
+hidex(F · x7→G) ≡ hidexF (hide select)
+x 6= y implies hidey(F · x7→G) ≡ hideyF · x7→G (hide over)
+hidex ≡  (hide empty)
+hidexS ≡ S (hide service)
+(F · S)G ≡ SG (use service)
+(A  |B)  |C ≡ A  |(B  |C) (par assoc)
+(A  |B)  |C ≡ (B  |A)  |C (par left commute)
+(A  |B) · C ≡ A  |B · C (par ext left)
+F · (A  |B) ≡ A  |F ·B (par ext right)
+(A  |B)C ≡ A  |BC (par app left)
+F (A  |B) ≡ A  |FB (par app right)
+(A  |B);C ≡ A  |B;C (par sandbox left)
+F ; (A  |B) ≡ F ;A  |F ;B (par sandbox right)
+F  |A ≡ A (discard zombie)
+cF ≡ cF  | (emit)
+νcd.A ≡ νdc.A (commute channels)
+</equation>
+<table confidence="0.95816875">
+c /∈ fc(A) implies A  |νc.B ≡ νc.(A  |B) (scope par left)
+c /∈ fc(A) implies (νc.B)  |A ≡ νc.(B  |A) (scope par right)
+c /∈ fc(A) implies (νc.B) ·A ≡ νc.(B ·A) (scope ext left)
+c /∈ fc(A) implies A · νc.B ≡ νc.(A ·B) (scope ext right)
+c /∈ fc(A) implies A; νc.B ≡ νc.(A;B) (scope sandbox left)
+c /∈ fc(A) implies (νc.B);A ≡ νc.(B;A) (scope sandbox right)
+c /∈ fc(A) implies (νc.B)A ≡ νc.BA (scope app left)
+c /∈ fc(A) implies A(νc.B) ≡ νc.AB (scope app right)
+</table>
+<tableCaption confidence="0.774009">
+Table 3. Congruences
+10 Oscar Nierstrasz and Franz Achermann
+</tableCaption>
+<bodyText confidence="0.96992225">
+The rules single service and single binding specify that extension overwrites
+services and bindings with the same label.
+We define labels(F ) as follows:
+Definition 2. For each form F , the set of labels(F ) ⊂ L is given by:
+</bodyText>
+<equation confidence="0.9985595">
+labels() = ∅ labels(S) = ∅
+labels(x7→G) = {x} labels(F ·G) = labels(F ) ∪ labels(G)
+</equation>
+<bodyText confidence="0.847523">
+Using the form congruences, we can rewrite any form F into one of the
+following three cases:
+</bodyText>
+<equation confidence="0.917531666666667">
+F ≡ 
+F ≡ S
+F ≡ F ′ · x7→G where x 6∈ labels(F ′)
+</equation>
+<bodyText confidence="0.9978135">
+This is proved by structural induction over forms [2]. This formalizes our idea
+that forms are extensible records unified with services. A form has at most one
+binding for a given label.
+The second group (from sandbox ext to use service) defines preforms. These
+are agent expressions that are congruent to a form. For instance, the agent hidex
+is equivalent to the empty form . The set of all preforms is defined by:
+</bodyText>
+<equation confidence="0.950075">
+F≡ = {A|∃F ∈ F with F ≡ A}
+</equation>
+<bodyText confidence="0.997825125">
+Clearly, all forms are preforms.
+The last group (from par assoc to scope app right) defines the semantics of
+parallel composition and communication for agents. Note how these rules always
+preserve the position of the rightmost agent in a parallel composition, since this
+agent, when reduced to a form, will represent the value of the composition. In
+particular, the rule discard zombie garbage-collects form values appearing to the
+left of this position. The rule emit, on the other hand, spawns an empty form as
+the value, thus enabling the message to move around freely. For instance in
+</bodyText>
+<equation confidence="0.992785">
+x7→c() ≡ x7→(c()  |) by emit
+≡ c()  |x7→ by par ext right
+</equation>
+<bodyText confidence="0.944766">
+the message c() escapes the binding x7→.
+</bodyText>
+<subsectionHeader confidence="0.920893">
+3.4 Reduction
+</subsectionHeader>
+<bodyText confidence="0.986293833333333">
+We define the reduction relation → on agent expressions to reduce applications,
+communications and projections (see table 4). ⇒ is the reflexive and transitive
+closure of →.
+Especially noteworthy is the rule reduce beta. This rule does not substitute
+G for x in the agent A as in the classical λ-calculus. Instead, it extends the
+A Calculus for Modeling Software Components 11
+</bodyText>
+<equation confidence="0.889418833333333">
+(F ;λx.A) G→ F · x7→G;A (reduce beta)
+cF  |c?→ F (reduce comm)
+F · x7→G;x→ G (reduce project)
+L→ ;λx.(x; isEmpty) (reduce inspect empty)
+LS → ;λx.(x; isService) (reduce inspect service)
+L(F · x7→G)→ ;λx.(x; isLabel)labelx (reduce inspect label)
+A ≡ A′ A′ → B′ B′ ≡ B
+A→ B
+(reduce struct)
+A→ B
+E [A]→ E [B]
+(reduce propagate)
+</equation>
+<bodyText confidence="0.9776015">
+where labelx = project 7→(;λx.(x;x)) · hide 7→hidex · bind 7→(x7→) and E is an evaluation
+context defined by the grammar:
+</bodyText>
+<equation confidence="0.9211305">
+E ::= [ ]
+∣∣ E ·A ∣∣ F · E ∣∣ E ;A ∣∣ F ; E ∣∣ EA ∣∣ FE ∣∣ A|E ∣∣ E|A ∣∣ νc.E
+</equation>
+<tableCaption confidence="0.986747">
+Table 4. Reduction rules
+</tableCaption>
+<bodyText confidence="0.877134">
+environment in which A is evaluated. This is essentially the beta-reduction rule
+found in calculi for explicit substitution [1, 32]:
+(F ;λx.A)G → F · x7→G;A
+The application of the closure F ;λx.A to the argument G reduces to a sandbox
+expression in which the agent A is evaluated in the environment F · x7→G. Free
+occurrences of x in A will therefore be bound to G.
+The property of being closed is respected by reduction:
+Lemma 1. If A is a closed agent and A → B or A ≡ B then B is closed as
+well.
+Proof. Easily checked by induction over the formal proof for A→ B.
+</bodyText>
+<subsectionHeader confidence="0.744417">
+3.5 Encoding Booleans
+</subsectionHeader>
+<bodyText confidence="0.9988375">
+The following toy example actually illustrates many of the principles at stake
+when we model components with the Piccola calculus.
+We can encode booleans by services that either project on the labels true or
+false depending on which boolean value they are supposed to model (cf. [13]).
+(This same idea is used by the primitive service L to reflect over the bindings
+and services of a form.)
+</bodyText>
+<table confidence="0.990211666666667">
+12 Oscar Nierstrasz and Franz Achermann
+True def= ;λx.(x; true) (1)
+False def= ;λx.(x; false) (2)
+Consider now:
+True(true 7→1 · false 7→2) = (;λx.(x; true))(true 7→1 · false 7→2)
+→  · x7→(true 7→1 · false 7→2); (x; true) by reduce beta
+≡ ( · x7→(true 7→1 · false 7→2);x); true by sandbox assoc
+→ (true 7→1 · false 7→2); true by reduce project
+≡ (false 7→2 · true 7→1); true by ext bind commute
+</table>
+<bodyText confidence="0.871404571428571">
+→ 1 by reduce project
+Note how the bindings are swapped to project on true in the last step. A
+similar reduction would show False(true 7→1 · false 7→2)⇒ 2.
+One of the key points of forms is that a client can provide additional bindings
+which are ignored when they are not used (cf. [13]). This same principle is applied
+to good effect in various scripting languages, such as Python [22]. For instance
+we can use True and provide an additional binding notused 7→F for arbitrary
+</bodyText>
+<table confidence="0.914849888888889">
+form F :
+True(true 7→1 · false 7→2 · notused 7→F )
+⇒ (true 7→1 · false 7→2 · notused 7→F ); true
+≡ (false 7→2 · true 7→1 · notused 7→F ); true by ext bind commute
+≡ (false 7→2 · notused 7→F · true 7→1); true by ext bind commute
+→ 1 by reduce project
+Extending forms can also be used to overwrite existing bindings. For instance
+instead of binding the variable notused a client may override true:
+True(true 7→1 · false 7→2 · true 7→3)⇒ 3
+</table>
+<bodyText confidence="0.98678025">
+A conditional expression is encoded as a curried service that takes a boolean
+and a case form. When invoked, it selects and evaluates the appropriate service
+in the case form:
+if def= ;λuv.u(true 7→(v; then) · false 7→(v; else))
+</bodyText>
+<table confidence="0.627063333333333">
+Now consider:
+if True (then 7→(F ;λx.A) · else 7→(G;λx.B))
+⇒ F · x7→;A
+A Calculus for Modeling Software Components 13
+The expression if True has triggered the evaluation of agent A in the envi-
+ronment F · x7→.
+</table>
+<bodyText confidence="0.9901646">
+The contract supported by if requires that the cases provided bind the labels
+then and else. We can relax this contract and provide default services if those
+bindings are not provided by the client. To do so, we replace in the definition of if
+the sandbox expression v; else with a default service. This service gets triggered
+when the case form does not contain an else binding:
+</bodyText>
+<equation confidence="0.822583">
+ifd
+def= ;λuv.b(true 7→(v; then) · false 7→(else 7→(λx.) · v; else))
+Now ifd False(then 7→(F ;λx.A))⇒ .
+</equation>
+<subsectionHeader confidence="0.908464">
+3.6 Equivalence for Agents
+</subsectionHeader>
+<bodyText confidence="0.980597615384615">
+Two agents are equivalent if they exhibit the same behaviour, i.e., they enjoy the
+same reductions. We adopt Milner and Sangiorgi’s notion of barbed bisimulation
+[26]. The idea is that an agent A is barbed similar to B if A can exhibit any
+reduction that B does and if B is a barb, then A is a barb, too. If A and B are
+similar to each other they are bisimilar. The advantage of this bisimulation is
+that it can be readily be given for any calculus that contains barbs or values.
+For the asynchronous π-calculus, barbs are usually defined as having the
+capability of doing an output on a channel. A Piccola agent reduces to a barb,
+i.e., it returns a form. During evaluation the agent may spawn off new subthreads
+which could be blocked or still be running. We consequently define barbs as
+follows:
+Definition 3. A barb V is an agent expression A that is congruent to an agent
+generated by the following grammar:
+</bodyText>
+<equation confidence="0.86254375">
+V ::= F
+∣∣ A|V ∣∣ νc.V
+We write A ↓ for the fact that A is a barb, and A⇓ when a barb V exists such
+that A⇒ V .
+</equation>
+<bodyText confidence="0.878014">
+The following lemma relates forms, barbs and agents:
+</bodyText>
+<construct confidence="0.7686555">
+Lemma 2. The following inclusion holds and is strict:
+F ⊂ F≡ ⊂ {A|A↓} ⊂ A
+</construct>
+<bodyText confidence="0.633565285714286">
+Proof. The inclusions hold by definition. To see that the inclusion are strict,
+consider the empty form , the agent hidex, the barb 0  |hidex and the agent
+0 (where 0 = νc.c? is the deadlocked null agent).
+The following lemma gives a syntactical characterization of barbs.
+14 Oscar Nierstrasz and Franz Achermann
+Lemma 3. For any form F , agent A, and label x, the following terms are barbs,
+given V1 and V2 are barbs.
+</bodyText>
+<equation confidence="0.8872824">
+V1 · V2 νc.V1
+V1;V2 A  |V1
+x7→V1
+Proof. By definition we have V ≡ νc̃.A  |F . The claim follows by induction over
+F .
+</equation>
+<bodyText confidence="0.915888">
+We now define barbed bisimulation and the induced congruence:
+</bodyText>
+<listItem confidence="0.894974222222222">
+Definition 4. A relation R is a (weak) barbed bisimulation, if A R B, i.e.,
+(A,B) ∈ R implies:
+– If A→ A′ then there exists an agent B′ with B ⇒ B′ and A′ R B′.
+– If B → B′ then there exists an agent A′ with A⇒ A′ and A′ R B′.
+– If A↓ then B⇓.
+– If B ↓ then A⇓.
+Two agents are (weakly) barbed bisimilar, written A ≈̇ B, if there is some (weak)
+barbed bisimulation R with A R B. Two agents are (weakly) barbed congruent,
+written A ≈ B, if for all contexts C we have C[A] ≈̇ C[B].
+</listItem>
+<bodyText confidence="0.9956306">
+We define behavioural equality using the notion of barbed congruence. As
+usual we can define strong and weak versions of barbed bisimulation. The strong
+versions are obtained in the standard way by replacing ⇒ with → and ⇓ with ↓
+in Definition 4. We only concentrate on the weak case since it abstracts internal
+computation.
+</bodyText>
+<subsectionHeader confidence="0.991965">
+3.7 Erroneous Reductions
+</subsectionHeader>
+<bodyText confidence="0.995700384615385">
+Not all agents reduce to forms. Some agents enjoy an infinite reduction [2]. Other
+agents are stuck. An agent is stuck if it is not a barb and can reduce no further.
+Definition 5. An agent A is stuck, written A↑, if A is not a barb and there is
+no agent B such that A→ B.
+Clearly it holds that 0 ↑ and R ↑. The property of being stuck is not composi-
+tional. For instance c? ↑ but obviously, c()  |c? can reduce to . We can put R
+into a context so that it becomes a barb, for instance F ;R ≡ F . Note that if an
+agent is stuck it is not a preform: F≡ ∩ {A|A↑} = ∅ by definition.
+Although 0 is arguably stuck by intention, in general a stuck agent can be
+interpreted as an error. The two typical cases which may lead to errors are (i)
+projection on an unbound label, e.g., ;x, and (ii) application of a non-service,
+e.g., .
+A Calculus for Modeling Software Components 15
+</bodyText>
+<subsectionHeader confidence="0.992291">
+3.8 π-Calculus Encoding
+</subsectionHeader>
+<bodyText confidence="0.998396">
+One may well ask what exactly the Piccola calculus adds over and above the
+asynchronous π calculus. In Achermann’s thesis it is shown that the Piccola
+calculus can be faithfully embedded into the localized π-calculus Lπ of Merro
+and Sangiorgi [23, 36].
+The mapping [[]]a encodes Piccola calculus agents as π-calculus processes.
+The process [[A]]a evaluates A in the environment given by the empty form,
+and sends the resulting value along the channel a. A form (value) is encoded as
+a 4-tuple of channels representing projection, invocation, hiding and selection.
+The main result is that the encoding is sound and preserves reductions. We
+do not require a fully abstract encoding since that would mean that equivalent
+Piccola agents translated into the π-calculus could not be distinguished by any
+π-processes. Our milder requirement means that we consider only π-processes
+which are translations of Piccola agents themselves and state that they cannot
+distinguish similar agents:
+Proposition 1 (Soundness). For closed agents A, B and channel a the con-
+gruence [[A]]a ≈ [[B]]a implies A ≈ B.
+Although it is comforting to learn that the π-calculus can serve as a founda-
+tion for modeling components, it is also clear from the complexity of the encoding
+that it is very distant from the kinds of abstractions we need to conveniently
+model software composition. For this reason we find that a richer calculus is
+more convenient to express components and connectors.
+</bodyText>
+<sectionHeader confidence="0.642028" genericHeader="method">
+4 From the Piccola Calculus to Piccola
+</sectionHeader>
+<bodyText confidence="0.9937">
+Piccola is a small composition language that supports the requirements summa-
+rized in figure 1, and whose denotational semantics is defined in terms of the
+Piccola calculus [2].
+Piccola is designed in layered fashion. At the lowest level we have an abstract
+machine that implements the Piccola calculus.
+At the next level, we have the Piccola language, which is implemented by
+translation to the abstract machine, following the specification of the denota-
+tional semantics.
+</bodyText>
+<table confidence="0.963177916666667">
+Piccola Layers
+Applications: Components + Scripts
+Composition styles: Streams,
+GUI composition, ...
+Standard libraries: Coordination abstractions,
+control structures,
+basic object model ...
+Piccola language: Host components,
+user-defined operators,
+dynamic namespaces
+Piccola calculus: Forms, agents and channels
+16 Oscar Nierstrasz and Franz Achermann
+</table>
+<bodyText confidence="0.993304217391304">
+Piccola provides a more convenient, Python-like syntax for programming than
+does the calculus, including overloaded operators to support algebraic component
+composition. It also provides a bridge to the host language (currently Java or
+Squeak). Piccola provides no basic data types other than forms and channels.
+Booleans, integers, floating point numbers and strings, for example, must be
+provided by the host language through the language bridge.
+Curiously, the syntax of the Piccola calculus is actually larger than that of
+Piccola itself. This is because we need to represent all semantic entities, includ-
+ing agents and channels, as syntactic constructs in the calculus. In the Piccola
+language, however, these are represented only by standard library services, such
+as run and newChannel.
+The next layer provides a set of standard libraries to simplify the task of pro-
+gramming with Piccola. Not only does the Piccola language provide no built-in
+data types, it does not even offer any control structures of its own. These, how-
+ever, are provided as standard services implemented in Piccola. Exceptions and
+try-catch clauses are implemented using agents, channels, and dynamic names-
+paces [5].
+The first three layers constitute the standard Piccola distribution. The fourth
+layer is provided by the component framework designer. At this level, a domain
+expert encodes a compositional styles as a library of components, connectors,
+adaptors, coordination abstractions, and so on. Finally, at the top level, an
+application programmer may script together components using the abstractions
+provided by the lower layers [3, 29].
+</bodyText>
+<subsectionHeader confidence="0.999156">
+4.1 Reasoning About Styles
+</subsectionHeader>
+<bodyText confidence="0.999200304347826">
+We have also explored how to reason about Piccola programs at the language
+level [2]. We have studied two extended examples. First, we considered synchro-
+nization wrappers that express the synchronization constraints assumed by a
+component.
+We can use synchronization wrappers to make components safe in a multi-
+threaded environment. The wrappers separate the functionality of the compo-
+nent from their synchronization aspects. If the constraints assumed by the com-
+ponent hold in a particular composition the wrapper is not needed. In particular
+the wrapper is not necessary when the component is already wrapped. This
+property is formally expressed by requiring that the wrappers be idempotent.
+The second study compares push- and pull-flow filters. We demonstrate how
+to adapt pull-filters so that they work in a push-style. We have constructed a
+generic adapter for this task in two iterations. The first version contains a race-
+condition that may lead to data being lost. The formal model of Piccola is used
+to analyze the traces of an adapted filter and helps to detect the error. To fix the
+problem we specify the dynamics of a push-style filter, namely that push and
+close calls be mutually exclusive, that no further push calls may be attempted
+after a close, and that no “air-bubble” elements (filter slots holding an empty
+form) may be pushed downstream.
+A Calculus for Modeling Software Components 17
+Having clarified the interaction protocol as a wrapper, we present an im-
+proved version of the generic adapter. We show that the adapter ensures these
+invariants.
+</bodyText>
+<subsectionHeader confidence="0.999186">
+4.2 Partial Evaluation
+</subsectionHeader>
+<bodyText confidence="0.994507526315789">
+Another interesting application of the calculus was to enable the efficient im-
+plementation of the language bridge. Since Piccola is a pure composition lan-
+guage, evaluating scripts requires intensive upping and downing [24] between the
+“down” level of the host language and the “up” level of Piccola. If the language
+bridge were implemented näıvely, it would be hopelessly inefficient. Instead, Pic-
+cola achieves acceptable performance by adopting a partial evaluation scheme
+[2, 38, 39].
+Since the language has a denotational semantics, we can implement it effi-
+ciently while proving that we preserve the intended semantics. The partial eval-
+uation algorithm uses the fact that forms are immutable. We replace references
+to forms by the forms referred to. We can then specialize projections and replace
+applications of referentially transparent services by their results.
+However, most services in Piccola are not referentially transparent and cannot
+be inlined since that would change the order in which side-effects are executed.
+We need to separate the referentially transparent part from the non-transparent
+part in order to replace an application with its result and to ensure that the
+order in which the side-effects are evaluated is preserved.
+At the heart of the proof is that we can separate form expressions into side-
+effects and referentially transparent forms [2].
+</bodyText>
+<sectionHeader confidence="0.999415" genericHeader="method">
+5 Related Work
+</sectionHeader>
+<bodyText confidence="0.998817493670886">
+The Piccola calculus extends the asynchronous π-calculus with higher-order ab-
+stractions and first-class environments.
+π-calculus. The π-calculus [25] is a calculus of communicating systems in which
+one can naturally express processes with a changing structure. Its theory has
+been thoroughly studied and many results relate other formalisms or implemen-
+tations to it. The affinity between objects and processes, for example, has been
+treated by various authors in the context of the π-calculus [18, 44]. The Pict
+experiment has shown that the π-calculus is a suitable basis for programming
+many high-level construct by encodings [33].
+For programming and implementation purposes, synchronous communication
+seems uncommon and can generally be encoded by using explicit acknowledg-
+ments (cf. [18]). Moreover, asynchronous communication has a closer correspon-
+dence to distributed computing [45]. Furthermore, in the π-calculus the asyn-
+chronous variant has the pleasant property that equivalences are simpler than
+for the synchronous case [14]. Input-guarded choice can be encoded and is fully
+abstract [27]. For these reasons we adopt asynchronous channels in Piccola.
+18 Oscar Nierstrasz and Franz Achermann
+Higher-order abstractions. Programming directly in the π-calculus is often con-
+sidered like programming a concurrent assembler. When comparing programs
+written in the π-calculus with the lambda-calculus it seems like lambda abstrac-
+tions scale up, whereas sending and receiving messages does not scale well. There
+are two possible solutions proposed to this problem: We can change the metaphor
+of communication or we can introduce abstractions as first-class values.
+The first approach is advocated by the Join-calculus [15]. Communication
+does not happen between a sender and a receiver, instead a join pattern triggers a
+process on consumption of several pending messages. The Blue calculus of Boudol
+[9] changes the receive primitive into a definition which is defined for a scope. By
+that change, the Blue calculus is more closely related to functions and provides a
+better notion for higher-order abstraction. Boudol calls it a continuation-passing
+calculus.
+The other approach is adopted by Sangiorgi in the HOπ-calculus. Instead of
+communicating channels or tuples of channels, processes can be communicated
+as well. Surprisingly, the higher-order case has the same expressive power as
+the first-order version [35, 36]. In Piccola we take the second approach and reuse
+existing encodings of functions into the π-calculus as in Pict. The motivation
+for this comes from the fact that the HOπ-calculus itself can be encoded in the
+first-order case.
+Asymmetric parallel composition. The semantics of asynchronous parallel com-
+position is used in the concurrent object calculus of Gordon and Hankin [17]
+or the (asymmetric) Blue calculus studied by Dal-Zilio [12]. In the higher-order
+π-calculus the evaluation order is orthogonal to the communication semantics
+[36]. In Piccola, evaluation strategy interferes with communication, therefore we
+have to fix one for meaningful terms. For Piccola, we define strict evaluation
+which seems appropriate and more common for concurrent computing.
+Record calculus. When modeling components and interfaces, a record-based ap-
+proach is the obvious choice. We use forms [20, 21] as an explicit notion for
+extensible records. Record calculi are studied in more detail for example in [11,
+34].
+In the λ-calculus with names of Dami [13] arguments to functions are named.
+The resulting system supports records as arguments instead of tuples as in the
+classical calculus. The λN -calculus was one of the main inspiration for our work
+on forms without introspection. An issue omitted in our approach is record
+typing. It is not clear how far record types with subtyping and the runtime
+acquisition can be combined. An overview of record typing and the problems
+involved can be found for example in [11].
+Explicit environments. An explicit environment generalizes the concept of ex-
+plicit substitution [1] by using a record like structure for the environment. In
+the environment calculus of Nishizaki, there is an operation to get the current
+environment as a record and an operator to evaluate an expression using a record
+as environment [32, 37]. Projection of a label x in a record R then corresponds
+A Calculus for Modeling Software Components 19
+to evaluating the script x in an environment denoted by R. The reader may note
+that explicit environments subsume records. This is the reason why we call them
+forms in Piccola instead of just records. Handling the environment as a first-class
+entity allows us to define concepts like modules, interfaces and implementation
+for programming in the large within the framework.
+To our knowledge, the language Pebble of Burstall and Lampson was the first
+to formally show how to build modules, interfaces and implementation, abstract
+data types and generics on a typed lambda calculus with bindings, declarations
+and types as first-class values [10].
+Other approaches A very different model is offered by ρω (AKA Reo) [7], a cal-
+culus of component connectors. Reo is algebraic in flavour, and provides various
+connectors that coordinate and compose streams of data. Primitives connec-
+tors can be composed using the Reo operators to build hiigher-level connectors.
+In contrast to process calculi, Reo is well-suited to compositional reasoning,
+since connectors can be composed to yield new connectors, and properties of
+connectors can be shown to compose. Data communicated along streams are
+uninterpreted in Reo, so it would be natural to explore the application of Reo
+to streams of forms.
+</bodyText>
+<sectionHeader confidence="0.987492" genericHeader="method">
+6 Concluding Remarks
+</sectionHeader>
+<bodyText confidence="0.999882434782609">
+We have presented the Piccola calculus, a high-level calculus for modeling soft-
+ware components that extends the asynchronous π-calculus with explicit names-
+paces, or forms. The calculus serves as the semantic target for Piccola, a language
+for composing software components that conform to a particular compositional
+style. JPiccola, the Java implementation of Piccola, is realized by translation to
+an abstract machine that implements the Piccola calculus.
+The Piccola calculus is not only helpful for modeling components and con-
+nectors, but it also helps to reason about the Piccola language implementation
+and about compositional styles. Efficient language bridging between Piccola and
+the host language (Java or Squeak) is achieved by means of partial evaluation of
+language wrappers. The partial evaluation algorithm can be proved correct with
+the help of the Piccola calculus.
+Different compositional styles make different assumptions about software
+components. Mixing incompatible components can lead to compositional mis-
+matches. We have outlined how the Piccola calculus can help to bridge mis-
+matches by supporting reasoning about wrappers that adapt component con-
+tracts from one style to another.
+One shortcoming of our work so far is the lack of a type system. We have been
+experimenting with a system of contractual types [28] that expresses both the
+provided as well as the required services of a software component. Contractual
+types are formalized in the context of the form calculus, which can be seen as
+the Piccola calculus minus agents and channels. Contractual types have been
+integrated into the most recent distribution of JPiccola [19].
+</bodyText>
+<sectionHeader confidence="0.7335985" genericHeader="conclusions">
+20 Oscar Nierstrasz and Franz Achermann
+Acknowledgments
+</sectionHeader>
+<bodyText confidence="0.8923175">
+We gratefully acknowledge the financial support of the Swiss National Science
+Foundation for projects No. 20-61655.00, “Meta-models and Tools for Evolution
+</bodyText>
+<subsectionHeader confidence="0.4482105">
+Towards Component Systems”, and 2000-067855.02, “Tools and Techniques for
+Decomposing and Composing Software”.
+</subsectionHeader>
+<sectionHeader confidence="0.823669" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.999148966666667">
+1. Mart́ın Abadi, Luca Cardelli, Pierre-Louis Curien, and Jean-Jacques Lévy. Explicit
+substitutions. Journal of Functional Programming, 1(4):375–416, October 1991.
+2. Franz Achermann. Forms, Agents and Channels – Defining Composition Abstrac-
+tion with Style. PhD thesis, University of Berne, January 2002.
+3. Franz Achermann, Stefan Kneubuehl, and Oscar Nierstrasz. Scripting coordination
+styles. In António Porto and Gruia-Catalin Roman, editors, Coordination ’2000,
+volume 1906 of LNCS, pages 19–35, Limassol, Cyprus, September 2000. Springer-
+Verlag.
+4. Franz Achermann, Markus Lumpe, Jean-Guy Schneider, and Oscar Nierstrasz.
+Piccola – a small composition language. In Howard Bowman and John Derrick,
+editors, Formal Methods for Distributed Processing – A Survey of Object-Oriented
+Approaches, pages 403–426. Cambridge University Press, 2001.
+5. Franz Achermann and Oscar Nierstrasz. Explicit Namespaces. In Jürg Gutknecht
+and Wolfgang Weck, editors, Modular Programming Languages, volume 1897 of
+LNCS, pages 77–89, Zürich, Switzerland, September 2000. Springer-Verlag.
+6. Franz Achermann and Oscar Nierstrasz. Applications = Components + Scripts –
+A Tour of Piccola. In Mehmet Aksit, editor, Software Architectures and Component
+Technology, pages 261–292. Kluwer, 2001.
+7. Farhad Arbab and Farhad Mavaddat. Coordination through channel composition.
+In F. Arbab and C. Talcott, editors, Coordination Languages and Models: Proc.
+Coordination 2002, volume 2315 of Lecture Notes in Computer Science, pages 21–
+38. Springer-Verlag, April 2002.
+8. Gérard Berry and Gérard Boudol. The chemical abstract machine. Theoretical
+Computer Science, 96:217–248, 1992.
+9. Gérard Boudol. The pi-calculus in direct style. In Conference Record of POPL ’97,
+pages 228–241, 1997.
+10. Rod Burstall and Butler Lampson. A kernel language for abstract data types
+and modules. Information and Computation, 76(2/3), 1984. Also appeared in
+Proceedings of the International Symposium on Semantics of Data Types, Springer,
+LNCS (1984), and as SRC Research Report 1.
+11. Luca Cardelli and John C. Mitchell. Operations on records. In Carl A. Gunter and
+John C. Mitchell, editors, Theoretical Aspects of Object-Oriented Programming.
+Types, Semantics and Language Design, pages 295–350. MIT Press, 1993.
+12. Silvano Dal-Zilio. Le calcul bleu: types et objects. Ph.D. thesis, Université de Nice
+– Sophia Antipolis, July 1999. In french.
+13. Laurent Dami. Software Composition: Towards an Integration of Functional and
+Object-Oriented Approaches. Ph.D. thesis, University of Geneva, 1994.
+14. Cédric Fournet and Georges Gonthier. A hierarchy of equivalences for asynchronous
+calculi. In Proceedings of ICALP ’98, pages 844–855, 1998.
+A Calculus for Modeling Software Components 21
+15. Cédric Fournet, Georges Gonthier, Jean-Jacques Lévy, Luc Maranget, and Didier
+Rémy. A calculus of mobile agents. In Proceedings of the 7th International Con-
+ference on Concurrency Theory (CONCUR ’96), volume 1119 of LNCS, pages
+406–421. Springer-Verlag, August 1996.
+16. David Garlan, Robert Allen, and John Ockerbloom. Architectural mismatch: Why
+reuse is so hard. IEEE Software, 12(6):17–26, November 1995.
+17. Andrew D. Gordon and Paul D. Hankin. A concurrent object calculus: Reduction
+and typing. In Proceedings HLCL ’98. Elsevier ENTCS, 1998.
+18. Kohei Honda and Mario Tokoro. An object calculus for asynchronous communi-
+cation. In Pierre America, editor, Proceedings ECOOP ’91, volume 512 of LNCS,
+pages 133–147, Geneva, Switzerland, July 15–19 1991. Springer-Verlag.
+19. Stefan Kneubuehl. Typeful compositional styles. Diploma thesis, University of
+Bern, April 2003.
+20. Markus Lumpe. A Pi-Calculus Based Approach to Software Composition. Ph.D.
+thesis, University of Bern, Institute of Computer Science and Applied Mathematics,
+January 1999.
+21. Markus Lumpe, Franz Achermann, and Oscar Nierstrasz. A Formal Language
+for Composition. In Gary Leavens and Murali Sitaraman, editors, Foundations of
+Component Based Systems, pages 69–90. Cambridge University Press, 2000.
+22. Mark Lutz. Programming Python. O’Reilly &amp; Associates, Inc., 1996.
+23. Massimo Merro and Davide Sangiorgi. On asynchrony in name-passing calculi.
+In Kim G. Larsen, Sven Skyum, and Glynn Winskel, editors, 25th Colloquium
+on Automata, Languages and Programming (ICALP) (Aalborg, Denmark), volume
+1443 of LNCS, pages 856–867. Springer-Verlag, July 1998.
+24. Wolfgang De Meuter. Agora: The story of the simplest MOP in the world — or
+— the scheme of object–orientation. In J. Noble, I. Moore, and A. Taivalsaari,
+editors, Prototype-based Programming. Springer-Verlag, 1998.
+25. Robin Milner, Joachim Parrow, and David Walker. A calculus of mobile processes,
+part I/II. Information and Computation, 100:1–77, 1992.
+26. Robin Milner and Davide Sangiorgi. Barbed bisimulation. In Proceedings ICALP
+’92, volume 623 of LNCS, pages 685–695, Vienna, July 1992. Springer-Verlag.
+27. Uwe Nestmann and Benjamin C. Pierce. Decoding choice encodings. In Ugo
+Montanari and Vladimiro Sassone, editors, CONCUR ’96: Concurrency Theory,
+7th International Conference, volume 1119 of LNCS, pages 179–194, Pisa, Italy,
+August 1996. Springer-Verlag.
+28. Oscar Nierstrasz. Contractual types. Technical Report IAM-03-004, Institut für
+Informatik, Universität Bern, Switzerland, 2003.
+29. Oscar Nierstrasz and Franz Achermann. Supporting Compositional Styles for Soft-
+ware Evolution. In Proceedings International Symposium on Principles of Software
+Evolution (ISPSE 2000), pages 11–19, Kanazawa, Japan, Nov 1-2 2000. IEEE.
+30. Oscar Nierstrasz, Franz Achermann, and Stefan Kneubuehl. A guide to jpiccola.
+Technical Report IAM-03-003, Institut für Informatik, Universität Bern, Switzer-
+land, June 2003.
+31. Oscar Nierstrasz and Laurent Dami. Component-oriented software technology. In
+Oscar Nierstrasz and Dennis Tsichritzis, editors, Object-Oriented Software Com-
+position, pages 3–28. Prentice-Hall, 1995.
+32. Shin-ya Nishizaki. Programmable environment calculus as theory of dynamic soft-
+ware evolution. In Proceedings ISPSE 2000. IEEE Computer Society Press, 2000.
+33. Benjamin C. Pierce and David N. Turner. Pict: A programming language based on
+the pi-calculus. In G. Plotkin, C. Stirling, and M. Tofte, editors, Proof, Language
+and Interaction: Essays in Honour of Robin Milner. MIT Press, May 2000.
+22 Oscar Nierstrasz and Franz Achermann
+34. Didier Rémy. Typing Record Concatenation for Free, chapter 10, pages 351–372.
+MIT Press, April 1994.
+35. Davide Sangiorgi. Expressing Mobility in Process Algebras: First-Order and Higher-
+Order Paradigms. Ph.D. thesis, Computer Science Dept., University of Edinburgh,
+May 1993.
+36. Davide Sangiorgi. Asynchronous process calculi: the first-order and higher-order
+paradigms (tutorial). Theoretical Computer Science, 253, 2001.
+37. Masahiko Sato, Takafumi Sakurai, and Rod M. Burstall. Explicit environments.
+In Jean-Yves Girard, editor, Typed Lambda Calculi and Applications, volume 1581
+of LNCS, pages 340–354, L’Aquila, Italy, April 1999. Springer-Verlag.
+38. Nathanael Schärli. Supporting pure composition by inter-language bridging on the
+meta-level. Diploma thesis, University of Bern, September 2001.
+39. Nathanael Schärli and Franz Achermann. Partial evaluation of inter-language
+wrappers. In Workshop on Composition Languages, WCL ’01, September 2001.
+40. Jean-Guy Schneider. Components, Scripts, and Glue: A conceptual framework for
+software composition. Ph.D. thesis, University of Bern, Institute of Computer
+Science and Applied Mathematics, October 1999.
+41. Jean-Guy Schneider and Oscar Nierstrasz. Components, scripts and glue. In Leonor
+Barroca, Jon Hall, and Patrick Hall, editors, Software Architectures – Advances and
+Applications, pages 13–25. Springer-Verlag, 1999.
+42. Mary Shaw and David Garlan. Software Architecture: Perspectives on an Emerging
+Discipline. Prentice-Hall, 1996.
+43. Clemens A. Szyperski. Component Software. Addison Wesley, 1998.
+44. David Walker. Objects in the π-calculus. Information and Computation,
+116(2):253–271, February 1995.
+45. Pawel T. Wojciechowski. Nomadic Pict: Language and Infrastructure Design for
+Mobile Computation. PhD thesis, Wolfson College, University of Cambridge, March
+2000.
+</reference>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.869818">
+<title confidence="0.99953">A Calculus for Modeling Software Components ?</title>
+<author confidence="0.996019">Oscar Nierstrasz</author>
+<author confidence="0.996019">Franz Achermann</author>
+<affiliation confidence="0.9438445">Software Composition Group University of Bern, Switzerland</affiliation>
+<web confidence="0.996413">http://www.iam.unibe.ch/∼scg</web>
+<abstract confidence="0.9991878125">Many competing definitions of software components have been proposed over the years, but still today there is only partial agreement over such basic issues as granularity (are components bigger or smaller than objects, packages, or application?), instantiation (do components exist at run-time or only at compile-time?), and state (should we distinguish between components and “instances” of components?). We adopt a minimalist view in which components can be distinguished by composable interfaces. We have identified a number of key features and mechanisms for expressing composable software, and propose a calculus for modeling components, based on the asynchronous π calculus extended with explicit namespaces, or “forms”. This calculus serves as a semantic foundation and an executable abstract machine for Piccola, an experimental composition language. The calculus also enables reasoning about compositional styles and evaluation strategies for Piccola. We present the design rationale for the Piccola calculus, and briefly outline some of the results obtained.</abstract>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>Martın Abadi</author>
+<author>Luca Cardelli</author>
+<author>Pierre-Louis Curien</author>
+<author>Jean-Jacques Levy</author>
+</authors>
+<title>Explicit substitutions.</title>
+<date>1991</date>
+<journal>Journal of Functional Programming,</journal>
+<volume>1</volume>
+<issue>4</issue>
+<contexts>
+<context position="22856" citStr="[1, 32]" startWordPosition="3832" endWordPosition="3833">uce project) L→ ;λx.(x; isEmpty) (reduce inspect empty) LS → ;λx.(x; isService) (reduce inspect service) L(F · x7→G)→ ;λx.(x; isLabel)labelx (reduce inspect label) A ≡ A′ A′ → B′ B′ ≡ B A→ B (reduce struct) A→ B E [A]→ E [B] (reduce propagate) where labelx = project 7→(;λx.(x;x)) · hide 7→hidex · bind 7→(x7→) and E is an evaluation context defined by the grammar: E ::= [ ] ∣∣ E ·A ∣∣ F · E ∣∣ E ;A ∣∣ F ; E ∣∣ EA ∣∣ FE ∣∣ A|E ∣∣ E|A ∣∣ νc.E Table 4. Reduction rules environment in which A is evaluated. This is essentially the beta-reduction rule found in calculi for explicit substitution [1, 32]: (F ;λx.A)G → F · x7→G;A The application of the closure F ;λx.A to the argument G reduces to a sandbox expression in which the agent A is evaluated in the environment F · x7→G. Free occurrences of x in A will therefore be bound to G. The property of being closed is respected by reduction: Lemma 1. If A is a closed agent and A → B or A ≡ B then B is closed as well. Proof. Easily checked by induction over the formal proof for A→ B. 3.5 Encoding Booleans The following toy example actually illustrates many of the principles at stake when we model components with the Piccola calculus. We can encod</context>
+<context position="40446" citStr="[1]" startWordPosition="6781" endWordPosition="6781"> the λ-calculus with names of Dami [13] arguments to functions are named. The resulting system supports records as arguments instead of tuples as in the classical calculus. The λN -calculus was one of the main inspiration for our work on forms without introspection. An issue omitted in our approach is record typing. It is not clear how far record types with subtyping and the runtime acquisition can be combined. An overview of record typing and the problems involved can be found for example in [11]. Explicit environments. An explicit environment generalizes the concept of explicit substitution [1] by using a record like structure for the environment. In the environment calculus of Nishizaki, there is an operation to get the current environment as a record and an operator to evaluate an expression using a record as environment [32, 37]. Projection of a label x in a record R then corresponds A Calculus for Modeling Software Components 19 to evaluating the script x in an environment denoted by R. The reader may note that explicit environments subsume records. This is the reason why we call them forms in Piccola instead of just records. Handling the environment as a first-class entity allo</context>
+</contexts>
+<marker>1.</marker>
+<rawString>Mart́ın Abadi, Luca Cardelli, Pierre-Louis Curien, and Jean-Jacques Lévy. Explicit substitutions. Journal of Functional Programming, 1(4):375–416, October 1991.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Franz Achermann</author>
+</authors>
+<title>Forms, Agents and Channels – Defining Composition Abstraction with Style.</title>
+<date>2002</date>
+<tech>PhD thesis,</tech>
+<institution>University of Berne,</institution>
+<contexts>
+<context position="4130" citStr="[2]" startWordPosition="609" endWordPosition="609">the notion of forms — first-class, extensible namespaces. The missing aspect (coordination) can be addressed by agents and channels. We propose, therefore, a calculus for modeling composable software which is based on the asynchronous π calculus [25, 36] extended with first-class namespaces [5]. This calculus serves both as the semantic target and as an executable abstract machine for Piccola, an experimental composition language for implementing styles, scripts, coordination abstractions and glue code [4, 6]. The Piccola calculus is described in greater detail in Achermann’s PhD dissertation [2]. In this paper we first motivate the calculus by establishing a set of requirements for modeling composition of software components in section 2. Next, we address these requirements by presenting the syntax and semantics of the Piccola calculus in section 3. In section 4 we provide a brief overview of Piccola, and summarize how the calculus helps us to define its semantics, reason about composition, and optimize the language bridge by partial evaluation while preserving its semantics. Finally, we conclude with a few remarks about related and ongoing work in sections 5 and 6. 2 Modeling Softwa</context>
+<context position="20697" citStr="[2]" startWordPosition="3445" endWordPosition="3445">s A(νc.B) ≡ νc.AB (scope app right) Table 3. Congruences 10 Oscar Nierstrasz and Franz Achermann The rules single service and single binding specify that extension overwrites services and bindings with the same label. We define labels(F ) as follows: Definition 2. For each form F , the set of labels(F ) ⊂ L is given by: labels() = ∅ labels(S) = ∅ labels(x7→G) = {x} labels(F ·G) = labels(F ) ∪ labels(G) Using the form congruences, we can rewrite any form F into one of the following three cases: F ≡  F ≡ S F ≡ F ′ · x7→G where x 6∈ labels(F ′) This is proved by structural induction over forms [2]. This formalizes our idea that forms are extensible records unified with services. A form has at most one binding for a given label. The second group (from sandbox ext to use service) defines preforms. These are agent expressions that are congruent to a form. For instance, the agent hidex is equivalent to the empty form . The set of all preforms is defined by: F≡ = {A|∃F ∈ F with F ≡ A} Clearly, all forms are preforms. The last group (from par assoc to scope app right) defines the semantics of parallel composition and communication for agents. Note how these rules always preserve the positi</context>
+<context position="28629" citStr="[2]" startWordPosition="4923" endWordPosition="4923">r, written A ≈ B, if there is some (weak) barbed bisimulation R with A R B. Two agents are (weakly) barbed congruent, written A ≈ B, if for all contexts C we have C[A] ≈ C[B]. We define behavioural equality using the notion of barbed congruence. As usual we can define strong and weak versions of barbed bisimulation. The strong versions are obtained in the standard way by replacing ⇒ with → and ⇓ with ↓ in Definition 4. We only concentrate on the weak case since it abstracts internal computation. 3.7 Erroneous Reductions Not all agents reduce to forms. Some agents enjoy an infinite reduction [2]. Other agents are stuck. An agent is stuck if it is not a barb and can reduce no further. Definition 5. An agent A is stuck, written A↑, if A is not a barb and there is no agent B such that A→ B. Clearly it holds that 0 ↑ and R ↑. The property of being stuck is not compositional. For instance c? ↑ but obviously, c() |c? can reduce to . We can put R into a context so that it becomes a barb, for instance F ;R ≡ F . Note that if an agent is stuck it is not a preform: F≡ ∩ {A|A↑} = ∅ by definition. Although 0 is arguably stuck by intention, in general a stuck agent can be interpreted as an error</context>
+<context position="31124" citStr="[2]" startWordPosition="5361" endWordPosition="5361">]]a implies A ≈ B. Although it is comforting to learn that the π-calculus can serve as a foundation for modeling components, it is also clear from the complexity of the encoding that it is very distant from the kinds of abstractions we need to conveniently model software composition. For this reason we find that a richer calculus is more convenient to express components and connectors. 4 From the Piccola Calculus to Piccola Piccola is a small composition language that supports the requirements summarized in figure 1, and whose denotational semantics is defined in terms of the Piccola calculus [2]. Piccola is designed in layered fashion. At the lowest level we have an abstract machine that implements the Piccola calculus. At the next level, we have the Piccola language, which is implemented by translation to the abstract machine, following the specification of the denotational semantics. Piccola Layers Applications: Components + Scripts Composition styles: Streams, GUI composition, ... Standard libraries: Coordination abstractions, control structures, basic object model ... Piccola language: Host components, user-defined operators, dynamic namespaces Piccola calculus: Forms, agents and</context>
+<context position="33511" citStr="[2]" startWordPosition="5715" endWordPosition="5715">plemented using agents, channels, and dynamic namespaces [5]. The first three layers constitute the standard Piccola distribution. The fourth layer is provided by the component framework designer. At this level, a domain expert encodes a compositional styles as a library of components, connectors, adaptors, coordination abstractions, and so on. Finally, at the top level, an application programmer may script together components using the abstractions provided by the lower layers [3, 29]. 4.1 Reasoning About Styles We have also explored how to reason about Piccola programs at the language level [2]. We have studied two extended examples. First, we considered synchronization wrappers that express the synchronization constraints assumed by a component. We can use synchronization wrappers to make components safe in a multithreaded environment. The wrappers separate the functionality of the component from their synchronization aspects. If the constraints assumed by the component hold in a particular composition the wrapper is not needed. In particular the wrapper is not necessary when the component is already wrapped. This property is formally expressed by requiring that the wrappers be ide</context>
+<context position="35506" citStr="[2, 38, 39]" startWordPosition="6029" endWordPosition="6031">resent an improved version of the generic adapter. We show that the adapter ensures these invariants. 4.2 Partial Evaluation Another interesting application of the calculus was to enable the efficient implementation of the language bridge. Since Piccola is a pure composition language, evaluating scripts requires intensive upping and downing [24] between the “down” level of the host language and the “up” level of Piccola. If the language bridge were implemented naıvely, it would be hopelessly inefficient. Instead, Piccola achieves acceptable performance by adopting a partial evaluation scheme [2, 38, 39]. Since the language has a denotational semantics, we can implement it efficiently while proving that we preserve the intended semantics. The partial evaluation algorithm uses the fact that forms are immutable. We replace references to forms by the forms referred to. We can then specialize projections and replace applications of referentially transparent services by their results. However, most services in Piccola are not referentially transparent and cannot be inlined since that would change the order in which side-effects are executed. We need to separate the referentially transparent part f</context>
+</contexts>
+<marker>2.</marker>
+<rawString>Franz Achermann. Forms, Agents and Channels – Defining Composition Abstraction with Style. PhD thesis, University of Berne, January 2002.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Franz Achermann</author>
+<author>Stefan Kneubuehl</author>
+<author>Oscar Nierstrasz</author>
+</authors>
+<title>Scripting coordination styles.</title>
+<date></date>
+<booktitle>In Antonio Porto and Gruia-Catalin Roman, editors, Coordination ’2000, volume 1906 of LNCS,</booktitle>
+<pages>pages</pages>
+<publisher>SpringerVerlag.</publisher>
+<location>Limassol, Cyprus,</location>
+<contexts>
+<context position="2773" citStr="[3, 29, 42]" startWordPosition="406" endWordPosition="408">mponents present their services as a set of interfaces or “plugs”: ? FMCO 2002 Proceedings, LNCS, vol. 2852, Springer-Verlag, 2003, pp. 339-360. 2 Oscar Nierstrasz and Franz Achermann “A software component is a static abstraction with plugs.” [31] This leads us to answer the question, “What makes up the rest?” as follows: Applications = Components + Scripts [6] that is, component-based applications are (ideally) made up of stable, off-theshelf components, and scripts that plug them together. Scripts (ideally) make use of high-level connectors that coordinate the services of various components [3, 29, 42]. Furthermore, complex applications may need services of components that depend on very different architectural assumptions [16]. In these cases, glue code is needed to adapt components to different architectural styles [40, 41]. Returning to our original questions, then, we conclude that it is not really possible to define software components without taking these complementary aspects of CBSD into account. At a purely technical level, i.e., ignoring methodological and software process aspects, these aspects include styles (plugs and connectors), scripts, coordination and glue code. A formal f</context>
+<context position="33398" citStr="[3, 29]" startWordPosition="5695" endWordPosition="5696">wn. These, however, are provided as standard services implemented in Piccola. Exceptions and try-catch clauses are implemented using agents, channels, and dynamic namespaces [5]. The first three layers constitute the standard Piccola distribution. The fourth layer is provided by the component framework designer. At this level, a domain expert encodes a compositional styles as a library of components, connectors, adaptors, coordination abstractions, and so on. Finally, at the top level, an application programmer may script together components using the abstractions provided by the lower layers [3, 29]. 4.1 Reasoning About Styles We have also explored how to reason about Piccola programs at the language level [2]. We have studied two extended examples. First, we considered synchronization wrappers that express the synchronization constraints assumed by a component. We can use synchronization wrappers to make components safe in a multithreaded environment. The wrappers separate the functionality of the component from their synchronization aspects. If the constraints assumed by the component hold in a particular composition the wrapper is not needed. In particular the wrapper is not necessary</context>
+</contexts>
+<marker>3.</marker>
+<rawString>Franz Achermann, Stefan Kneubuehl, and Oscar Nierstrasz. Scripting coordination styles. In António Porto and Gruia-Catalin Roman, editors, Coordination ’2000, volume 1906 of LNCS, pages 19–35, Limassol, Cyprus, September 2000. SpringerVerlag.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Franz Achermann</author>
+<author>Markus Lumpe</author>
+<author>Jean-Guy Schneider</author>
+<author>Oscar Nierstrasz</author>
+</authors>
+<title>Piccola – a small composition language. In Howard Bowman and</title>
+<date>2001</date>
+<booktitle>Formal Methods for Distributed Processing – A Survey of Object-Oriented Approaches,</booktitle>
+<pages>403--426</pages>
+<editor>John Derrick, editors,</editor>
+<publisher>Cambridge University Press,</publisher>
+<contexts>
+<context position="4041" citStr="[4, 6]" startWordPosition="595" endWordPosition="596">t address these aspects. We claim that most of these aspects can be adequately addressed by the notion of forms — first-class, extensible namespaces. The missing aspect (coordination) can be addressed by agents and channels. We propose, therefore, a calculus for modeling composable software which is based on the asynchronous π calculus [25, 36] extended with first-class namespaces [5]. This calculus serves both as the semantic target and as an executable abstract machine for Piccola, an experimental composition language for implementing styles, scripts, coordination abstractions and glue code [4, 6]. The Piccola calculus is described in greater detail in Achermann’s PhD dissertation [2]. In this paper we first motivate the calculus by establishing a set of requirements for modeling composition of software components in section 2. Next, we address these requirements by presenting the syntax and semantics of the Piccola calculus in section 3. In section 4 we provide a brief overview of Piccola, and summarize how the calculus helps us to define its semantics, reason about composition, and optimize the language bridge by partial evaluation while preserving its semantics. Finally, we conclude</context>
+</contexts>
+<marker>4.</marker>
+<rawString>Franz Achermann, Markus Lumpe, Jean-Guy Schneider, and Oscar Nierstrasz. Piccola – a small composition language. In Howard Bowman and John Derrick, editors, Formal Methods for Distributed Processing – A Survey of Object-Oriented Approaches, pages 403–426. Cambridge University Press, 2001.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Franz Achermann</author>
+<author>Oscar Nierstrasz</author>
+</authors>
+<title>Explicit Namespaces.</title>
+<date>2000</date>
+<booktitle>Modular Programming Languages,</booktitle>
+<volume>1897</volume>
+<pages>77--89</pages>
+<editor>In Jurg Gutknecht and Wolfgang Weck, editors,</editor>
+<publisher>Springer-Verlag.</publisher>
+<location>Zurich, Switzerland,</location>
+<contexts>
+<context position="3822" citStr="[5]" startWordPosition="563" endWordPosition="563">ignoring methodological and software process aspects, these aspects include styles (plugs and connectors), scripts, coordination and glue code. A formal foundation for any reasonable notion of software components must address these aspects. We claim that most of these aspects can be adequately addressed by the notion of forms — first-class, extensible namespaces. The missing aspect (coordination) can be addressed by agents and channels. We propose, therefore, a calculus for modeling composable software which is based on the asynchronous π calculus [25, 36] extended with first-class namespaces [5]. This calculus serves both as the semantic target and as an executable abstract machine for Piccola, an experimental composition language for implementing styles, scripts, coordination abstractions and glue code [4, 6]. The Piccola calculus is described in greater detail in Achermann’s PhD dissertation [2]. In this paper we first motivate the calculus by establishing a set of requirements for modeling composition of software components in section 2. Next, we address these requirements by presenting the syntax and semantics of the Piccola calculus in section 3. In section 4 we provide a brief </context>
+<context position="11948" citStr="[5]" startWordPosition="1795" endWordPosition="1795">ion of concurrent activities. Consider a readers/writers synchronization policy as a generic wrapper. 6 Oscar Nierstrasz and Franz Achermann We conclude that we not only need higher-order functions over first-class namespaces (with introspection), but also a way of expressing concurrency and communication [40]. 3 The Piccola Calculus As a consequence of the requirements we have identified above, we propose as a foundation a process calculus based on the higher-order asynchronous π calculus [25, 36] in which tuple-based communication is replaced by communication of extensible records, or forms [5]. Furthermore, forms serve as first-class namespaces and support a simple kind of introspection. The design of the Piccola calculus strikes a balance between minimalism and expressiveness. As a calculus it is rather large. In fact, it would be possible to express everything we want with the π calculus alone, but the semantic gap between concepts we wish to model and the terms of the calculus would be rather large. With the Piccola calculus we are aiming for the smallest calculus with which we can conveniently express components, connectors and scripts. 3.1 Syntax The Piccola calculus is given </context>
+<context position="32968" citStr="[5]" startWordPosition="5633" endWordPosition="5633">c entities, including agents and channels, as syntactic constructs in the calculus. In the Piccola language, however, these are represented only by standard library services, such as run and newChannel. The next layer provides a set of standard libraries to simplify the task of programming with Piccola. Not only does the Piccola language provide no built-in data types, it does not even offer any control structures of its own. These, however, are provided as standard services implemented in Piccola. Exceptions and try-catch clauses are implemented using agents, channels, and dynamic namespaces [5]. The first three layers constitute the standard Piccola distribution. The fourth layer is provided by the component framework designer. At this level, a domain expert encodes a compositional styles as a library of components, connectors, adaptors, coordination abstractions, and so on. Finally, at the top level, an application programmer may script together components using the abstractions provided by the lower layers [3, 29]. 4.1 Reasoning About Styles We have also explored how to reason about Piccola programs at the language level [2]. We have studied two extended examples. First, we consid</context>
+</contexts>
+<marker>5.</marker>
+<rawString>Franz Achermann and Oscar Nierstrasz. Explicit Namespaces. In Jürg Gutknecht and Wolfgang Weck, editors, Modular Programming Languages, volume 1897 of LNCS, pages 77–89, Zürich, Switzerland, September 2000. Springer-Verlag.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Franz Achermann</author>
+<author>Oscar Nierstrasz</author>
+</authors>
+<date>2001</date>
+<booktitle>Applications = Components + Scripts – A Tour of Piccola. In Mehmet Aksit, editor, Software Architectures and Component Technology,</booktitle>
+<pages>261--292</pages>
+<publisher>Kluwer,</publisher>
+<contexts>
+<context position="2525" citStr="[6]" startWordPosition="372" endWordPosition="372">f functionality. This, of course, begs the question, “If components are the stable stuff, what makes up the rest?” Second, “independent deployment” of components actually entails compliance with some well-defined component model in which components present their services as a set of interfaces or “plugs”: ? FMCO 2002 Proceedings, LNCS, vol. 2852, Springer-Verlag, 2003, pp. 339-360. 2 Oscar Nierstrasz and Franz Achermann “A software component is a static abstraction with plugs.” [31] This leads us to answer the question, “What makes up the rest?” as follows: Applications = Components + Scripts [6] that is, component-based applications are (ideally) made up of stable, off-theshelf components, and scripts that plug them together. Scripts (ideally) make use of high-level connectors that coordinate the services of various components [3, 29, 42]. Furthermore, complex applications may need services of components that depend on very different architectural assumptions [16]. In these cases, glue code is needed to adapt components to different architectural styles [40, 41]. Returning to our original questions, then, we conclude that it is not really possible to define software components withou</context>
+<context position="4041" citStr="[4, 6]" startWordPosition="595" endWordPosition="596">t address these aspects. We claim that most of these aspects can be adequately addressed by the notion of forms — first-class, extensible namespaces. The missing aspect (coordination) can be addressed by agents and channels. We propose, therefore, a calculus for modeling composable software which is based on the asynchronous π calculus [25, 36] extended with first-class namespaces [5]. This calculus serves both as the semantic target and as an executable abstract machine for Piccola, an experimental composition language for implementing styles, scripts, coordination abstractions and glue code [4, 6]. The Piccola calculus is described in greater detail in Achermann’s PhD dissertation [2]. In this paper we first motivate the calculus by establishing a set of requirements for modeling composition of software components in section 2. Next, we address these requirements by presenting the syntax and semantics of the Piccola calculus in section 3. In section 4 we provide a brief overview of Piccola, and summarize how the calculus helps us to define its semantics, reason about composition, and optimize the language bridge by partial evaluation while preserving its semantics. Finally, we conclude</context>
+</contexts>
+<marker>6.</marker>
+<rawString>Franz Achermann and Oscar Nierstrasz. Applications = Components + Scripts – A Tour of Piccola. In Mehmet Aksit, editor, Software Architectures and Component Technology, pages 261–292. Kluwer, 2001.</rawString>
+</citation>
+<citation valid="true">
+<title>Farhad Arbab and Farhad Mavaddat. Coordination through channel composition.</title>
+<date>2002</date>
+<booktitle>Coordination Languages and Models: Proc. Coordination</booktitle>
+<volume>2315</volume>
+<pages>21</pages>
+<editor>In F. Arbab and C. Talcott, editors,</editor>
+<contexts>
+<context position="41509" citStr="[7]" startWordPosition="6955" endWordPosition="6955">records. This is the reason why we call them forms in Piccola instead of just records. Handling the environment as a first-class entity allows us to define concepts like modules, interfaces and implementation for programming in the large within the framework. To our knowledge, the language Pebble of Burstall and Lampson was the first to formally show how to build modules, interfaces and implementation, abstract data types and generics on a typed lambda calculus with bindings, declarations and types as first-class values [10]. Other approaches A very different model is offered by ρω (AKA Reo) [7], a calculus of component connectors. Reo is algebraic in flavour, and provides various connectors that coordinate and compose streams of data. Primitives connectors can be composed using the Reo operators to build hiigher-level connectors. In contrast to process calculi, Reo is well-suited to compositional reasoning, since connectors can be composed to yield new connectors, and properties of connectors can be shown to compose. Data communicated along streams are uninterpreted in Reo, so it would be natural to explore the application of Reo to streams of forms. 6 Concluding Remarks We have pre</context>
+</contexts>
+<marker>7.</marker>
+<rawString>Farhad Arbab and Farhad Mavaddat. Coordination through channel composition. In F. Arbab and C. Talcott, editors, Coordination Languages and Models: Proc. Coordination 2002, volume 2315 of Lecture Notes in Computer Science, pages 21–</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Springer-Verlag</author>
+</authors>
+<date>2002</date>
+<contexts>
+<context position="35506" citStr="[2, 38, 39]" startWordPosition="6029" endWordPosition="6031">resent an improved version of the generic adapter. We show that the adapter ensures these invariants. 4.2 Partial Evaluation Another interesting application of the calculus was to enable the efficient implementation of the language bridge. Since Piccola is a pure composition language, evaluating scripts requires intensive upping and downing [24] between the “down” level of the host language and the “up” level of Piccola. If the language bridge were implemented naıvely, it would be hopelessly inefficient. Instead, Piccola achieves acceptable performance by adopting a partial evaluation scheme [2, 38, 39]. Since the language has a denotational semantics, we can implement it efficiently while proving that we preserve the intended semantics. The partial evaluation algorithm uses the fact that forms are immutable. We replace references to forms by the forms referred to. We can then specialize projections and replace applications of referentially transparent services by their results. However, most services in Piccola are not referentially transparent and cannot be inlined since that would change the order in which side-effects are executed. We need to separate the referentially transparent part f</context>
+</contexts>
+<marker>38.</marker>
+<rawString>Springer-Verlag, April 2002.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Gerard Berry</author>
+<author>Gerard Boudol</author>
+</authors>
+<title>The chemical abstract machine.</title>
+<date>1992</date>
+<journal>Theoretical Computer Science,</journal>
+<volume>96</volume>
+<contexts>
+<context position="18374" citStr="[8]" startWordPosition="2959" endWordPosition="2959">sed. Open agents are R, variables x, abstractions λx.A and compositions thereof. Any agent can be closed by putting it into a sandbox with a closed context. Sandbox agents are closed if the root context is closed. In lemma 1 we show that the property of being closed is preserved by reduction. 3.3 Congruence and Pre-forms As in the π calculus, we introduce structural congruence over agent expressions to simplify the reduction relation. The congruence allows us to rewrite agent expressions to bring communicating agents into juxtapositions, as in the Chemical Abstract Machine of Berry and Boudol [8]. The congruence rules constitute three groups (see table 3). The first group (from ext empty right to single service) deals with congruence over forms. It specifies that extension is idempotent and associative on forms. A Calculus for Modeling Software Components 9 ≡ is the smallest congruence satisfying the following axioms: F ·  ≡ F (ext empty right)  · F ≡ F (ext empty left) (F ·G) ·H ≡ F · (G ·H) (ext assoc) S · (x7→F ) ≡ (x7→F ) · S (ext service commute) x 6= y implies x7→F · y 7→G ≡ y 7→G · x7→F (ext bind commute) x7→F · x7→G ≡ x7→G (single binding) S · S′ ≡ S′ (single service) F ;A ·</context>
+</contexts>
+<marker>8.</marker>
+<rawString>Gérard Berry and Gérard Boudol. The chemical abstract machine. Theoretical Computer Science, 96:217–248, 1992.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Gerard Boudol</author>
+</authors>
+<title>The pi-calculus in direct style.</title>
+<date>1997</date>
+<booktitle>In Conference Record of POPL ’97,</booktitle>
+<pages>228--241</pages>
+<contexts>
+<context position="38317" citStr="[9]" startWordPosition="6451" endWordPosition="6451">g a concurrent assembler. When comparing programs written in the π-calculus with the lambda-calculus it seems like lambda abstractions scale up, whereas sending and receiving messages does not scale well. There are two possible solutions proposed to this problem: We can change the metaphor of communication or we can introduce abstractions as first-class values. The first approach is advocated by the Join-calculus [15]. Communication does not happen between a sender and a receiver, instead a join pattern triggers a process on consumption of several pending messages. The Blue calculus of Boudol [9] changes the receive primitive into a definition which is defined for a scope. By that change, the Blue calculus is more closely related to functions and provides a better notion for higher-order abstraction. Boudol calls it a continuation-passing calculus. The other approach is adopted by Sangiorgi in the HOπ-calculus. Instead of communicating channels or tuples of channels, processes can be communicated as well. Surprisingly, the higher-order case has the same expressive power as the first-order version [35, 36]. In Piccola we take the second approach and reuse existing encodings of function</context>
+</contexts>
+<marker>9.</marker>
+<rawString>Gérard Boudol. The pi-calculus in direct style. In Conference Record of POPL ’97, pages 228–241, 1997.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Rod Burstall</author>
+<author>Butler Lampson</author>
+</authors>
+<title>A kernel language for abstract data types and modules.</title>
+<date>1984</date>
+<journal>Information and Computation,</journal>
+<booktitle>in Proceedings of the International Symposium on Semantics of Data Types, Springer, LNCS</booktitle>
+<volume>76</volume>
+<issue>2</issue>
+<contexts>
+<context position="41436" citStr="[10]" startWordPosition="6942" endWordPosition="6942">ment denoted by R. The reader may note that explicit environments subsume records. This is the reason why we call them forms in Piccola instead of just records. Handling the environment as a first-class entity allows us to define concepts like modules, interfaces and implementation for programming in the large within the framework. To our knowledge, the language Pebble of Burstall and Lampson was the first to formally show how to build modules, interfaces and implementation, abstract data types and generics on a typed lambda calculus with bindings, declarations and types as first-class values [10]. Other approaches A very different model is offered by ρω (AKA Reo) [7], a calculus of component connectors. Reo is algebraic in flavour, and provides various connectors that coordinate and compose streams of data. Primitives connectors can be composed using the Reo operators to build hiigher-level connectors. In contrast to process calculi, Reo is well-suited to compositional reasoning, since connectors can be composed to yield new connectors, and properties of connectors can be shown to compose. Data communicated along streams are uninterpreted in Reo, so it would be natural to explore the</context>
+</contexts>
+<marker>10.</marker>
+<rawString>Rod Burstall and Butler Lampson. A kernel language for abstract data types and modules. Information and Computation, 76(2/3), 1984. Also appeared in Proceedings of the International Symposium on Semantics of Data Types, Springer, LNCS (1984), and as SRC Research Report 1.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Luca Cardelli</author>
+<author>John C Mitchell</author>
+</authors>
+<title>Operations on records.</title>
+<date>1993</date>
+<booktitle>Theoretical Aspects of Object-Oriented Programming. Types, Semantics and Language Design,</booktitle>
+<pages>295--350</pages>
+<editor>In Carl A. Gunter and John C. Mitchell, editors,</editor>
+<publisher>MIT Press,</publisher>
+<contexts>
+<context position="39839" citStr="[11, 34]" startWordPosition="6681" endWordPosition="6682">ric) Blue calculus studied by Dal-Zilio [12]. In the higher-order π-calculus the evaluation order is orthogonal to the communication semantics [36]. In Piccola, evaluation strategy interferes with communication, therefore we have to fix one for meaningful terms. For Piccola, we define strict evaluation which seems appropriate and more common for concurrent computing. Record calculus. When modeling components and interfaces, a record-based approach is the obvious choice. We use forms [20, 21] as an explicit notion for extensible records. Record calculi are studied in more detail for example in [11, 34]. In the λ-calculus with names of Dami [13] arguments to functions are named. The resulting system supports records as arguments instead of tuples as in the classical calculus. The λN -calculus was one of the main inspiration for our work on forms without introspection. An issue omitted in our approach is record typing. It is not clear how far record types with subtyping and the runtime acquisition can be combined. An overview of record typing and the problems involved can be found for example in [11]. Explicit environments. An explicit environment generalizes the concept of explicit substitut</context>
+</contexts>
+<marker>11.</marker>
+<rawString>Luca Cardelli and John C. Mitchell. Operations on records. In Carl A. Gunter and John C. Mitchell, editors, Theoretical Aspects of Object-Oriented Programming. Types, Semantics and Language Design, pages 295–350. MIT Press, 1993.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Silvano Dal-Zilio</author>
+</authors>
+<title>Le calcul bleu: types et objects.</title>
+<date>1999</date>
+<booktitle>Ph.D. thesis, Universite de Nice – Sophia Antipolis,</booktitle>
+<note>In french.</note>
+<contexts>
+<context position="39275" citStr="[12]" startWordPosition="6598" endWordPosition="6598">s or tuples of channels, processes can be communicated as well. Surprisingly, the higher-order case has the same expressive power as the first-order version [35, 36]. In Piccola we take the second approach and reuse existing encodings of functions into the π-calculus as in Pict. The motivation for this comes from the fact that the HOπ-calculus itself can be encoded in the first-order case. Asymmetric parallel composition. The semantics of asynchronous parallel composition is used in the concurrent object calculus of Gordon and Hankin [17] or the (asymmetric) Blue calculus studied by Dal-Zilio [12]. In the higher-order π-calculus the evaluation order is orthogonal to the communication semantics [36]. In Piccola, evaluation strategy interferes with communication, therefore we have to fix one for meaningful terms. For Piccola, we define strict evaluation which seems appropriate and more common for concurrent computing. Record calculus. When modeling components and interfaces, a record-based approach is the obvious choice. We use forms [20, 21] as an explicit notion for extensible records. Record calculi are studied in more detail for example in [11, 34]. In the λ-calculus with names of Da</context>
+</contexts>
+<marker>12.</marker>
+<rawString>Silvano Dal-Zilio. Le calcul bleu: types et objects. Ph.D. thesis, Université de Nice – Sophia Antipolis, July 1999. In french.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Laurent Dami</author>
+</authors>
+<title>Software Composition: Towards an Integration of Functional and Object-Oriented Approaches.</title>
+<date>1994</date>
+<tech>Ph.D. thesis,</tech>
+<institution>University of Geneva,</institution>
+<contexts>
+<context position="23596" citStr="[13]" startWordPosition="3973" endWordPosition="3973">is evaluated in the environment F · x7→G. Free occurrences of x in A will therefore be bound to G. The property of being closed is respected by reduction: Lemma 1. If A is a closed agent and A → B or A ≡ B then B is closed as well. Proof. Easily checked by induction over the formal proof for A→ B. 3.5 Encoding Booleans The following toy example actually illustrates many of the principles at stake when we model components with the Piccola calculus. We can encode booleans by services that either project on the labels true or false depending on which boolean value they are supposed to model (cf. [13]). (This same idea is used by the primitive service L to reflect over the bindings and services of a form.) 12 Oscar Nierstrasz and Franz Achermann True def= ;λx.(x; true) (1) False def= ;λx.(x; false) (2) Consider now: True(true 7→1 · false 7→2) = (;λx.(x; true))(true 7→1 · false 7→2) →  · x7→(true 7→1 · false 7→2); (x; true) by reduce beta ≡ ( · x7→(true 7→1 · false 7→2);x); true by sandbox assoc → (true 7→1 · false 7→2); true by reduce project ≡ (false 7→2 · true 7→1); true by ext bind commute → 1 by reduce project Note how the bindings are swapped to project on true in the last step. </context>
+<context position="39882" citStr="[13]" startWordPosition="6690" endWordPosition="6690">n the higher-order π-calculus the evaluation order is orthogonal to the communication semantics [36]. In Piccola, evaluation strategy interferes with communication, therefore we have to fix one for meaningful terms. For Piccola, we define strict evaluation which seems appropriate and more common for concurrent computing. Record calculus. When modeling components and interfaces, a record-based approach is the obvious choice. We use forms [20, 21] as an explicit notion for extensible records. Record calculi are studied in more detail for example in [11, 34]. In the λ-calculus with names of Dami [13] arguments to functions are named. The resulting system supports records as arguments instead of tuples as in the classical calculus. The λN -calculus was one of the main inspiration for our work on forms without introspection. An issue omitted in our approach is record typing. It is not clear how far record types with subtyping and the runtime acquisition can be combined. An overview of record typing and the problems involved can be found for example in [11]. Explicit environments. An explicit environment generalizes the concept of explicit substitution [1] by using a record like structure fo</context>
+</contexts>
+<marker>13.</marker>
+<rawString>Laurent Dami. Software Composition: Towards an Integration of Functional and Object-Oriented Approaches. Ph.D. thesis, University of Geneva, 1994.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Cedric Fournet</author>
+<author>Georges Gonthier</author>
+</authors>
+<title>A hierarchy of equivalences for asynchronous calculi.</title>
+<date>1998</date>
+<journal>Components</journal>
+<booktitle>In Proceedings of ICALP ’98,</booktitle>
+<volume>21</volume>
+<pages>844--855</pages>
+<contexts>
+<context position="37446" citStr="[14]" startWordPosition="6321" endWordPosition="6321">treated by various authors in the context of the π-calculus [18, 44]. The Pict experiment has shown that the π-calculus is a suitable basis for programming many high-level construct by encodings [33]. For programming and implementation purposes, synchronous communication seems uncommon and can generally be encoded by using explicit acknowledgments (cf. [18]). Moreover, asynchronous communication has a closer correspondence to distributed computing [45]. Furthermore, in the π-calculus the asynchronous variant has the pleasant property that equivalences are simpler than for the synchronous case [14]. Input-guarded choice can be encoded and is fully abstract [27]. For these reasons we adopt asynchronous channels in Piccola. 18 Oscar Nierstrasz and Franz Achermann Higher-order abstractions. Programming directly in the π-calculus is often considered like programming a concurrent assembler. When comparing programs written in the π-calculus with the lambda-calculus it seems like lambda abstractions scale up, whereas sending and receiving messages does not scale well. There are two possible solutions proposed to this problem: We can change the metaphor of communication or we can introduce abst</context>
+</contexts>
+<marker>14.</marker>
+<rawString>Cédric Fournet and Georges Gonthier. A hierarchy of equivalences for asynchronous calculi. In Proceedings of ICALP ’98, pages 844–855, 1998. A Calculus for Modeling Software Components 21</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Cedric Fournet</author>
+<author>Georges Gonthier</author>
+<author>Jean-Jacques Levy</author>
+<author>Luc Maranget</author>
+<author>Didier Remy</author>
+</authors>
+<title>A calculus of mobile agents.</title>
+<date>1996</date>
+<booktitle>In Proceedings of the 7th International Conference on Concurrency Theory (CONCUR ’96),</booktitle>
+<volume>1119</volume>
+<pages>406--421</pages>
+<publisher>Springer-Verlag,</publisher>
+<contexts>
+<context position="38135" citStr="[15]" startWordPosition="6422" endWordPosition="6422">e adopt asynchronous channels in Piccola. 18 Oscar Nierstrasz and Franz Achermann Higher-order abstractions. Programming directly in the π-calculus is often considered like programming a concurrent assembler. When comparing programs written in the π-calculus with the lambda-calculus it seems like lambda abstractions scale up, whereas sending and receiving messages does not scale well. There are two possible solutions proposed to this problem: We can change the metaphor of communication or we can introduce abstractions as first-class values. The first approach is advocated by the Join-calculus [15]. Communication does not happen between a sender and a receiver, instead a join pattern triggers a process on consumption of several pending messages. The Blue calculus of Boudol [9] changes the receive primitive into a definition which is defined for a scope. By that change, the Blue calculus is more closely related to functions and provides a better notion for higher-order abstraction. Boudol calls it a continuation-passing calculus. The other approach is adopted by Sangiorgi in the HOπ-calculus. Instead of communicating channels or tuples of channels, processes can be communicated as well. </context>
+</contexts>
+<marker>15.</marker>
+<rawString>Cédric Fournet, Georges Gonthier, Jean-Jacques Lévy, Luc Maranget, and Didier Rémy. A calculus of mobile agents. In Proceedings of the 7th International Conference on Concurrency Theory (CONCUR ’96), volume 1119 of LNCS, pages 406–421. Springer-Verlag, August 1996.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>David Garlan</author>
+<author>Robert Allen</author>
+<author>John Ockerbloom</author>
+</authors>
+<title>Architectural mismatch: Why reuse is so hard.</title>
+<date>1995</date>
+<journal>IEEE Software,</journal>
+<volume>12</volume>
+<issue>6</issue>
+<contexts>
+<context position="2901" citStr="[16]" startWordPosition="424" endWordPosition="424"> 339-360. 2 Oscar Nierstrasz and Franz Achermann “A software component is a static abstraction with plugs.” [31] This leads us to answer the question, “What makes up the rest?” as follows: Applications = Components + Scripts [6] that is, component-based applications are (ideally) made up of stable, off-theshelf components, and scripts that plug them together. Scripts (ideally) make use of high-level connectors that coordinate the services of various components [3, 29, 42]. Furthermore, complex applications may need services of components that depend on very different architectural assumptions [16]. In these cases, glue code is needed to adapt components to different architectural styles [40, 41]. Returning to our original questions, then, we conclude that it is not really possible to define software components without taking these complementary aspects of CBSD into account. At a purely technical level, i.e., ignoring methodological and software process aspects, these aspects include styles (plugs and connectors), scripts, coordination and glue code. A formal foundation for any reasonable notion of software components must address these aspects. We claim that most of these aspects can b</context>
+</contexts>
+<marker>16.</marker>
+<rawString>David Garlan, Robert Allen, and John Ockerbloom. Architectural mismatch: Why reuse is so hard. IEEE Software, 12(6):17–26, November 1995.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Andrew D Gordon</author>
+<author>Paul D Hankin</author>
+</authors>
+<title>A concurrent object calculus: Reduction and typing.</title>
+<date>1998</date>
+<booktitle>In Proceedings HLCL ’98. Elsevier ENTCS,</booktitle>
+<contexts>
+<context position="39215" citStr="[17]" startWordPosition="6589" endWordPosition="6589">giorgi in the HOπ-calculus. Instead of communicating channels or tuples of channels, processes can be communicated as well. Surprisingly, the higher-order case has the same expressive power as the first-order version [35, 36]. In Piccola we take the second approach and reuse existing encodings of functions into the π-calculus as in Pict. The motivation for this comes from the fact that the HOπ-calculus itself can be encoded in the first-order case. Asymmetric parallel composition. The semantics of asynchronous parallel composition is used in the concurrent object calculus of Gordon and Hankin [17] or the (asymmetric) Blue calculus studied by Dal-Zilio [12]. In the higher-order π-calculus the evaluation order is orthogonal to the communication semantics [36]. In Piccola, evaluation strategy interferes with communication, therefore we have to fix one for meaningful terms. For Piccola, we define strict evaluation which seems appropriate and more common for concurrent computing. Record calculus. When modeling components and interfaces, a record-based approach is the obvious choice. We use forms [20, 21] as an explicit notion for extensible records. Record calculi are studied in more detail</context>
+</contexts>
+<marker>17.</marker>
+<rawString>Andrew D. Gordon and Paul D. Hankin. A concurrent object calculus: Reduction and typing. In Proceedings HLCL ’98. Elsevier ENTCS, 1998.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Kohei Honda</author>
+<author>Mario Tokoro</author>
+</authors>
+<title>An object calculus for asynchronous communication.</title>
+<date>1991</date>
+<booktitle>Proceedings ECOOP ’91,</booktitle>
+<volume>512</volume>
+<pages>133--147</pages>
+<editor>In Pierre America, editor,</editor>
+<publisher>Springer-Verlag.</publisher>
+<location>Geneva, Switzerland,</location>
+<contexts>
+<context position="36910" citStr="[18, 44]" startWordPosition="6245" endWordPosition="6246"> we can separate form expressions into sideeffects and referentially transparent forms [2]. 5 Related Work The Piccola calculus extends the asynchronous π-calculus with higher-order abstractions and first-class environments. π-calculus. The π-calculus [25] is a calculus of communicating systems in which one can naturally express processes with a changing structure. Its theory has been thoroughly studied and many results relate other formalisms or implementations to it. The affinity between objects and processes, for example, has been treated by various authors in the context of the π-calculus [18, 44]. The Pict experiment has shown that the π-calculus is a suitable basis for programming many high-level construct by encodings [33]. For programming and implementation purposes, synchronous communication seems uncommon and can generally be encoded by using explicit acknowledgments (cf. [18]). Moreover, asynchronous communication has a closer correspondence to distributed computing [45]. Furthermore, in the π-calculus the asynchronous variant has the pleasant property that equivalences are simpler than for the synchronous case [14]. Input-guarded choice can be encoded and is fully abstract [27]</context>
+</contexts>
+<marker>18.</marker>
+<rawString>Kohei Honda and Mario Tokoro. An object calculus for asynchronous communication. In Pierre America, editor, Proceedings ECOOP ’91, volume 512 of LNCS, pages 133–147, Geneva, Switzerland, July 15–19 1991. Springer-Verlag.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Stefan Kneubuehl</author>
+</authors>
+<title>Typeful compositional styles. Diploma thesis,</title>
+<date>2003</date>
+<institution>University of Bern,</institution>
+<marker>19.</marker>
+<rawString>Stefan Kneubuehl. Typeful compositional styles. Diploma thesis, University of Bern, April 2003.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Markus Lumpe</author>
+</authors>
+<title>A Pi-Calculus Based Approach to Software Composition.</title>
+<date>1999</date>
+<tech>Ph.D. thesis,</tech>
+<institution>University of Bern, Institute of Computer Science and Applied Mathematics,</institution>
+<contexts>
+<context position="39727" citStr="[20, 21]" startWordPosition="6662" endWordPosition="6663">hronous parallel composition is used in the concurrent object calculus of Gordon and Hankin [17] or the (asymmetric) Blue calculus studied by Dal-Zilio [12]. In the higher-order π-calculus the evaluation order is orthogonal to the communication semantics [36]. In Piccola, evaluation strategy interferes with communication, therefore we have to fix one for meaningful terms. For Piccola, we define strict evaluation which seems appropriate and more common for concurrent computing. Record calculus. When modeling components and interfaces, a record-based approach is the obvious choice. We use forms [20, 21] as an explicit notion for extensible records. Record calculi are studied in more detail for example in [11, 34]. In the λ-calculus with names of Dami [13] arguments to functions are named. The resulting system supports records as arguments instead of tuples as in the classical calculus. The λN -calculus was one of the main inspiration for our work on forms without introspection. An issue omitted in our approach is record typing. It is not clear how far record types with subtyping and the runtime acquisition can be combined. An overview of record typing and the problems involved can be found f</context>
+</contexts>
+<marker>20.</marker>
+<rawString>Markus Lumpe. A Pi-Calculus Based Approach to Software Composition. Ph.D. thesis, University of Bern, Institute of Computer Science and Applied Mathematics, January 1999.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Markus Lumpe</author>
+</authors>
+<title>Franz Achermann, and Oscar Nierstrasz. A Formal Language for Composition.</title>
+<date>2000</date>
+<booktitle>In Gary Leavens and Murali Sitaraman, editors, Foundations of Component Based Systems,</booktitle>
+<pages>69--90</pages>
+<publisher>Cambridge University Press,</publisher>
+<contexts>
+<context position="39727" citStr="[20, 21]" startWordPosition="6662" endWordPosition="6663">hronous parallel composition is used in the concurrent object calculus of Gordon and Hankin [17] or the (asymmetric) Blue calculus studied by Dal-Zilio [12]. In the higher-order π-calculus the evaluation order is orthogonal to the communication semantics [36]. In Piccola, evaluation strategy interferes with communication, therefore we have to fix one for meaningful terms. For Piccola, we define strict evaluation which seems appropriate and more common for concurrent computing. Record calculus. When modeling components and interfaces, a record-based approach is the obvious choice. We use forms [20, 21] as an explicit notion for extensible records. Record calculi are studied in more detail for example in [11, 34]. In the λ-calculus with names of Dami [13] arguments to functions are named. The resulting system supports records as arguments instead of tuples as in the classical calculus. The λN -calculus was one of the main inspiration for our work on forms without introspection. An issue omitted in our approach is record typing. It is not clear how far record types with subtyping and the runtime acquisition can be combined. An overview of record typing and the problems involved can be found f</context>
+</contexts>
+<marker>21.</marker>
+<rawString>Markus Lumpe, Franz Achermann, and Oscar Nierstrasz. A Formal Language for Composition. In Gary Leavens and Murali Sitaraman, editors, Foundations of Component Based Systems, pages 69–90. Cambridge University Press, 2000.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Mark Lutz</author>
+</authors>
+<title>Programming Python. O’Reilly &amp;</title>
+<date>1996</date>
+<publisher>Associates, Inc.,</publisher>
+<contexts>
+<context position="24489" citStr="[22]" startWordPosition="4140" endWordPosition="4140"> →  · x7→(true 7→1 · false 7→2); (x; true) by reduce beta ≡ ( · x7→(true 7→1 · false 7→2);x); true by sandbox assoc → (true 7→1 · false 7→2); true by reduce project ≡ (false 7→2 · true 7→1); true by ext bind commute → 1 by reduce project Note how the bindings are swapped to project on true in the last step. A similar reduction would show False(true 7→1 · false 7→2)⇒ 2. One of the key points of forms is that a client can provide additional bindings which are ignored when they are not used (cf. [13]). This same principle is applied to good effect in various scripting languages, such as Python [22]. For instance we can use True and provide an additional binding notused 7→F for arbitrary form F : True(true 7→1 · false 7→2 · notused 7→F ) ⇒ (true 7→1 · false 7→2 · notused 7→F ); true ≡ (false 7→2 · true 7→1 · notused 7→F ); true by ext bind commute ≡ (false 7→2 · notused 7→F · true 7→1); true by ext bind commute → 1 by reduce project Extending forms can also be used to overwrite existing bindings. For instance instead of binding the variable notused a client may override true: True(true 7→1 · false 7→2 · true 7→3)⇒ 3 A conditional expression is encoded as a curried service that takes a bo</context>
+</contexts>
+<marker>22.</marker>
+<rawString>Mark Lutz. Programming Python. O’Reilly &amp; Associates, Inc., 1996.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Massimo Merro</author>
+<author>Davide Sangiorgi</author>
+</authors>
+<title>On asynchrony in name-passing calculi.</title>
+<date></date>
+<booktitle>25th Colloquium on Automata, Languages and Programming (ICALP)</booktitle>
+<volume>1443</volume>
+<pages>856--867</pages>
+<editor>In Kim G. Larsen, Sven Skyum, and Glynn Winskel, editors,</editor>
+<publisher>Springer-Verlag,</publisher>
+<location>Aalborg,</location>
+<contexts>
+<context position="29700" citStr="[23, 36]" startWordPosition="5131" endWordPosition="5132">reform: F≡ ∩ {A|A↑} = ∅ by definition. Although 0 is arguably stuck by intention, in general a stuck agent can be interpreted as an error. The two typical cases which may lead to errors are (i) projection on an unbound label, e.g., ;x, and (ii) application of a non-service, e.g., . A Calculus for Modeling Software Components 15 3.8 π-Calculus Encoding One may well ask what exactly the Piccola calculus adds over and above the asynchronous π calculus. In Achermann’s thesis it is shown that the Piccola calculus can be faithfully embedded into the localized π-calculus Lπ of Merro and Sangiorgi [23, 36]. The mapping [[]]a encodes Piccola calculus agents as π-calculus processes. The process [[A]]a evaluates A in the environment given by the empty form, and sends the resulting value along the channel a. A form (value) is encoded as a 4-tuple of channels representing projection, invocation, hiding and selection. The main result is that the encoding is sound and preserves reductions. We do not require a fully abstract encoding since that would mean that equivalent Piccola agents translated into the π-calculus could not be distinguished by any π-processes. Our milder requirement means that we con</context>
+</contexts>
+<marker>23.</marker>
+<rawString>Massimo Merro and Davide Sangiorgi. On asynchrony in name-passing calculi. In Kim G. Larsen, Sven Skyum, and Glynn Winskel, editors, 25th Colloquium on Automata, Languages and Programming (ICALP) (Aalborg, Denmark), volume 1443 of LNCS, pages 856–867. Springer-Verlag, July 1998.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Wolfgang De Meuter</author>
+</authors>
+<title>Agora: The story of the simplest MOP in the world — or — the scheme of object–orientation.</title>
+<date>1998</date>
+<editor>In J. Noble, I. Moore, and A. Taivalsaari, editors, Prototype-based Programming.</editor>
+<publisher>Springer-Verlag,</publisher>
+<contexts>
+<context position="35242" citStr="[24]" startWordPosition="5990" endWordPosition="5990">o further push calls may be attempted after a close, and that no “air-bubble” elements (filter slots holding an empty form) may be pushed downstream. A Calculus for Modeling Software Components 17 Having clarified the interaction protocol as a wrapper, we present an improved version of the generic adapter. We show that the adapter ensures these invariants. 4.2 Partial Evaluation Another interesting application of the calculus was to enable the efficient implementation of the language bridge. Since Piccola is a pure composition language, evaluating scripts requires intensive upping and downing [24] between the “down” level of the host language and the “up” level of Piccola. If the language bridge were implemented naıvely, it would be hopelessly inefficient. Instead, Piccola achieves acceptable performance by adopting a partial evaluation scheme [2, 38, 39]. Since the language has a denotational semantics, we can implement it efficiently while proving that we preserve the intended semantics. The partial evaluation algorithm uses the fact that forms are immutable. We replace references to forms by the forms referred to. We can then specialize projections and replace applications of refer</context>
+</contexts>
+<marker>24.</marker>
+<rawString>Wolfgang De Meuter. Agora: The story of the simplest MOP in the world — or — the scheme of object–orientation. In J. Noble, I. Moore, and A. Taivalsaari, editors, Prototype-based Programming. Springer-Verlag, 1998.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Robin Milner</author>
+<author>Joachim Parrow</author>
+<author>David Walker</author>
+</authors>
+<title>A calculus of mobile processes, part I/II.</title>
+<date>1992</date>
+<journal>Information and Computation,</journal>
+<volume>100</volume>
+<contexts>
+<context position="3781" citStr="[25, 36]" startWordPosition="557" endWordPosition="558">o account. At a purely technical level, i.e., ignoring methodological and software process aspects, these aspects include styles (plugs and connectors), scripts, coordination and glue code. A formal foundation for any reasonable notion of software components must address these aspects. We claim that most of these aspects can be adequately addressed by the notion of forms — first-class, extensible namespaces. The missing aspect (coordination) can be addressed by agents and channels. We propose, therefore, a calculus for modeling composable software which is based on the asynchronous π calculus [25, 36] extended with first-class namespaces [5]. This calculus serves both as the semantic target and as an executable abstract machine for Piccola, an experimental composition language for implementing styles, scripts, coordination abstractions and glue code [4, 6]. The Piccola calculus is described in greater detail in Achermann’s PhD dissertation [2]. In this paper we first motivate the calculus by establishing a set of requirements for modeling composition of software components in section 2. Next, we address these requirements by presenting the syntax and semantics of the Piccola calculus in se</context>
+<context position="11848" citStr="[25, 36]" startWordPosition="1779" endWordPosition="1780">dependent tasks. – Coordination abstractions: Both connectors and glue code may need to express coordination of concurrent activities. Consider a readers/writers synchronization policy as a generic wrapper. 6 Oscar Nierstrasz and Franz Achermann We conclude that we not only need higher-order functions over first-class namespaces (with introspection), but also a way of expressing concurrency and communication [40]. 3 The Piccola Calculus As a consequence of the requirements we have identified above, we propose as a foundation a process calculus based on the higher-order asynchronous π calculus [25, 36] in which tuple-based communication is replaced by communication of extensible records, or forms [5]. Furthermore, forms serve as first-class namespaces and support a simple kind of introspection. The design of the Piccola calculus strikes a balance between minimalism and expressiveness. As a calculus it is rather large. In fact, it would be possible to express everything we want with the π calculus alone, but the semantic gap between concepts we wish to model and the terms of the calculus would be rather large. With the Piccola calculus we are aiming for the smallest calculus with which we ca</context>
+<context position="36558" citStr="[25]" startWordPosition="6190" endWordPosition="6190">ent and cannot be inlined since that would change the order in which side-effects are executed. We need to separate the referentially transparent part from the non-transparent part in order to replace an application with its result and to ensure that the order in which the side-effects are evaluated is preserved. At the heart of the proof is that we can separate form expressions into sideeffects and referentially transparent forms [2]. 5 Related Work The Piccola calculus extends the asynchronous π-calculus with higher-order abstractions and first-class environments. π-calculus. The π-calculus [25] is a calculus of communicating systems in which one can naturally express processes with a changing structure. Its theory has been thoroughly studied and many results relate other formalisms or implementations to it. The affinity between objects and processes, for example, has been treated by various authors in the context of the π-calculus [18, 44]. The Pict experiment has shown that the π-calculus is a suitable basis for programming many high-level construct by encodings [33]. For programming and implementation purposes, synchronous communication seems uncommon and can generally be encoded </context>
+</contexts>
+<marker>25.</marker>
+<rawString>Robin Milner, Joachim Parrow, and David Walker. A calculus of mobile processes, part I/II. Information and Computation, 100:1–77, 1992.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Robin Milner</author>
+<author>Davide Sangiorgi</author>
+</authors>
+<title>Barbed bisimulation.</title>
+<date>1992</date>
+<booktitle>In Proceedings ICALP ’92,</booktitle>
+<volume>623</volume>
+<pages>685--695</pages>
+<publisher>Springer-Verlag.</publisher>
+<location>Vienna,</location>
+<contexts>
+<context position="26140" citStr="[26]" startWordPosition="4437" endWordPosition="4437"> then and else. We can relax this contract and provide default services if those bindings are not provided by the client. To do so, we replace in the definition of if the sandbox expression v; else with a default service. This service gets triggered when the case form does not contain an else binding: ifd def= ;λuv.b(true 7→(v; then) · false 7→(else 7→(λx.) · v; else)) Now ifd False(then 7→(F ;λx.A))⇒ . 3.6 Equivalence for Agents Two agents are equivalent if they exhibit the same behaviour, i.e., they enjoy the same reductions. We adopt Milner and Sangiorgi’s notion of barbed bisimulation [26]. The idea is that an agent A is barbed similar to B if A can exhibit any reduction that B does and if B is a barb, then A is a barb, too. If A and B are similar to each other they are bisimilar. The advantage of this bisimulation is that it can be readily be given for any calculus that contains barbs or values. For the asynchronous π-calculus, barbs are usually defined as having the capability of doing an output on a channel. A Piccola agent reduces to a barb, i.e., it returns a form. During evaluation the agent may spawn off new subthreads which could be blocked or still be running. We conse</context>
+</contexts>
+<marker>26.</marker>
+<rawString>Robin Milner and Davide Sangiorgi. Barbed bisimulation. In Proceedings ICALP ’92, volume 623 of LNCS, pages 685–695, Vienna, July 1992. Springer-Verlag.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Uwe Nestmann</author>
+<author>Benjamin C Pierce</author>
+</authors>
+<title>Decoding choice encodings.</title>
+<date>1996</date>
+<booktitle>CONCUR ’96: Concurrency Theory, 7th International Conference,</booktitle>
+<volume>1119</volume>
+<pages>179--194</pages>
+<editor>In Ugo Montanari and Vladimiro Sassone, editors,</editor>
+<publisher>Springer-Verlag.</publisher>
+<location>Pisa, Italy,</location>
+<contexts>
+<context position="37510" citStr="[27]" startWordPosition="6331" endWordPosition="6331"> 44]. The Pict experiment has shown that the π-calculus is a suitable basis for programming many high-level construct by encodings [33]. For programming and implementation purposes, synchronous communication seems uncommon and can generally be encoded by using explicit acknowledgments (cf. [18]). Moreover, asynchronous communication has a closer correspondence to distributed computing [45]. Furthermore, in the π-calculus the asynchronous variant has the pleasant property that equivalences are simpler than for the synchronous case [14]. Input-guarded choice can be encoded and is fully abstract [27]. For these reasons we adopt asynchronous channels in Piccola. 18 Oscar Nierstrasz and Franz Achermann Higher-order abstractions. Programming directly in the π-calculus is often considered like programming a concurrent assembler. When comparing programs written in the π-calculus with the lambda-calculus it seems like lambda abstractions scale up, whereas sending and receiving messages does not scale well. There are two possible solutions proposed to this problem: We can change the metaphor of communication or we can introduce abstractions as first-class values. The first approach is advocated </context>
+</contexts>
+<marker>27.</marker>
+<rawString>Uwe Nestmann and Benjamin C. Pierce. Decoding choice encodings. In Ugo Montanari and Vladimiro Sassone, editors, CONCUR ’96: Concurrency Theory, 7th International Conference, volume 1119 of LNCS, pages 179–194, Pisa, Italy, August 1996. Springer-Verlag.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Oscar Nierstrasz</author>
+</authors>
+<title>Contractual types.</title>
+<date>2003</date>
+<tech>Technical Report IAM-03-004,</tech>
+<institution>Institut fur Informatik, Universitat Bern,</institution>
+<contexts>
+<context position="43434" citStr="[28]" startWordPosition="7248" endWordPosition="7248">ed by means of partial evaluation of language wrappers. The partial evaluation algorithm can be proved correct with the help of the Piccola calculus. Different compositional styles make different assumptions about software components. Mixing incompatible components can lead to compositional mismatches. We have outlined how the Piccola calculus can help to bridge mismatches by supporting reasoning about wrappers that adapt component contracts from one style to another. One shortcoming of our work so far is the lack of a type system. We have been experimenting with a system of contractual types [28] that expresses both the provided as well as the required services of a software component. Contractual types are formalized in the context of the form calculus, which can be seen as the Piccola calculus minus agents and channels. Contractual types have been integrated into the most recent distribution of JPiccola [19]. 20 Oscar Nierstrasz and Franz Achermann Acknowledgments We gratefully acknowledge the financial support of the Swiss National Science Foundation for projects No. 20-61655.00, “Meta-models and Tools for Evolution Towards Component Systems”, and 2000-067855.02, “Tools and Techniq</context>
+</contexts>
+<marker>28.</marker>
+<rawString>Oscar Nierstrasz. Contractual types. Technical Report IAM-03-004, Institut für Informatik, Universität Bern, Switzerland, 2003.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Oscar Nierstrasz</author>
+<author>Franz Achermann</author>
+</authors>
+<title>Supporting Compositional Styles for Software Evolution.</title>
+<date>2000</date>
+<booktitle>In Proceedings International Symposium on Principles of Software Evolution (ISPSE</booktitle>
+<pages>11--19</pages>
+<publisher>IEEE.</publisher>
+<location>Kanazawa, Japan,</location>
+<contexts>
+<context position="2773" citStr="[3, 29, 42]" startWordPosition="406" endWordPosition="408">mponents present their services as a set of interfaces or “plugs”: ? FMCO 2002 Proceedings, LNCS, vol. 2852, Springer-Verlag, 2003, pp. 339-360. 2 Oscar Nierstrasz and Franz Achermann “A software component is a static abstraction with plugs.” [31] This leads us to answer the question, “What makes up the rest?” as follows: Applications = Components + Scripts [6] that is, component-based applications are (ideally) made up of stable, off-theshelf components, and scripts that plug them together. Scripts (ideally) make use of high-level connectors that coordinate the services of various components [3, 29, 42]. Furthermore, complex applications may need services of components that depend on very different architectural assumptions [16]. In these cases, glue code is needed to adapt components to different architectural styles [40, 41]. Returning to our original questions, then, we conclude that it is not really possible to define software components without taking these complementary aspects of CBSD into account. At a purely technical level, i.e., ignoring methodological and software process aspects, these aspects include styles (plugs and connectors), scripts, coordination and glue code. A formal f</context>
+<context position="33398" citStr="[3, 29]" startWordPosition="5695" endWordPosition="5696">wn. These, however, are provided as standard services implemented in Piccola. Exceptions and try-catch clauses are implemented using agents, channels, and dynamic namespaces [5]. The first three layers constitute the standard Piccola distribution. The fourth layer is provided by the component framework designer. At this level, a domain expert encodes a compositional styles as a library of components, connectors, adaptors, coordination abstractions, and so on. Finally, at the top level, an application programmer may script together components using the abstractions provided by the lower layers [3, 29]. 4.1 Reasoning About Styles We have also explored how to reason about Piccola programs at the language level [2]. We have studied two extended examples. First, we considered synchronization wrappers that express the synchronization constraints assumed by a component. We can use synchronization wrappers to make components safe in a multithreaded environment. The wrappers separate the functionality of the component from their synchronization aspects. If the constraints assumed by the component hold in a particular composition the wrapper is not needed. In particular the wrapper is not necessary</context>
+</contexts>
+<marker>29.</marker>
+<rawString>Oscar Nierstrasz and Franz Achermann. Supporting Compositional Styles for Software Evolution. In Proceedings International Symposium on Principles of Software Evolution (ISPSE 2000), pages 11–19, Kanazawa, Japan, Nov 1-2 2000. IEEE.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Oscar Nierstrasz</author>
+<author>Franz Achermann</author>
+<author>Stefan Kneubuehl</author>
+</authors>
+<title>A guide to jpiccola.</title>
+<date>2003</date>
+<tech>Technical Report IAM-03-003,</tech>
+<institution>Institut fur Informatik, Universitat Bern, Switzerland,</institution>
+<contexts>
+<context position="8138" citStr="[30]" startWordPosition="1208" endWordPosition="1208">nd (at some level) overloading of operators. Services may be monadic, taking records as arguments, rather than polyadic. To invoke a service, we just apply it to a record which bundles together all the required arguments, and possibly some optional ones. These same records can serve as first-class namespaces which encapsulate the plugs and connectors of a given style. For this reason we unify records and namespaces, and call them “forms”, to emphasize their special role. A “form” is essentially a nested record, which binds labels to values. Consider, for example, the following JPiccola script [30]: makeFrame title = &quot;AWT Demo&quot; x = 200 y = 100 hello = &quot;hello world&quot; sayHello: println hello component = Button.new(text=hello) ? ActionPerformed sayHello This script invokes an abstraction makeFrame, passing it a form containing bindings for the labels title, x, and so on. The script makes use of a compositional style in which GUI components (i.e., the Button) can be bound to events (i.e., ActionPerformed) and actions (i.e., sayHello) by means of the ? connector. When we evaluate this code, it generates the button we see in figure 2. When we click on the button, hello world is printed on the </context>
+</contexts>
+<marker>30.</marker>
+<rawString>Oscar Nierstrasz, Franz Achermann, and Stefan Kneubuehl. A guide to jpiccola. Technical Report IAM-03-003, Institut für Informatik, Universität Bern, Switzerland, June 2003.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Oscar Nierstrasz</author>
+<author>Laurent Dami</author>
+</authors>
+<title>Component-oriented software technology.</title>
+<date>1995</date>
+<booktitle>In Oscar Nierstrasz and Dennis Tsichritzis, editors, Object-Oriented Software Composition,</booktitle>
+<pages>3--28</pages>
+<publisher>Prentice-Hall,</publisher>
+<contexts>
+<context position="2409" citStr="[31]" startWordPosition="352" endWordPosition="352">m what is not. That is, components are not just “independently deployable”, but they must encapsulate a stable unit of functionality. This, of course, begs the question, “If components are the stable stuff, what makes up the rest?” Second, “independent deployment” of components actually entails compliance with some well-defined component model in which components present their services as a set of interfaces or “plugs”: ? FMCO 2002 Proceedings, LNCS, vol. 2852, Springer-Verlag, 2003, pp. 339-360. 2 Oscar Nierstrasz and Franz Achermann “A software component is a static abstraction with plugs.” [31] This leads us to answer the question, “What makes up the rest?” as follows: Applications = Components + Scripts [6] that is, component-based applications are (ideally) made up of stable, off-theshelf components, and scripts that plug them together. Scripts (ideally) make use of high-level connectors that coordinate the services of various components [3, 29, 42]. Furthermore, complex applications may need services of components that depend on very different architectural assumptions [16]. In these cases, glue code is needed to adapt components to different architectural styles [40, 41]. Return</context>
+</contexts>
+<marker>31.</marker>
+<rawString>Oscar Nierstrasz and Laurent Dami. Component-oriented software technology. In Oscar Nierstrasz and Dennis Tsichritzis, editors, Object-Oriented Software Composition, pages 3–28. Prentice-Hall, 1995.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Shin-ya Nishizaki</author>
+</authors>
+<title>Programmable environment calculus as theory of dynamic software evolution.</title>
+<date>2000</date>
+<booktitle>In Proceedings ISPSE</booktitle>
+<publisher>IEEE Computer Society Press,</publisher>
+<contexts>
+<context position="22856" citStr="[1, 32]" startWordPosition="3832" endWordPosition="3833">uce project) L→ ;λx.(x; isEmpty) (reduce inspect empty) LS → ;λx.(x; isService) (reduce inspect service) L(F · x7→G)→ ;λx.(x; isLabel)labelx (reduce inspect label) A ≡ A′ A′ → B′ B′ ≡ B A→ B (reduce struct) A→ B E [A]→ E [B] (reduce propagate) where labelx = project 7→(;λx.(x;x)) · hide 7→hidex · bind 7→(x7→) and E is an evaluation context defined by the grammar: E ::= [ ] ∣∣ E ·A ∣∣ F · E ∣∣ E ;A ∣∣ F ; E ∣∣ EA ∣∣ FE ∣∣ A|E ∣∣ E|A ∣∣ νc.E Table 4. Reduction rules environment in which A is evaluated. This is essentially the beta-reduction rule found in calculi for explicit substitution [1, 32]: (F ;λx.A)G → F · x7→G;A The application of the closure F ;λx.A to the argument G reduces to a sandbox expression in which the agent A is evaluated in the environment F · x7→G. Free occurrences of x in A will therefore be bound to G. The property of being closed is respected by reduction: Lemma 1. If A is a closed agent and A → B or A ≡ B then B is closed as well. Proof. Easily checked by induction over the formal proof for A→ B. 3.5 Encoding Booleans The following toy example actually illustrates many of the principles at stake when we model components with the Piccola calculus. We can encod</context>
+<context position="40688" citStr="[32, 37]" startWordPosition="6821" endWordPosition="6822"> forms without introspection. An issue omitted in our approach is record typing. It is not clear how far record types with subtyping and the runtime acquisition can be combined. An overview of record typing and the problems involved can be found for example in [11]. Explicit environments. An explicit environment generalizes the concept of explicit substitution [1] by using a record like structure for the environment. In the environment calculus of Nishizaki, there is an operation to get the current environment as a record and an operator to evaluate an expression using a record as environment [32, 37]. Projection of a label x in a record R then corresponds A Calculus for Modeling Software Components 19 to evaluating the script x in an environment denoted by R. The reader may note that explicit environments subsume records. This is the reason why we call them forms in Piccola instead of just records. Handling the environment as a first-class entity allows us to define concepts like modules, interfaces and implementation for programming in the large within the framework. To our knowledge, the language Pebble of Burstall and Lampson was the first to formally show how to build modules, interfa</context>
+</contexts>
+<marker>32.</marker>
+<rawString>Shin-ya Nishizaki. Programmable environment calculus as theory of dynamic software evolution. In Proceedings ISPSE 2000. IEEE Computer Society Press, 2000.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Benjamin C Pierce</author>
+<author>David N Turner</author>
+</authors>
+<title>Pict: A programming language based on the pi-calculus.</title>
+<date>2000</date>
+<booktitle>Proof, Language and Interaction: Essays in Honour of Robin Milner.</booktitle>
+<editor>In G. Plotkin, C. Stirling, and M. Tofte, editors,</editor>
+<publisher>MIT Press,</publisher>
+<contexts>
+<context position="37041" citStr="[33]" startWordPosition="6266" endWordPosition="6266"> the asynchronous π-calculus with higher-order abstractions and first-class environments. π-calculus. The π-calculus [25] is a calculus of communicating systems in which one can naturally express processes with a changing structure. Its theory has been thoroughly studied and many results relate other formalisms or implementations to it. The affinity between objects and processes, for example, has been treated by various authors in the context of the π-calculus [18, 44]. The Pict experiment has shown that the π-calculus is a suitable basis for programming many high-level construct by encodings [33]. For programming and implementation purposes, synchronous communication seems uncommon and can generally be encoded by using explicit acknowledgments (cf. [18]). Moreover, asynchronous communication has a closer correspondence to distributed computing [45]. Furthermore, in the π-calculus the asynchronous variant has the pleasant property that equivalences are simpler than for the synchronous case [14]. Input-guarded choice can be encoded and is fully abstract [27]. For these reasons we adopt asynchronous channels in Piccola. 18 Oscar Nierstrasz and Franz Achermann Higher-order abstractions. P</context>
+</contexts>
+<marker>33.</marker>
+<rawString>Benjamin C. Pierce and David N. Turner. Pict: A programming language based on the pi-calculus. In G. Plotkin, C. Stirling, and M. Tofte, editors, Proof, Language and Interaction: Essays in Honour of Robin Milner. MIT Press, May 2000. 22 Oscar Nierstrasz and Franz Achermann</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Didier Remy</author>
+</authors>
+<title>Typing Record Concatenation for Free, chapter 10,</title>
+<date>1994</date>
+<pages>351--372</pages>
+<publisher>MIT Press,</publisher>
+<contexts>
+<context position="39839" citStr="[11, 34]" startWordPosition="6681" endWordPosition="6682">ric) Blue calculus studied by Dal-Zilio [12]. In the higher-order π-calculus the evaluation order is orthogonal to the communication semantics [36]. In Piccola, evaluation strategy interferes with communication, therefore we have to fix one for meaningful terms. For Piccola, we define strict evaluation which seems appropriate and more common for concurrent computing. Record calculus. When modeling components and interfaces, a record-based approach is the obvious choice. We use forms [20, 21] as an explicit notion for extensible records. Record calculi are studied in more detail for example in [11, 34]. In the λ-calculus with names of Dami [13] arguments to functions are named. The resulting system supports records as arguments instead of tuples as in the classical calculus. The λN -calculus was one of the main inspiration for our work on forms without introspection. An issue omitted in our approach is record typing. It is not clear how far record types with subtyping and the runtime acquisition can be combined. An overview of record typing and the problems involved can be found for example in [11]. Explicit environments. An explicit environment generalizes the concept of explicit substitut</context>
+</contexts>
+<marker>34.</marker>
+<rawString>Didier Rémy. Typing Record Concatenation for Free, chapter 10, pages 351–372. MIT Press, April 1994.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Davide Sangiorgi</author>
+</authors>
+<title>Expressing Mobility in Process Algebras: First-Order and HigherOrder Paradigms.</title>
+<date>1993</date>
+<tech>Ph.D. thesis,</tech>
+<institution>Computer Science Dept., University of Edinburgh,</institution>
+<contexts>
+<context position="38836" citStr="[35, 36]" startWordPosition="6528" endWordPosition="6529">ers a process on consumption of several pending messages. The Blue calculus of Boudol [9] changes the receive primitive into a definition which is defined for a scope. By that change, the Blue calculus is more closely related to functions and provides a better notion for higher-order abstraction. Boudol calls it a continuation-passing calculus. The other approach is adopted by Sangiorgi in the HOπ-calculus. Instead of communicating channels or tuples of channels, processes can be communicated as well. Surprisingly, the higher-order case has the same expressive power as the first-order version [35, 36]. In Piccola we take the second approach and reuse existing encodings of functions into the π-calculus as in Pict. The motivation for this comes from the fact that the HOπ-calculus itself can be encoded in the first-order case. Asymmetric parallel composition. The semantics of asynchronous parallel composition is used in the concurrent object calculus of Gordon and Hankin [17] or the (asymmetric) Blue calculus studied by Dal-Zilio [12]. In the higher-order π-calculus the evaluation order is orthogonal to the communication semantics [36]. In Piccola, evaluation strategy interferes with communic</context>
+</contexts>
+<marker>35.</marker>
+<rawString>Davide Sangiorgi. Expressing Mobility in Process Algebras: First-Order and HigherOrder Paradigms. Ph.D. thesis, Computer Science Dept., University of Edinburgh, May 1993.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Davide Sangiorgi</author>
+</authors>
+<title>Asynchronous process calculi: the first-order and higher-order paradigms (tutorial).</title>
+<date>2001</date>
+<journal>Theoretical Computer Science,</journal>
+<volume>253</volume>
+<contexts>
+<context position="3781" citStr="[25, 36]" startWordPosition="557" endWordPosition="558">o account. At a purely technical level, i.e., ignoring methodological and software process aspects, these aspects include styles (plugs and connectors), scripts, coordination and glue code. A formal foundation for any reasonable notion of software components must address these aspects. We claim that most of these aspects can be adequately addressed by the notion of forms — first-class, extensible namespaces. The missing aspect (coordination) can be addressed by agents and channels. We propose, therefore, a calculus for modeling composable software which is based on the asynchronous π calculus [25, 36] extended with first-class namespaces [5]. This calculus serves both as the semantic target and as an executable abstract machine for Piccola, an experimental composition language for implementing styles, scripts, coordination abstractions and glue code [4, 6]. The Piccola calculus is described in greater detail in Achermann’s PhD dissertation [2]. In this paper we first motivate the calculus by establishing a set of requirements for modeling composition of software components in section 2. Next, we address these requirements by presenting the syntax and semantics of the Piccola calculus in se</context>
+<context position="11848" citStr="[25, 36]" startWordPosition="1779" endWordPosition="1780">dependent tasks. – Coordination abstractions: Both connectors and glue code may need to express coordination of concurrent activities. Consider a readers/writers synchronization policy as a generic wrapper. 6 Oscar Nierstrasz and Franz Achermann We conclude that we not only need higher-order functions over first-class namespaces (with introspection), but also a way of expressing concurrency and communication [40]. 3 The Piccola Calculus As a consequence of the requirements we have identified above, we propose as a foundation a process calculus based on the higher-order asynchronous π calculus [25, 36] in which tuple-based communication is replaced by communication of extensible records, or forms [5]. Furthermore, forms serve as first-class namespaces and support a simple kind of introspection. The design of the Piccola calculus strikes a balance between minimalism and expressiveness. As a calculus it is rather large. In fact, it would be possible to express everything we want with the π calculus alone, but the semantic gap between concepts we wish to model and the terms of the calculus would be rather large. With the Piccola calculus we are aiming for the smallest calculus with which we ca</context>
+<context position="29700" citStr="[23, 36]" startWordPosition="5131" endWordPosition="5132">reform: F≡ ∩ {A|A↑} = ∅ by definition. Although 0 is arguably stuck by intention, in general a stuck agent can be interpreted as an error. The two typical cases which may lead to errors are (i) projection on an unbound label, e.g., ;x, and (ii) application of a non-service, e.g., . A Calculus for Modeling Software Components 15 3.8 π-Calculus Encoding One may well ask what exactly the Piccola calculus adds over and above the asynchronous π calculus. In Achermann’s thesis it is shown that the Piccola calculus can be faithfully embedded into the localized π-calculus Lπ of Merro and Sangiorgi [23, 36]. The mapping [[]]a encodes Piccola calculus agents as π-calculus processes. The process [[A]]a evaluates A in the environment given by the empty form, and sends the resulting value along the channel a. A form (value) is encoded as a 4-tuple of channels representing projection, invocation, hiding and selection. The main result is that the encoding is sound and preserves reductions. We do not require a fully abstract encoding since that would mean that equivalent Piccola agents translated into the π-calculus could not be distinguished by any π-processes. Our milder requirement means that we con</context>
+<context position="38836" citStr="[35, 36]" startWordPosition="6528" endWordPosition="6529">ers a process on consumption of several pending messages. The Blue calculus of Boudol [9] changes the receive primitive into a definition which is defined for a scope. By that change, the Blue calculus is more closely related to functions and provides a better notion for higher-order abstraction. Boudol calls it a continuation-passing calculus. The other approach is adopted by Sangiorgi in the HOπ-calculus. Instead of communicating channels or tuples of channels, processes can be communicated as well. Surprisingly, the higher-order case has the same expressive power as the first-order version [35, 36]. In Piccola we take the second approach and reuse existing encodings of functions into the π-calculus as in Pict. The motivation for this comes from the fact that the HOπ-calculus itself can be encoded in the first-order case. Asymmetric parallel composition. The semantics of asynchronous parallel composition is used in the concurrent object calculus of Gordon and Hankin [17] or the (asymmetric) Blue calculus studied by Dal-Zilio [12]. In the higher-order π-calculus the evaluation order is orthogonal to the communication semantics [36]. In Piccola, evaluation strategy interferes with communic</context>
+</contexts>
+<marker>36.</marker>
+<rawString>Davide Sangiorgi. Asynchronous process calculi: the first-order and higher-order paradigms (tutorial). Theoretical Computer Science, 253, 2001.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Masahiko Sato</author>
+<author>Takafumi Sakurai</author>
+<author>Rod M Burstall</author>
+</authors>
+<title>Explicit environments.</title>
+<date>1999</date>
+<booktitle>Typed Lambda Calculi and Applications,</booktitle>
+<volume>1581</volume>
+<pages>340--354</pages>
+<editor>In Jean-Yves Girard, editor,</editor>
+<publisher>Springer-Verlag.</publisher>
+<location>L’Aquila, Italy,</location>
+<contexts>
+<context position="40688" citStr="[32, 37]" startWordPosition="6821" endWordPosition="6822"> forms without introspection. An issue omitted in our approach is record typing. It is not clear how far record types with subtyping and the runtime acquisition can be combined. An overview of record typing and the problems involved can be found for example in [11]. Explicit environments. An explicit environment generalizes the concept of explicit substitution [1] by using a record like structure for the environment. In the environment calculus of Nishizaki, there is an operation to get the current environment as a record and an operator to evaluate an expression using a record as environment [32, 37]. Projection of a label x in a record R then corresponds A Calculus for Modeling Software Components 19 to evaluating the script x in an environment denoted by R. The reader may note that explicit environments subsume records. This is the reason why we call them forms in Piccola instead of just records. Handling the environment as a first-class entity allows us to define concepts like modules, interfaces and implementation for programming in the large within the framework. To our knowledge, the language Pebble of Burstall and Lampson was the first to formally show how to build modules, interfa</context>
+</contexts>
+<marker>37.</marker>
+<rawString>Masahiko Sato, Takafumi Sakurai, and Rod M. Burstall. Explicit environments. In Jean-Yves Girard, editor, Typed Lambda Calculi and Applications, volume 1581 of LNCS, pages 340–354, L’Aquila, Italy, April 1999. Springer-Verlag.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Nathanael Scharli</author>
+</authors>
+<title>Supporting pure composition by inter-language bridging on the meta-level. Diploma thesis,</title>
+<date>2001</date>
+<institution>University of Bern,</institution>
+<contexts>
+<context position="35506" citStr="[2, 38, 39]" startWordPosition="6029" endWordPosition="6031">resent an improved version of the generic adapter. We show that the adapter ensures these invariants. 4.2 Partial Evaluation Another interesting application of the calculus was to enable the efficient implementation of the language bridge. Since Piccola is a pure composition language, evaluating scripts requires intensive upping and downing [24] between the “down” level of the host language and the “up” level of Piccola. If the language bridge were implemented naıvely, it would be hopelessly inefficient. Instead, Piccola achieves acceptable performance by adopting a partial evaluation scheme [2, 38, 39]. Since the language has a denotational semantics, we can implement it efficiently while proving that we preserve the intended semantics. The partial evaluation algorithm uses the fact that forms are immutable. We replace references to forms by the forms referred to. We can then specialize projections and replace applications of referentially transparent services by their results. However, most services in Piccola are not referentially transparent and cannot be inlined since that would change the order in which side-effects are executed. We need to separate the referentially transparent part f</context>
+</contexts>
+<marker>38.</marker>
+<rawString>Nathanael Schärli. Supporting pure composition by inter-language bridging on the meta-level. Diploma thesis, University of Bern, September 2001.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Nathanael Scharli</author>
+<author>Franz Achermann</author>
+</authors>
+<title>Partial evaluation of inter-language wrappers.</title>
+<date>2001</date>
+<booktitle>In Workshop on Composition Languages, WCL ’01,</booktitle>
+<contexts>
+<context position="35506" citStr="[2, 38, 39]" startWordPosition="6029" endWordPosition="6031">resent an improved version of the generic adapter. We show that the adapter ensures these invariants. 4.2 Partial Evaluation Another interesting application of the calculus was to enable the efficient implementation of the language bridge. Since Piccola is a pure composition language, evaluating scripts requires intensive upping and downing [24] between the “down” level of the host language and the “up” level of Piccola. If the language bridge were implemented naıvely, it would be hopelessly inefficient. Instead, Piccola achieves acceptable performance by adopting a partial evaluation scheme [2, 38, 39]. Since the language has a denotational semantics, we can implement it efficiently while proving that we preserve the intended semantics. The partial evaluation algorithm uses the fact that forms are immutable. We replace references to forms by the forms referred to. We can then specialize projections and replace applications of referentially transparent services by their results. However, most services in Piccola are not referentially transparent and cannot be inlined since that would change the order in which side-effects are executed. We need to separate the referentially transparent part f</context>
+</contexts>
+<marker>39.</marker>
+<rawString>Nathanael Schärli and Franz Achermann. Partial evaluation of inter-language wrappers. In Workshop on Composition Languages, WCL ’01, September 2001.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Jean-Guy Schneider</author>
+</authors>
+<title>Components, Scripts, and Glue: A conceptual framework for software composition.</title>
+<date>1999</date>
+<tech>Ph.D. thesis,</tech>
+<institution>University of Bern, Institute of Computer Science and Applied Mathematics,</institution>
+<contexts>
+<context position="3001" citStr="[40, 41]" startWordPosition="439" endWordPosition="440">ith plugs.” [31] This leads us to answer the question, “What makes up the rest?” as follows: Applications = Components + Scripts [6] that is, component-based applications are (ideally) made up of stable, off-theshelf components, and scripts that plug them together. Scripts (ideally) make use of high-level connectors that coordinate the services of various components [3, 29, 42]. Furthermore, complex applications may need services of components that depend on very different architectural assumptions [16]. In these cases, glue code is needed to adapt components to different architectural styles [40, 41]. Returning to our original questions, then, we conclude that it is not really possible to define software components without taking these complementary aspects of CBSD into account. At a purely technical level, i.e., ignoring methodological and software process aspects, these aspects include styles (plugs and connectors), scripts, coordination and glue code. A formal foundation for any reasonable notion of software components must address these aspects. We claim that most of these aspects can be adequately addressed by the notion of forms — first-class, extensible namespaces. The missing aspe</context>
+<context position="11656" citStr="[40]" startWordPosition="1749" endWordPosition="1749"> important. 2.4 Coordination CBSD is especially relevant in concurrent and distributed contexts. For this reason, a foundation for composition must be able to express coordination of interdependent tasks. – Coordination abstractions: Both connectors and glue code may need to express coordination of concurrent activities. Consider a readers/writers synchronization policy as a generic wrapper. 6 Oscar Nierstrasz and Franz Achermann We conclude that we not only need higher-order functions over first-class namespaces (with introspection), but also a way of expressing concurrency and communication [40]. 3 The Piccola Calculus As a consequence of the requirements we have identified above, we propose as a foundation a process calculus based on the higher-order asynchronous π calculus [25, 36] in which tuple-based communication is replaced by communication of extensible records, or forms [5]. Furthermore, forms serve as first-class namespaces and support a simple kind of introspection. The design of the Piccola calculus strikes a balance between minimalism and expressiveness. As a calculus it is rather large. In fact, it would be possible to express everything we want with the π calculus alone</context>
+</contexts>
+<marker>40.</marker>
+<rawString>Jean-Guy Schneider. Components, Scripts, and Glue: A conceptual framework for software composition. Ph.D. thesis, University of Bern, Institute of Computer Science and Applied Mathematics, October 1999.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Jean-Guy Schneider</author>
+<author>Oscar Nierstrasz</author>
+</authors>
+<title>Components, scripts and glue.</title>
+<date>1999</date>
+<booktitle>Software Architectures – Advances and Applications,</booktitle>
+<pages>13--25</pages>
+<editor>In Leonor Barroca, Jon Hall, and Patrick Hall, editors,</editor>
+<publisher>Springer-Verlag,</publisher>
+<contexts>
+<context position="3001" citStr="[40, 41]" startWordPosition="439" endWordPosition="440">ith plugs.” [31] This leads us to answer the question, “What makes up the rest?” as follows: Applications = Components + Scripts [6] that is, component-based applications are (ideally) made up of stable, off-theshelf components, and scripts that plug them together. Scripts (ideally) make use of high-level connectors that coordinate the services of various components [3, 29, 42]. Furthermore, complex applications may need services of components that depend on very different architectural assumptions [16]. In these cases, glue code is needed to adapt components to different architectural styles [40, 41]. Returning to our original questions, then, we conclude that it is not really possible to define software components without taking these complementary aspects of CBSD into account. At a purely technical level, i.e., ignoring methodological and software process aspects, these aspects include styles (plugs and connectors), scripts, coordination and glue code. A formal foundation for any reasonable notion of software components must address these aspects. We claim that most of these aspects can be adequately addressed by the notion of forms — first-class, extensible namespaces. The missing aspe</context>
+</contexts>
+<marker>41.</marker>
+<rawString>Jean-Guy Schneider and Oscar Nierstrasz. Components, scripts and glue. In Leonor Barroca, Jon Hall, and Patrick Hall, editors, Software Architectures – Advances and Applications, pages 13–25. Springer-Verlag, 1999.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Mary Shaw</author>
+<author>David Garlan</author>
+</authors>
+<title>Software Architecture: Perspectives on an Emerging Discipline.</title>
+<date>1996</date>
+<publisher>Prentice-Hall,</publisher>
+<contexts>
+<context position="2773" citStr="[3, 29, 42]" startWordPosition="406" endWordPosition="408">mponents present their services as a set of interfaces or “plugs”: ? FMCO 2002 Proceedings, LNCS, vol. 2852, Springer-Verlag, 2003, pp. 339-360. 2 Oscar Nierstrasz and Franz Achermann “A software component is a static abstraction with plugs.” [31] This leads us to answer the question, “What makes up the rest?” as follows: Applications = Components + Scripts [6] that is, component-based applications are (ideally) made up of stable, off-theshelf components, and scripts that plug them together. Scripts (ideally) make use of high-level connectors that coordinate the services of various components [3, 29, 42]. Furthermore, complex applications may need services of components that depend on very different architectural assumptions [16]. In these cases, glue code is needed to adapt components to different architectural styles [40, 41]. Returning to our original questions, then, we conclude that it is not really possible to define software components without taking these complementary aspects of CBSD into account. At a purely technical level, i.e., ignoring methodological and software process aspects, these aspects include styles (plugs and connectors), scripts, coordination and glue code. A formal f</context>
+<context position="5916" citStr="[42]" startWordPosition="878" endWordPosition="878">ing on demand • agents &amp; channels Styles • primitive neutral object model • meta-objects • HO plugs &amp; connectors • default arguments • encapsulation • component algebras Glue • generic wrappers • component packaging • generic adaptors Coordination • coordination abstractions Scripts • sandboxes • composition expressions • context-dependent policies Fig. 1. How Piccola supports composition 2.1 Compositional Styles A compositional style allows us to express the structure of a software application in terms of components, connectors and rules governing their composition (cf. “architectural style” [42]). – Neutral object model: There exists a wide variety of different object and component models. Components may also be bigger or smaller than objects. As a consequence, a general foundation for modeling components should make as few assumptions about objects, classes and inheritance as possible, namely, objects provide services, they may be instantiated, and their internal structure is hidden. – Meta-objects: On the other hand, many component models depend on runtime reflection, so it must be possible to express dynamic generation of metaobjects. – Higher-order plugs and connectors: In genera</context>
+</contexts>
+<marker>42.</marker>
+<rawString>Mary Shaw and David Garlan. Software Architecture: Perspectives on an Emerging Discipline. Prentice-Hall, 1996.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Clemens A Szyperski</author>
+</authors>
+<title>Component Software.</title>
+<date>1998</date>
+<publisher>Addison Wesley,</publisher>
+<contexts>
+<context position="1591" citStr="[43]" startWordPosition="230" endWordPosition="230">e for Piccola, an experimental composition language. The calculus also enables reasoning about compositional styles and evaluation strategies for Piccola. We present the design rationale for the Piccola calculus, and briefly outline some of the results obtained. 1 Introduction What is a software component? What are the essential aspects of ComponentBased Software Development? What is a suitable foundation for modeling and reasoning about CBSD? To the first question, one of the most robust and appealing answers has been: “A software component is a unit of independent deployment without state.” [43] This simple definition captures much that is important, though it leaves some very important aspects implicit. First, CBSD attempts to streamline software development and evolution by separating what is stable from what is not. That is, components are not just “independently deployable”, but they must encapsulate a stable unit of functionality. This, of course, begs the question, “If components are the stable stuff, what makes up the rest?” Second, “independent deployment” of components actually entails compliance with some well-defined component model in which components present their servic</context>
+</contexts>
+<marker>43.</marker>
+<rawString>Clemens A. Szyperski. Component Software. Addison Wesley, 1998.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>David Walker</author>
+</authors>
+<title>Objects in the π-calculus.</title>
+<date>1995</date>
+<journal>Information and Computation,</journal>
+<volume>116</volume>
+<issue>2</issue>
+<contexts>
+<context position="36910" citStr="[18, 44]" startWordPosition="6245" endWordPosition="6246"> we can separate form expressions into sideeffects and referentially transparent forms [2]. 5 Related Work The Piccola calculus extends the asynchronous π-calculus with higher-order abstractions and first-class environments. π-calculus. The π-calculus [25] is a calculus of communicating systems in which one can naturally express processes with a changing structure. Its theory has been thoroughly studied and many results relate other formalisms or implementations to it. The affinity between objects and processes, for example, has been treated by various authors in the context of the π-calculus [18, 44]. The Pict experiment has shown that the π-calculus is a suitable basis for programming many high-level construct by encodings [33]. For programming and implementation purposes, synchronous communication seems uncommon and can generally be encoded by using explicit acknowledgments (cf. [18]). Moreover, asynchronous communication has a closer correspondence to distributed computing [45]. Furthermore, in the π-calculus the asynchronous variant has the pleasant property that equivalences are simpler than for the synchronous case [14]. Input-guarded choice can be encoded and is fully abstract [27]</context>
+</contexts>
+<marker>44.</marker>
+<rawString>David Walker. Objects in the π-calculus. Information and Computation, 116(2):253–271, February 1995.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Pawel T Wojciechowski</author>
+</authors>
+<title>Nomadic Pict: Language and Infrastructure Design for Mobile Computation.</title>
+<date></date>
+<tech>PhD thesis,</tech>
+<institution>Wolfson College, University of Cambridge,</institution>
+<contexts>
+<context position="37298" citStr="[45]" startWordPosition="6299" endWordPosition="6299">oughly studied and many results relate other formalisms or implementations to it. The affinity between objects and processes, for example, has been treated by various authors in the context of the π-calculus [18, 44]. The Pict experiment has shown that the π-calculus is a suitable basis for programming many high-level construct by encodings [33]. For programming and implementation purposes, synchronous communication seems uncommon and can generally be encoded by using explicit acknowledgments (cf. [18]). Moreover, asynchronous communication has a closer correspondence to distributed computing [45]. Furthermore, in the π-calculus the asynchronous variant has the pleasant property that equivalences are simpler than for the synchronous case [14]. Input-guarded choice can be encoded and is fully abstract [27]. For these reasons we adopt asynchronous channels in Piccola. 18 Oscar Nierstrasz and Franz Achermann Higher-order abstractions. Programming directly in the π-calculus is often considered like programming a concurrent assembler. When comparing programs written in the π-calculus with the lambda-calculus it seems like lambda abstractions scale up, whereas sending and receiving messages </context>
+</contexts>
+<marker>45.</marker>
+<rawString>Pawel T. Wojciechowski. Nomadic Pict: Language and Infrastructure Design for Mobile Computation. PhD thesis, Wolfson College, University of Cambridge, March</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

@@ -1,0 +1,928 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.083475">
+<tableCaption confidence="0.996875">
+Table 2. The visitor methods of the interpreter.
+</tableCaption>
+<bodyText confidence="0.994555307692308">
+Root context, which also delegates to the native memory
+management even for contextual objects.
+Internally, the interpreter uses several Dictionary in-
+stances to implement the memory model for contextual ob-
+jects: one dictionary per registered context is created and
+maps {object identity, field} to the corresponding value.
+A special field class is used for the class of the object. This
+implies one level of indirection to access the state of a con-
+textual object.
+The active context is referenced in a field of the inter-
+preter and each thread has a dedicated instance of the in-
+terpreter. To distinguish between primitive or contextual ob-
+jects, we maintain two pools of references represented in-
+ternally with two Sets (this is admittedly a naive approach:
+tagging the pointer would be faster).
+The set of primitive objects was adapted to match the re-
+ality of a fully reflective system. Object, Behaviour, Class,
+Metaclass and other special classes needed during bootstrap-
+ping cannot be contextual, as they need to exist in order for
+the BaseContext class to be defined, so for them to be con-
+textual would lead to a chicken-and-egg problem. The same
+also holds true for basic, immutable objects like nil, true and
+false, as well as numbers, characters, strings and symbols.
+The keywords in Table 1 have been implemented with
+regular message sends that the interpreter handles in a spe-
+cial way.
+</bodyText>
+<subsectionHeader confidence="0.998906">
+5.2 Demonstration
+</subsectionHeader>
+<bodyText confidence="0.8849105">
+To validate our approach, we have implemented a canoni-
+cal server-side application that illustrates our approach and
+follows the use case of section 3. The application we im-
+new send read write
+</bodyText>
+<table confidence="0.989747625">
+Primitive
+Metacircular 191 215 137 137
+Root 393 297 215 219
+Updated 492 294 217 283
+Contextual
+Metacircular 192 146 137 200
+Root 347 229 292 294
+Updated 935 341 259 598
+</table>
+<tableCaption confidence="0.7555485">
+Table 3. Benchmark—Milliseconds for 500 executions of
+specific instructions for contextual and primitive objects us-
+</tableCaption>
+<bodyText confidence="0.998928333333333">
+ing the meta-circular interpreter and the ActiveContext in-
+terpreter with one context (Root) and two contexts (Root and
+Updated).
+plemented is a Telnet server. A client can connect to the
+server and run a few simple commands to update a list of
+contacts stored in memory. While simpler than a web-based
+Content Management system, such a system exhibits com-
+parable characteristics in term of design and difficulties with
+respect to dynamic updates.
+The telnet server was adapted according to step Prepara-
+tion in section 3. First, a global variable latestContext was
+introduced. Second, the main loop that listens for incoming
+TCP connections was modified so that when a new connec-
+tion is accepted, the corresponding thread that is spawned to
+handle the connection is executed in the latest context. Third,
+a client connects to the server and usees special commands
+to upload code and “push” an update.
+The system can then be bootstrapped and runs initially
+in the Root context. An administrator can connect to the
+server and use a special command to upload an update. The
+classes implementing the logic to process commands can
+in particular be changed to change the logic of an existing
+command, or to add new ones. All commands executed as
+well as their versions are logged in a file. A thread handling
+a specific client connection keeps running as long as the
+connection is established. Already connected clients that
+use the original version are not impacted by the update and
+multiple clients connected to the server might see different
+versions of the command-line interface.
+When a client disconnects, its server-side thread termi-
+nates. The system stabilizes eventually when all clients have
+disconnected. The log shows the various commands exe-
+cuted over the time and the migration of the server from one
+version to another.
+We benchmarked object creation, message send, field
+read and field write for primitive and contextual objects un-
+der the three configurations of the system that are described
+in Table 3.
+The meta-circular interpreter serves as the baseline for
+comparison. When running the benchmark with this inter-
+preter, contextual and primitive objects are treated in the
+same way and results are then similar. When running the
+benchmark with the ActiveContext interpreter with solely
+the Root context, our implementation delegates to the na-
+tive memory for primitive and contextual object. Results for
+both kinds of object are in the same range, but slower than
+on the meta-circular interpreter due to the overhead of our
+interpreter. When running the benchmark with the Active-
+Context interpreter and two contexts (Root and Updated),
+we perceive a small performance drop for primitive objects,
+but a significative performance drop for contextual objects,
+notably for operations new and write (in bold in the table).
+This can be explained easily: (1) send and read operations
+for contextual objects need to look up data in internal dic-
+tionaries, and (2) in addition to the lookup in dictionaries,
+operations new and write need to trigger transformations to
+synchronize the data in the Root context.
+Looking at these results, the worst performance drop is
+in the range of a factor 5 for contextual object creation (935
+ms vs. 191 ms). These results will vary depending on the
+structure of the objects, the number of objects created and
+maintained in the pool of references, and the number of reg-
+istered contexts that need to be synchronized, as well as the
+complexity of the transformations. This suffices however to
+estimate the maximum performance degradation to one or-
+der of magnitude. We believe this performance degradation
+can be reduced by a smarter implementation. We consider
+this to be a validation of the conceptual contribution and a
+positive feasibility study.
+</bodyText>
+<subsectionHeader confidence="0.999744">
+5.3 Assessment of ActiveContext
+</subsectionHeader>
+<bodyText confidence="0.965175583333334">
+Let us assess ActiveContext according to the safety, time-
+liness, and practicality, as we did for vanilla Smalltalk in
+section 2:
+Safety. Custom state transfer can be specified to transition
+from one version to the other. Code running in a given ver-
+sion will not produce run-time type errors due to dynamic
+updates. Contexts also help address safety that is beyond typ-
+ing errors: it provides version consistency. Contexts enable
+the atomic installation of co-related changes to class, and
+ensure that code running in a context always corresponds to
+one precise version of the software.
+Timeliness. If the synchronization is performed lazily, the
+creation of a new software version entails no overhead, and
+it can be used immediately after creation.
+Practicality. Contexts are simple abstractions that are easy
+to use. They extend the language and do not impose restric-
+tions. Writing the transformations manually is extra work,
+but it is acceptable if updates are not too frequent, e.g., dur-
+ing maintenance phase. The overhead for synchronizing ob-
+jects is significant, but it can be dramatically improved by
+(1) synchronizing only objects that are actually shared, and
+(2) synchronizing lazily.
+ActiveContext extends the reflective architecture with
+features that enable the update of production system safely.
+</bodyText>
+<sectionHeader confidence="0.988065" genericHeader="abstract">
+6. Future work
+</sectionHeader>
+<bodyText confidence="0.99960475">
+This paper presents a conceptual model for systems to sup-
+port dynamic software updates, as well as a prototype to
+demonstrate the soundness of the approach. Several further
+points would need to be considered in a full implementation:
+Lazy transformation and garbage collection The model
+that we have presented and implemented uses eager transfor-
+mations: the state of objects is synchronized after each write.
+This entails significant overhead for objects whose lifetime
+is short, and are never accessed from another context than
+the one in which they were created. This also entails high
+memory consumption as we keep as many representations
+for an object as we have contexts. All context instances are
+connected to each other in a list which prevents them from
+being garbage collected. With eager transformations, long-
+lived objects consume more and more memory and become
+slower and slower to synchronize.
+More appealing are lazy transformations: instead of syn-
+chronizing their state eagerly on write, it is synchronized
+lazily on read, in a way similar to how caches work. Not only
+would this reduce the performance overhead, but also reduce
+memory consumption as only the most up-to-date represen-
+tation would be kept in memory. There should be a signifi-
+cant overhead only for objects whose structure has changed
+and has been accessed from several contexts.
+Keeping only the most up-to-date representation assumes
+that the transformation is lossless, that is, one representation
+can be computed out of another one without loss of data.
+This is not always the case, e.g., in case of field addition or
+removal with no counterpart in the other context. Such trans-
+formations are said to be lossy. One idea would be to track
+which transformations are lossy or not, and only keep multi-
+ple versions of objects impacted by lossy transformations.
+We plan to implement lazy transformations, to distinguish
+between lossy and lossless transformations for further opti-
+mizations, and to enable garbage collection of unused con-
+texts using weak references in our implementation.
+Interdependent class evolution The object graph can be
+navigated during the transformation, which makes our ap-
+proach very flexible to support arbitrary forms of evolu-
+tion and interdependent class evolution, as was shown in the
+refactoring of Figure 4. Other approaches with similar fa-
+cilities to navigate the object graph proved to support most
+scenarios of evolution in practice [2, 20, 28]. Keeping sev-
+eral versions of objects in memory is necessary until an up-
+date has been installed completely [2]. This puts memory
+pressure on the system, regardless of whether the transfor-
+mations happen lazily or eagerly. One promising aspect of
+our approach with bi-directional transformations is that the
+old representation can in principle be recovered at any time;
+we could avoid keeping multiple representations (at least for
+objects subject to lossless transformations) and thus relieve
+the memory pressure.
+Versioning of class hierarchies In our current implemen-
+tation, classes are not contextual objects and this implies
+that two versions of a class have distinct names across con-
+texts (see line 10 in Figure 3). In a more elaborate imple-
+mentation, the same class name could be used and would
+resolve to a different representation of the class. The con-
+textual class state would include methodDict and super. This
+would enable the fine-grained evolution of class hierarchies:
+the superclass of a class could differ in two contexts (with-
+out the subclass being modified), and conversely, two ver-
+sions of a subclass could have different superclasses in two
+contexts. Metaclasses could possibly also be contextual but
+some classes would need to be primitive and would not be
+resolved contextually, for the same reasons that we distin-
+guish between primitive objects and contextual objects (see
+subsection 4.3).
+</bodyText>
+<sectionHeader confidence="0.840299" genericHeader="conclusions">
+7. Conclusion
+</sectionHeader>
+<bodyText confidence="0.999438631578947">
+We have presented a novel approach to dynamically update
+software systems written in dynamic languages. ActiveCon-
+text is a programming model that extends the reflective ca-
+pabilities of a dynamic language with first-class contexts to
+support the coexistence and synchronization of alternative
+representations of objects in memory. With ActiveContext,
+existing threads run to termination in the old context while
+new threads run in a new context. Program state will even-
+tually migrate from the old to the new context, and during
+the transition period the state will be synchronized between
+contexts with the help of bi-directional transformations. We
+showed that ActiveContext is safe, practical, and timely. It
+empowers the developer with more control over dynamic up-
+dates, and does not require that the system be quiescent to be
+updated. We have demonstrated how to build a dynamically
+updatable system with a typical use case. The next step is
+to introduce lazy transformation and enable garbage collec-
+tion, which should improve performance and further reduce
+memory consumption.
+</bodyText>
+<sectionHeader confidence="0.967032" genericHeader="acknowledgments">
+Acknowledgments
+</sectionHeader>
+<bodyText confidence="0.9521345">
+We would like to thank Mircea Lungu, Adrian Lienhard,
+Niko Schwarz and Toon Verwaest for kindly reviewing ear-
+lier drafts of our paper. We gratefully acknowledge the finan-
+cial support of the Swiss National Science Foundation for
+the project “Synchronizing Models and Code” (SNF Project
+No. 200020-131827, Oct. 2010 - Sept. 2012).
+</bodyText>
+<sectionHeader confidence="0.96797" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.99893580625">
+[1] A. Bergel. Classboxes — Controlling Visibility of Class Ex-
+tensions. PhD thesis, University of Bern, Nov. 2005. URL
+http://scg.unibe.ch/archive/phd/bergel-phd.pdf.
+[2] C. Boyapati, B. Liskov, L. Shrira, C.-H. Moh, and S. Richman.
+Lazy modular upgrades in persistent object stores. SIGPLAN
+Not., 38(11):403–417, 2003. ISSN 0362-1340. doi: 10.1145/
+949343.949341. URL 10.1145/949343.949341.
+[3] G. Bracha and D. Ungar. Mirrors: design principles for meta-
+level facilities of object-oriented programming languages.
+In Proceedings of the International Conference on Object-
+Oriented Programming, Systems, Languages, and Applica-
+tions (OOPSLA’04), ACM SIGPLAN Notices, pages 331–344,
+New York, NY, USA, 2004. ACM Press. URL http://
+bracha.org/mirrors.pdf.
+[4] G. Casaccio, D. Pollet, M. Denker, and S. Ducasse. Object
+spaces for safe image surgery. In IWST ’09: Proceedings of the
+International Workshop on Smalltalk Technologies, pages 77–
+81, New York, NY, USA, 2009. ACM. ISBN 978-1-60558-
+899-5. doi: 10.1145/1735935.1735948.
+[5] S. Cech Previtali and T. R. Gross. Aspect-based dynamic
+software updating: a model and its empirical evaluation. In
+Proceedings of the tenth international conference on Aspect-
+oriented software development, AOSD ’11, pages 105–116,
+New York, NY, USA, 2011. ACM. ISBN 978-1-4503-0605-
+8. doi: 10.1145/1960275.1960289. URL http://doi.acm.
+org/10.1145/1960275.1960289.
+[6] H. Chen, J. Yu, R. Chen, B. Zang, and P.-C. Yew. Polus: A
+powerful live updating system. In ICSE ’07: Proceedings of
+the 29th international conference on Software Engineering,
+pages 271–281, Washington, DC, USA, 2007. IEEE Com-
+puter Society. ISBN 0-7695-2828-7. doi: 10.1109/ICSE.2007.
+65.
+[7] M. Denker, T. Gı̂rba, A. Lienhard, O. Nierstrasz, L. Renggli,
+and P. Zumkehr. Encapsulating and exploiting change with
+Changeboxes. In Proceedings of the 2007 International Con-
+ference on Dynamic Languages (ICDL 2007), pages 25–49.
+ACM Digital Library, 2007. ISBN 978-1-60558-084-5. doi:
+10.1145/1352678.1352681. URL http://scg.unibe.ch/
+archive/papers/Denk07cChangeboxes.pdf.
+[8] M. Dmitriev. Towards flexible and safe technology for run-
+time evolution of Java language applications. In Proceedings
+of the Workshop on Engineering Complex Object-Oriented
+Systems for Evolution, in association with OOPSLA 2001,
+Oct. 2001.
+[9] D. Duggan. Type-based hot swapping of running modules. In
+Intl. Conf. on Functional Programming, pages 62–73, 2001.
+[10] Gemstone. Gemstone/s programming guide, 2007.
+URL http://seaside.gemstone.com/docs/
+GS64-ProgGuide-2.2.pdf.
+[11] A. R. Gregersen and B. N. Jørgensen. Dynamic update of Java
+applications — balancing change flexibility vs programming
+transparency. J. Softw. Maint. Evol., 21:81–112, mar 2009.
+ISSN 1532-060X. doi: 10.1002/smr.v21:2. URL http://
+portal.acm.org/citation.cfm?id=1526497.1526501.
+[12] D. Gupta, P. Jalote, and G. Barua. A formal framework for
+on-line software version change. IEEE Trans. Softw. Eng.,
+22(2):120–131, 1996. ISSN 0098-5589. doi: 10.1109/32.
+485222. URL http://portal.acm.org/citation.cfm?
+id=229583.229586.
+[13] S. Herrmann, S. Herrmann, C. Hundt, C. Hundt, K. Mehner,
+and K. Mehner. Translation polymorphism in object teams.
+Technical report, Technical University Berlin, 2004.
+[14] M. Hicks and S. Nettles. Dynamic software updating. ACM
+Transactions on Programming Languages and Systems, 27(6):
+1049–1096, nov 2005. doi: 10.1145/1108970.1108971.
+[15] G. Hjálmtýsson and R. Gray. Dynamic C++ classes: a
+lightweight mechanism to update code in a running program.
+In Proceedings of the annual conference on USENIX Annual
+Technical Conference, ATEC ’98, pages 6–6, Berkeley, CA,
+USA, 1998. USENIX Association. URL http://portal.
+acm.org/citation.cfm?id=1268256.1268262.
+[16] J. Kabanov. Jrebel tool demo. Electron. Notes Theor. Comput.
+Sci., 264:51–57, feb 2011. ISSN 1571-0661. doi: 10.1016/
+j.entcs.2011.02.005. URL http://dx.doi.org/10.1016/
+j.entcs.2011.02.005.
+[17] S. Liang and G. Bracha. Dynamic class loading in the Java
+virtual machine. In Proceedings of OOPSLA ’98, ACM SIG-
+PLAN Notices, pages 36–44, 1998. doi: 10.1145/286936.
+286945.
+[18] O. L. Madsen and B. Møller-Pedersen. Virtual classes: A pow-
+erful mechanism in object-oriented programming. In Proceed-
+ings OOPSLA ’89, ACM SIGPLAN Notices, volume 24, pages
+397–406, Oct. 1989.
+[19] K. Makris and R. A. Bazzi. Immediate multi-threaded dy-
+namic software updates using stack reconstruction. In Pro-
+ceedings of the 2009 conference on USENIX Annual technical
+conference, USENIX’09, pages 31–31, Berkeley, CA, USA,
+2009. USENIX Association. URL http://portal.acm.
+org/citation.cfm?id=1855807.1855838.
+[20] S. Malabarba, R. Pandey, J. Gragg, E. Barr, and J. F. Barnes.
+Runtime support for type-safe dynamic Java classes. In
+Proceedings of the 14th European Conference on Object-
+Oriented Programming, pages 337–361. Springer-Verlag,
+2000. ISBN 3-540-67660-0. doi: 10.1007/3-540-45102-1 17.
+[21] I. Neamtiu and M. Hicks. Safe and timely updates to multi-
+threaded programs. In Proceedings of the 2009 ACM SIG-
+PLAN conference on Programming language design and im-
+plementation, PLDI ’09, pages 13–24, New York, NY, USA,
+2009. ACM. ISBN 978-1-60558-392-1. doi: 10.1145/
+1543135.1542479.
+[22] I. Neamtiu, M. Hicks, G. Stoyle, and M. Oriol. Practical
+dynamic software updating for C. In Proceedings of the
+2006 ACM SIGPLAN conference on Programming language
+design and implementation, PLDI ’06, pages 72–83, New
+York, NY, USA, 2006. ACM. ISBN 1-59593-320-4. doi:
+10.1145/1133981.1133991. URL http://doi.acm.org/
+10.1145/1133981.1133991.
+[23] I. Neamtiu, M. Hicks, J. S. Foster, and P. Pratikakis. Contex-
+tual effects for version-consistent dynamic software updating
+and safe concurrent programming. SIGPLAN Not., 43(1):37–
+49, 2008. ISSN 0362-1340. doi: 10.1145/1328897.1328447.
+[24] A. Orso, A. Rao, and M. Harrold. A Technique for Dy-
+namic Updating of Java Software. Software Maintenance,
+IEEE International Conference on, 0:0649+, 2002. doi:
+10.1109/ICSM.2002.1167829. URL http://dx.doi.org/
+10.1109/ICSM.2002.1167829.
+[25] M. Piccioni, M. Oriol, B. Meyer, and T. Schneider. An
+ide-based, integrated solution to schema evolution of object-
+oriented software. In ASE, pages 650–654, 2009.
+[26] B. Redmond and V. Cahill. Supporting unanticipated dy-
+namic adaptation of application behaviour. In Proceedings
+of European Conference on Object-Oriented Programming,
+volume 2374, pages 205–230. Springer-Verlag, 2002. doi:
+10.1007/3-540-47993-7 9.
+[27] scala. The scala programming language. URL http://
+lamp.epfl.ch/scala/. http://lamp.epfl.ch/scala/.
+[28] S. Subramanian, M. Hicks, and K. S. McKinley. Dynamic
+software updates: a VM-centric approach. In Proceedings of
+the 2009 ACM SIGPLAN conference on Programming lan-
+guage design and implementation, PLDI ’09, pages 1–12,
+New York, NY, USA, 2009. ACM. ISBN 978-1-60558-392-
+1. doi: 10.1145/1542476.1542478. URL http://doi.acm.
+org/10.1145/1542476.1542478.
+[29] E. Tanter. Contextual values. In Proceedings of the 2008
+symposium on Dynamic languages, DLS ’08, pages 3:1–3:10,
+New York, NY, USA, 2008. ACM. ISBN 978-1-60558-270-
+2. doi: 10.1145/1408681.1408684. URL http://doi.acm.
+org/10.1145/1408681.1408684.
+[30] Y. Vandewoude, P. Ebraert, Y. Berbers, and T. D’Hondt. Influ-
+ence of type systems on dynamic software evolution. CW Re-
+ports CW415, Department of Computer Science, K.U.Leuven,
+Leuven, Belgium, 2005. URL https://lirias.kuleuven.
+be/handle/123456789/131703.
+[31] T. Verwaest, C. Bruni, D. Gurtner, A. Lienhard, and O. Nier-
+strasz. Pinocchio: Bringing reflection to life with first-
+class interpreters. In OOPSLA Onward! ’10, 2010. doi:
+10.1145/1869459.1869522. URL http://scg.unibe.ch/
+archive/papers/Verw10aPinocchio.pdf.
+[32] A. Warth, M. Stanojević, and T. Millstein. Statically scoped
+object adaptation with expanders. In OOPSLA ’06: Proceed-
+ings of the 21st annual ACM SIGPLAN conference on Object-
+oriented programming systems, languages, and applications,
+pages 37–56, New York, NY, USA, 2006. ACM Press. ISBN
+1-59593-348-4. doi: 10.1145/1167473.1167477.
+[33] T. Würthinger, C. Wimmer, and L. Stadler. Dynamic code
+evolution for Java. In Proceedings of the 8th International
+Conference on the Principles and Practice of Programming
+in Java, PPPJ ’10, pages 10–19, New York, NY, USA, 2010.
+ACM. ISBN 978-1-4503-0269-2. doi: 10.1145/1852761.
+1852764.
+</reference>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.332002">
+<title confidence="0.999963">Using First-class Contexts to realize Dynamic Software Updates</title>
+<author confidence="0.954321">Erwann Wernli David Gurtner Oscar Nierstrasz</author>
+<address confidence="0.417664">Software Composition Group, University of Bern, Switzerland</address>
+<web confidence="0.998415">http://scg.unibe.ch/</web>
+<abstract confidence="0.991894666666666">Applications that need to be updated but cannot be easily restarted must be updated at run-time. We evaluate the reflective facilities of Smalltalk with respect to dynamic software and the state-of-the-art in this field. We conclude that while fine for debugging, the existing reflective facilities are not appropriate for dynamically updating production systems under constant load. We propose to enable dynamic updates by introducing first-class contexts as a mechanism to allow multiple versions of objects to coexist. Object states can be dynamically migrated from one context to another, and can be kept in sync with the help of bidirectional transformations. We demonstrate our approach with ActiveContext, an extension of Smalltalk with first-class contexts. ActiveContext eliminates the need for a system to be quiescent for it to be updated. ActiveContext is realized in Pinocchio, an experimental Smalltalk implementation that fully reifies the VM to enable radical extensions. We illustrate dynamic updates in ActiveContext with a typical use case, present initial benchmarks, and discuss future performance improvements.</abstract>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>A Bergel</author>
+</authors>
+<title>Classboxes — Controlling Visibility of Class Extensions.</title>
+<date>2005</date>
+<tech>PhD thesis,</tech>
+<institution>University of Bern,</institution>
+<note>URL http://scg.unibe.ch/archive/phd/bergel-phd.pdf.</note>
+<marker>[1]</marker>
+<rawString>A. Bergel. Classboxes — Controlling Visibility of Class Extensions. PhD thesis, University of Bern, Nov. 2005. URL http://scg.unibe.ch/archive/phd/bergel-phd.pdf.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>C Boyapati</author>
+<author>B Liskov</author>
+<author>L Shrira</author>
+<author>C-H Moh</author>
+<author>S Richman</author>
+</authors>
+<title>Lazy modular upgrades in persistent object stores.</title>
+<date>2003</date>
+<journal>SIGPLAN Not.,</journal>
+<volume>38</volume>
+<issue>11</issue>
+<pages>0362--1340</pages>
+<contexts>
+<context position="9533" citStr="[2, 20, 28]" startWordPosition="1534" endWordPosition="1536">an to implement lazy transformations, to distinguish between lossy and lossless transformations for further optimizations, and to enable garbage collection of unused contexts using weak references in our implementation. Interdependent class evolution The object graph can be navigated during the transformation, which makes our approach very flexible to support arbitrary forms of evolution and interdependent class evolution, as was shown in the refactoring of Figure 4. Other approaches with similar facilities to navigate the object graph proved to support most scenarios of evolution in practice [2, 20, 28]. Keeping several versions of objects in memory is necessary until an update has been installed completely [2]. This puts memory pressure on the system, regardless of whether the transformations happen lazily or eagerly. One promising aspect of our approach with bi-directional transformations is that the old representation can in principle be recovered at any time; we could avoid keeping multiple representations (at least for objects subject to lossless transformations) and thus relieve the memory pressure. Versioning of class hierarchies In our current implementation, classes are not contextu</context>
+</contexts>
+<marker>[2]</marker>
+<rawString>C. Boyapati, B. Liskov, L. Shrira, C.-H. Moh, and S. Richman. Lazy modular upgrades in persistent object stores. SIGPLAN Not., 38(11):403–417, 2003. ISSN 0362-1340. doi: 10.1145/ 949343.949341. URL 10.1145/949343.949341.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>G Bracha</author>
+<author>D Ungar</author>
+</authors>
+<title>Mirrors: design principles for metalevel facilities of object-oriented programming languages. In</title>
+<date>2004</date>
+<journal>ACM SIGPLAN Notices,</journal>
+<booktitle>Proceedings of the International Conference on ObjectOriented Programming, Systems, Languages, and Applications (OOPSLA’04),</booktitle>
+<pages>331--344</pages>
+<publisher>ACM Press. URL</publisher>
+<location>New York, NY, USA,</location>
+<note>http:// bracha.org/mirrors.pdf.</note>
+<marker>[3]</marker>
+<rawString>G. Bracha and D. Ungar. Mirrors: design principles for metalevel facilities of object-oriented programming languages. In Proceedings of the International Conference on ObjectOriented Programming, Systems, Languages, and Applications (OOPSLA’04), ACM SIGPLAN Notices, pages 331–344, New York, NY, USA, 2004. ACM Press. URL http:// bracha.org/mirrors.pdf.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>G Casaccio</author>
+<author>D Pollet</author>
+<author>M Denker</author>
+<author>S Ducasse</author>
+</authors>
+<title>Object spaces for safe image surgery.</title>
+<date>2009</date>
+<journal>ACM. ISBN</journal>
+<booktitle>In IWST ’09: Proceedings of the International Workshop on Smalltalk Technologies,</booktitle>
+<pages>77--81</pages>
+<location>New York, NY, USA,</location>
+<marker>[4]</marker>
+<rawString>G. Casaccio, D. Pollet, M. Denker, and S. Ducasse. Object spaces for safe image surgery. In IWST ’09: Proceedings of the International Workshop on Smalltalk Technologies, pages 77– 81, New York, NY, USA, 2009. ACM. ISBN 978-1-60558-899-5. doi: 10.1145/1735935.1735948.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Cech Previtali</author>
+<author>T R Gross</author>
+</authors>
+<title>Aspect-based dynamic software updating: a model and its empirical evaluation.</title>
+<date>2011</date>
+<journal>ACM. ISBN</journal>
+<booktitle>In Proceedings of the tenth international conference on Aspectoriented software development, AOSD ’11,</booktitle>
+<pages>105--116</pages>
+<location>New York, NY, USA,</location>
+<note>URL http://doi.acm. org/10.1145/1960275.1960289.</note>
+<marker>[5]</marker>
+<rawString>S. Cech Previtali and T. R. Gross. Aspect-based dynamic software updating: a model and its empirical evaluation. In Proceedings of the tenth international conference on Aspectoriented software development, AOSD ’11, pages 105–116, New York, NY, USA, 2011. ACM. ISBN 978-1-4503-0605-8. doi: 10.1145/1960275.1960289. URL http://doi.acm. org/10.1145/1960275.1960289.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>H Chen</author>
+<author>J Yu</author>
+<author>R Chen</author>
+<author>B Zang</author>
+<author>P-C Yew</author>
+</authors>
+<title>Polus: A powerful live updating system.</title>
+<date>2007</date>
+<journal>IEEE Computer Society. ISBN</journal>
+<booktitle>In ICSE ’07: Proceedings of the 29th international conference on Software Engineering,</booktitle>
+<pages>271--281</pages>
+<location>Washington, DC, USA,</location>
+<marker>[6]</marker>
+<rawString>H. Chen, J. Yu, R. Chen, B. Zang, and P.-C. Yew. Polus: A powerful live updating system. In ICSE ’07: Proceedings of the 29th international conference on Software Engineering, pages 271–281, Washington, DC, USA, 2007. IEEE Computer Society. ISBN 0-7695-2828-7. doi: 10.1109/ICSE.2007. 65.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Denker</author>
+<author>T Gırba</author>
+<author>A Lienhard</author>
+<author>O Nierstrasz</author>
+<author>L Renggli</author>
+<author>P Zumkehr</author>
+</authors>
+<title>Encapsulating and exploiting change with Changeboxes.</title>
+<date>2007</date>
+<journal>ISBN</journal>
+<booktitle>In Proceedings of the 2007 International Conference on Dynamic Languages (ICDL</booktitle>
+<pages>25--49</pages>
+<note>URL http://scg.unibe.ch/ archive/papers/Denk07cChangeboxes.pdf.</note>
+<marker>[7]</marker>
+<rawString>M. Denker, T. Gı̂rba, A. Lienhard, O. Nierstrasz, L. Renggli, and P. Zumkehr. Encapsulating and exploiting change with Changeboxes. In Proceedings of the 2007 International Conference on Dynamic Languages (ICDL 2007), pages 25–49. ACM Digital Library, 2007. ISBN 978-1-60558-084-5. doi: 10.1145/1352678.1352681. URL http://scg.unibe.ch/ archive/papers/Denk07cChangeboxes.pdf.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Dmitriev</author>
+</authors>
+<title>Towards flexible and safe technology for runtime evolution of Java language applications.</title>
+<date>2001</date>
+<booktitle>In Proceedings of the Workshop on Engineering Complex Object-Oriented Systems for Evolution, in association with OOPSLA</booktitle>
+<marker>[8]</marker>
+<rawString>M. Dmitriev. Towards flexible and safe technology for runtime evolution of Java language applications. In Proceedings of the Workshop on Engineering Complex Object-Oriented Systems for Evolution, in association with OOPSLA 2001, Oct. 2001.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Duggan</author>
+</authors>
+<title>Type-based hot swapping of running modules.</title>
+<date>2001</date>
+<booktitle>In Intl. Conf. on Functional Programming,</booktitle>
+<pages>62--73</pages>
+<marker>[9]</marker>
+<rawString>D. Duggan. Type-based hot swapping of running modules. In Intl. Conf. on Functional Programming, pages 62–73, 2001.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Gemstone</author>
+</authors>
+<title>Gemstone/s programming guide,</title>
+<date>2007</date>
+<note>URL http://seaside.gemstone.com/docs/ GS64-ProgGuide-2.2.pdf.</note>
+<marker>[10]</marker>
+<rawString>Gemstone. Gemstone/s programming guide, 2007. URL http://seaside.gemstone.com/docs/ GS64-ProgGuide-2.2.pdf.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A R Gregersen</author>
+<author>B N Jørgensen</author>
+</authors>
+<title>Dynamic update of Java applications — balancing change flexibility vs programming transparency.</title>
+<date>2009</date>
+<journal>J. Softw. Maint. Evol.,</journal>
+<volume>21</volume>
+<note>ISSN 1532-060X. doi: 10.1002/smr.v21:2. URL http:// portal.acm.org/citation.cfm?id=1526497.1526501.</note>
+<marker>[11]</marker>
+<rawString>A. R. Gregersen and B. N. Jørgensen. Dynamic update of Java applications — balancing change flexibility vs programming transparency. J. Softw. Maint. Evol., 21:81–112, mar 2009. ISSN 1532-060X. doi: 10.1002/smr.v21:2. URL http:// portal.acm.org/citation.cfm?id=1526497.1526501.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Gupta</author>
+<author>P Jalote</author>
+<author>G Barua</author>
+</authors>
+<title>A formal framework for on-line software version change.</title>
+<date>1996</date>
+<journal>IEEE Trans. Softw. Eng.,</journal>
+<volume>22</volume>
+<issue>2</issue>
+<pages>0098--5589</pages>
+<note>URL http://portal.acm.org/citation.cfm? id=229583.229586.</note>
+<marker>[12]</marker>
+<rawString>D. Gupta, P. Jalote, and G. Barua. A formal framework for on-line software version change. IEEE Trans. Softw. Eng., 22(2):120–131, 1996. ISSN 0098-5589. doi: 10.1109/32. 485222. URL http://portal.acm.org/citation.cfm? id=229583.229586.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Herrmann</author>
+<author>S Herrmann</author>
+<author>C Hundt</author>
+<author>C Hundt</author>
+<author>K Mehner</author>
+<author>K Mehner</author>
+</authors>
+<title>Translation polymorphism in object teams.</title>
+<date>2004</date>
+<tech>Technical report, Technical</tech>
+<institution>University</institution>
+<location>Berlin,</location>
+<marker>[13]</marker>
+<rawString>S. Herrmann, S. Herrmann, C. Hundt, C. Hundt, K. Mehner, and K. Mehner. Translation polymorphism in object teams. Technical report, Technical University Berlin, 2004.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Hicks</author>
+<author>S Nettles</author>
+</authors>
+<title>Dynamic software updating.</title>
+<date>2005</date>
+<journal>ACM Transactions on Programming Languages and Systems,</journal>
+<volume>27</volume>
+<issue>6</issue>
+<pages>1049--1096</pages>
+<marker>[14]</marker>
+<rawString>M. Hicks and S. Nettles. Dynamic software updating. ACM Transactions on Programming Languages and Systems, 27(6): 1049–1096, nov 2005. doi: 10.1145/1108970.1108971.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>G Hjalmtysson</author>
+<author>R Gray</author>
+</authors>
+<title>Dynamic C++ classes: a lightweight mechanism to update code in a running program.</title>
+<date>1998</date>
+<booktitle>In Proceedings of the annual conference on USENIX Annual Technical Conference, ATEC ’98,</booktitle>
+<pages>6--6</pages>
+<location>Berkeley, CA, USA,</location>
+<note>USENIX Association. URL http://portal. acm.org/citation.cfm?id=1268256.1268262.</note>
+<marker>[15]</marker>
+<rawString>G. Hjálmtýsson and R. Gray. Dynamic C++ classes: a lightweight mechanism to update code in a running program. In Proceedings of the annual conference on USENIX Annual Technical Conference, ATEC ’98, pages 6–6, Berkeley, CA, USA, 1998. USENIX Association. URL http://portal. acm.org/citation.cfm?id=1268256.1268262.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J Kabanov</author>
+</authors>
+<title>Jrebel tool demo.</title>
+<date>2011</date>
+<journal>Electron. Notes Theor. Comput. Sci.,</journal>
+<volume>264</volume>
+<note>ISSN 1571-0661. doi: 10.1016/ j.entcs.2011.02.005. URL http://dx.doi.org/10.1016/ j.entcs.2011.02.005.</note>
+<marker>[16]</marker>
+<rawString>J. Kabanov. Jrebel tool demo. Electron. Notes Theor. Comput. Sci., 264:51–57, feb 2011. ISSN 1571-0661. doi: 10.1016/ j.entcs.2011.02.005. URL http://dx.doi.org/10.1016/ j.entcs.2011.02.005.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Liang</author>
+<author>G Bracha</author>
+</authors>
+<title>Dynamic class loading in the Java virtual machine.</title>
+<date>1998</date>
+<journal>ACM SIGPLAN Notices,</journal>
+<booktitle>In Proceedings of OOPSLA ’98,</booktitle>
+<pages>36--44</pages>
+<marker>[17]</marker>
+<rawString>S. Liang and G. Bracha. Dynamic class loading in the Java virtual machine. In Proceedings of OOPSLA ’98, ACM SIGPLAN Notices, pages 36–44, 1998. doi: 10.1145/286936. 286945.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>O L Madsen</author>
+<author>B Møller-Pedersen</author>
+</authors>
+<title>Virtual classes: A powerful mechanism in object-oriented programming.</title>
+<date>1989</date>
+<journal>ACM SIGPLAN Notices,</journal>
+<booktitle>In Proceedings OOPSLA ’89,</booktitle>
+<volume>24</volume>
+<pages>397--406</pages>
+<marker>[18]</marker>
+<rawString>O. L. Madsen and B. Møller-Pedersen. Virtual classes: A powerful mechanism in object-oriented programming. In Proceedings OOPSLA ’89, ACM SIGPLAN Notices, volume 24, pages 397–406, Oct. 1989.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>K Makris</author>
+<author>R A Bazzi</author>
+</authors>
+<title>Immediate multi-threaded dynamic software updates using stack reconstruction.</title>
+<date>2009</date>
+<booktitle>In Proceedings of the 2009 conference on USENIX Annual technical conference, USENIX’09,</booktitle>
+<pages>31--31</pages>
+<location>Berkeley, CA, USA,</location>
+<marker>[19]</marker>
+<rawString>K. Makris and R. A. Bazzi. Immediate multi-threaded dynamic software updates using stack reconstruction. In Proceedings of the 2009 conference on USENIX Annual technical conference, USENIX’09, pages 31–31, Berkeley, CA, USA, 2009. USENIX Association. URL http://portal.acm. org/citation.cfm?id=1855807.1855838.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Malabarba</author>
+<author>R Pandey</author>
+<author>J Gragg</author>
+<author>E Barr</author>
+<author>J F Barnes</author>
+</authors>
+<title>Runtime support for type-safe dynamic Java classes.</title>
+<date>2000</date>
+<journal>ISBN</journal>
+<booktitle>In Proceedings of the 14th European Conference on ObjectOriented Programming,</booktitle>
+<pages>337--361</pages>
+<publisher>Springer-Verlag,</publisher>
+<contexts>
+<context position="9533" citStr="[2, 20, 28]" startWordPosition="1534" endWordPosition="1536">an to implement lazy transformations, to distinguish between lossy and lossless transformations for further optimizations, and to enable garbage collection of unused contexts using weak references in our implementation. Interdependent class evolution The object graph can be navigated during the transformation, which makes our approach very flexible to support arbitrary forms of evolution and interdependent class evolution, as was shown in the refactoring of Figure 4. Other approaches with similar facilities to navigate the object graph proved to support most scenarios of evolution in practice [2, 20, 28]. Keeping several versions of objects in memory is necessary until an update has been installed completely [2]. This puts memory pressure on the system, regardless of whether the transformations happen lazily or eagerly. One promising aspect of our approach with bi-directional transformations is that the old representation can in principle be recovered at any time; we could avoid keeping multiple representations (at least for objects subject to lossless transformations) and thus relieve the memory pressure. Versioning of class hierarchies In our current implementation, classes are not contextu</context>
+</contexts>
+<marker>[20]</marker>
+<rawString>S. Malabarba, R. Pandey, J. Gragg, E. Barr, and J. F. Barnes. Runtime support for type-safe dynamic Java classes. In Proceedings of the 14th European Conference on ObjectOriented Programming, pages 337–361. Springer-Verlag, 2000. ISBN 3-540-67660-0. doi: 10.1007/3-540-45102-1 17.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>I Neamtiu</author>
+<author>M Hicks</author>
+</authors>
+<title>Safe and timely updates to multithreaded programs.</title>
+<date>2009</date>
+<journal>ACM. ISBN</journal>
+<booktitle>In Proceedings of the 2009 ACM SIGPLAN conference on Programming language design and implementation, PLDI ’09,</booktitle>
+<pages>13--24</pages>
+<location>New York, NY, USA,</location>
+<marker>[21]</marker>
+<rawString>I. Neamtiu and M. Hicks. Safe and timely updates to multithreaded programs. In Proceedings of the 2009 ACM SIGPLAN conference on Programming language design and implementation, PLDI ’09, pages 13–24, New York, NY, USA, 2009. ACM. ISBN 978-1-60558-392-1. doi: 10.1145/ 1543135.1542479.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>I Neamtiu</author>
+<author>M Hicks</author>
+<author>G Stoyle</author>
+<author>M Oriol</author>
+</authors>
+<title>Practical dynamic software updating for C.</title>
+<date>2006</date>
+<journal>ACM. ISBN</journal>
+<booktitle>In Proceedings of the 2006 ACM SIGPLAN conference on Programming language design and implementation, PLDI ’06,</booktitle>
+<pages>72--83</pages>
+<location>New York, NY, USA,</location>
+<note>URL http://doi.acm.org/</note>
+<marker>[22]</marker>
+<rawString>I. Neamtiu, M. Hicks, G. Stoyle, and M. Oriol. Practical dynamic software updating for C. In Proceedings of the 2006 ACM SIGPLAN conference on Programming language design and implementation, PLDI ’06, pages 72–83, New York, NY, USA, 2006. ACM. ISBN 1-59593-320-4. doi: 10.1145/1133981.1133991. URL http://doi.acm.org/ 10.1145/1133981.1133991.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>I Neamtiu</author>
+<author>M Hicks</author>
+<author>J S Foster</author>
+<author>P Pratikakis</author>
+</authors>
+<title>Contextual effects for version-consistent dynamic software updating and safe concurrent programming.</title>
+<date>2008</date>
+<journal>SIGPLAN Not.,</journal>
+<volume>43</volume>
+<issue>1</issue>
+<pages>0362--1340</pages>
+<marker>[23]</marker>
+<rawString>I. Neamtiu, M. Hicks, J. S. Foster, and P. Pratikakis. Contextual effects for version-consistent dynamic software updating and safe concurrent programming. SIGPLAN Not., 43(1):37– 49, 2008. ISSN 0362-1340. doi: 10.1145/1328897.1328447.</rawString>
+</citation>
+<citation valid="false">
+<authors>
+<author>A Orso</author>
+<author>A Rao</author>
+<author>M Harrold</author>
+</authors>
+<title>A Technique for Dynamic Updating of Java Software.</title>
+<booktitle>Software Maintenance, IEEE International Conference on, 0:0649+, 2002. doi: 10.1109/ICSM.2002.1167829. URL http://dx.doi.org/ 10.1109/ICSM.2002.1167829.</booktitle>
+<marker>[24]</marker>
+<rawString>A. Orso, A. Rao, and M. Harrold. A Technique for Dynamic Updating of Java Software. Software Maintenance, IEEE International Conference on, 0:0649+, 2002. doi: 10.1109/ICSM.2002.1167829. URL http://dx.doi.org/ 10.1109/ICSM.2002.1167829.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Piccioni</author>
+<author>M Oriol</author>
+<author>B Meyer</author>
+<author>T Schneider</author>
+</authors>
+<title>An ide-based, integrated solution to schema evolution of objectoriented software.</title>
+<date>2009</date>
+<booktitle>In ASE,</booktitle>
+<pages>650--654</pages>
+<marker>[25]</marker>
+<rawString>M. Piccioni, M. Oriol, B. Meyer, and T. Schneider. An ide-based, integrated solution to schema evolution of objectoriented software. In ASE, pages 650–654, 2009.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>B Redmond</author>
+<author>V Cahill</author>
+</authors>
+<title>Supporting unanticipated dynamic adaptation of application behaviour.</title>
+<date>2002</date>
+<booktitle>In Proceedings of European Conference on Object-Oriented Programming,</booktitle>
+<volume>2374</volume>
+<pages>205--230</pages>
+<publisher>Springer-Verlag,</publisher>
+<marker>[26]</marker>
+<rawString>B. Redmond and V. Cahill. Supporting unanticipated dynamic adaptation of application behaviour. In Proceedings of European Conference on Object-Oriented Programming, volume 2374, pages 205–230. Springer-Verlag, 2002. doi: 10.1007/3-540-47993-7 9.</rawString>
+</citation>
+<citation valid="false">
+<authors>
+<author>scala</author>
+</authors>
+<title>The scala programming language.</title>
+<note>URL http:// lamp.epfl.ch/scala/. http://lamp.epfl.ch/scala/.</note>
+<marker>[27]</marker>
+<rawString>scala. The scala programming language. URL http:// lamp.epfl.ch/scala/. http://lamp.epfl.ch/scala/.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Subramanian</author>
+<author>M Hicks</author>
+<author>K S McKinley</author>
+</authors>
+<title>Dynamic software updates: a VM-centric approach.</title>
+<date>2009</date>
+<journal>ACM. ISBN</journal>
+<booktitle>In Proceedings of the 2009 ACM SIGPLAN conference on Programming language design and implementation, PLDI ’09,</booktitle>
+<pages>1--12</pages>
+<location>New York, NY, USA,</location>
+<note>URL http://doi.acm. org/10.1145/1542476.1542478.</note>
+<contexts>
+<context position="9533" citStr="[2, 20, 28]" startWordPosition="1534" endWordPosition="1536">an to implement lazy transformations, to distinguish between lossy and lossless transformations for further optimizations, and to enable garbage collection of unused contexts using weak references in our implementation. Interdependent class evolution The object graph can be navigated during the transformation, which makes our approach very flexible to support arbitrary forms of evolution and interdependent class evolution, as was shown in the refactoring of Figure 4. Other approaches with similar facilities to navigate the object graph proved to support most scenarios of evolution in practice [2, 20, 28]. Keeping several versions of objects in memory is necessary until an update has been installed completely [2]. This puts memory pressure on the system, regardless of whether the transformations happen lazily or eagerly. One promising aspect of our approach with bi-directional transformations is that the old representation can in principle be recovered at any time; we could avoid keeping multiple representations (at least for objects subject to lossless transformations) and thus relieve the memory pressure. Versioning of class hierarchies In our current implementation, classes are not contextu</context>
+</contexts>
+<marker>[28]</marker>
+<rawString>S. Subramanian, M. Hicks, and K. S. McKinley. Dynamic software updates: a VM-centric approach. In Proceedings of the 2009 ACM SIGPLAN conference on Programming language design and implementation, PLDI ’09, pages 1–12, New York, NY, USA, 2009. ACM. ISBN 978-1-60558-392-1. doi: 10.1145/1542476.1542478. URL http://doi.acm. org/10.1145/1542476.1542478.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>E Tanter</author>
+</authors>
+<title>Contextual values.</title>
+<date>2008</date>
+<journal>ACM. ISBN</journal>
+<booktitle>In Proceedings of the 2008 symposium on Dynamic languages, DLS ’08,</booktitle>
+<pages>3--1</pages>
+<location>New York, NY, USA,</location>
+<note>URL http://doi.acm. org/10.1145/1408681.1408684.</note>
+<marker>[29]</marker>
+<rawString>E. Tanter. Contextual values. In Proceedings of the 2008 symposium on Dynamic languages, DLS ’08, pages 3:1–3:10, New York, NY, USA, 2008. ACM. ISBN 978-1-60558-270-2. doi: 10.1145/1408681.1408684. URL http://doi.acm. org/10.1145/1408681.1408684.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Y Vandewoude</author>
+<author>P Ebraert</author>
+<author>Y Berbers</author>
+<author>T D’Hondt</author>
+</authors>
+<title>Influence of type systems on dynamic software evolution.</title>
+<date>2005</date>
+<tech>CW Reports CW415,</tech>
+<institution>Department of Computer Science,</institution>
+<location>K.U.Leuven, Leuven, Belgium,</location>
+<note>URL https://lirias.kuleuven. be/handle/123456789/131703.</note>
+<marker>[30]</marker>
+<rawString>Y. Vandewoude, P. Ebraert, Y. Berbers, and T. D’Hondt. Influence of type systems on dynamic software evolution. CW Reports CW415, Department of Computer Science, K.U.Leuven, Leuven, Belgium, 2005. URL https://lirias.kuleuven. be/handle/123456789/131703.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>T Verwaest</author>
+<author>C Bruni</author>
+<author>D Gurtner</author>
+<author>A Lienhard</author>
+<author>O Nierstrasz</author>
+</authors>
+<title>Pinocchio: Bringing reflection to life with firstclass interpreters.</title>
+<date>2010</date>
+<booktitle>In OOPSLA Onward! ’10,</booktitle>
+<pages>10--1145</pages>
+<note>URL http://scg.unibe.ch/ archive/papers/Verw10aPinocchio.pdf.</note>
+<marker>[31]</marker>
+<rawString>T. Verwaest, C. Bruni, D. Gurtner, A. Lienhard, and O. Nierstrasz. Pinocchio: Bringing reflection to life with firstclass interpreters. In OOPSLA Onward! ’10, 2010. doi: 10.1145/1869459.1869522. URL http://scg.unibe.ch/ archive/papers/Verw10aPinocchio.pdf.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>A Warth</author>
+<author>M Stanojevic</author>
+<author>T Millstein</author>
+</authors>
+<title>Statically scoped object adaptation with expanders.</title>
+<date>2006</date>
+<booktitle>In OOPSLA ’06: Proceedings of the 21st annual ACM SIGPLAN conference on Objectoriented programming systems, languages, and applications,</booktitle>
+<pages>37--56</pages>
+<publisher>ACM Press. ISBN</publisher>
+<location>New York, NY, USA,</location>
+<marker>[32]</marker>
+<rawString>A. Warth, M. Stanojević, and T. Millstein. Statically scoped object adaptation with expanders. In OOPSLA ’06: Proceedings of the 21st annual ACM SIGPLAN conference on Objectoriented programming systems, languages, and applications, pages 37–56, New York, NY, USA, 2006. ACM Press. ISBN 1-59593-348-4. doi: 10.1145/1167473.1167477.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>T Wurthinger</author>
+<author>C Wimmer</author>
+<author>L Stadler</author>
+</authors>
+<title>Dynamic code evolution for Java.</title>
+<date>2010</date>
+<journal>ACM. ISBN</journal>
+<booktitle>In Proceedings of the 8th International Conference on the Principles and Practice of Programming in Java, PPPJ ’10,</booktitle>
+<pages>10--19</pages>
+<location>New York, NY, USA,</location>
+<marker>[33]</marker>
+<rawString>T. Würthinger, C. Wimmer, and L. Stadler. Dynamic code evolution for Java. In Proceedings of the 8th International Conference on the Principles and Practice of Programming in Java, PPPJ ’10, pages 10–19, New York, NY, USA, 2010. ACM. ISBN 978-1-4503-0269-2. doi: 10.1145/1852761. 1852764.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

@@ -1,0 +1,1246 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.000000">
+<title confidence="0.3082725">
+Design Guidelines for Coordination
+Components
+</title>
+<author confidence="0.535175">
+Sander Tichelaar, Juan Carlos Cruz and Serge Demeyer
+</author>
+<bodyText confidence="0.973564">
+Institut für Informatik (IAM), Universität Bern, Neubrückstrasse 10, CH-3012 Berne, Switzerland.
+E-mail: {tichel,cruz,demeyer}@iam.unibe.ch. WWW: http://www.iam.unibe.ch/~scg/.
+Keywords: coordination component, object-orientation,
+contracts, transactions, design guidelines
+</bodyText>
+<sectionHeader confidence="0.943316" genericHeader="abstract">
+ABSTRACT
+</sectionHeader>
+<bodyText confidence="0.997201857142857">
+The distributed nature of a typical web application combined
+with the rapid evolution of underlying platforms demands
+for a plug-in component architecture. Nevertheless, code for
+controlling distributed activities is usually spread over mul-
+tiple subsystems, which makes it hard to dynamically recon-
+figure coordination services. This paper investigates
+coordination components as a way to encapsulate the coordi-
+nation of a distributed system into a separate, pluggable enti-
+ty. In an object-oriented context we introduce two design
+guidelines (namely, “turn contracts into objects” and “turn
+configuration into a factory object”) that help developers to
+separate coordination from computation and to develop re-
+usable and flexible solutions for coordination in distributed
+systems.
+</bodyText>
+<sectionHeader confidence="0.999396" genericHeader="introduction">
+1 INTRODUCTION
+</sectionHeader>
+<bodyText confidence="0.999451826086957">
+With the coming of the world-wide web, more and more soft-
+ware systems must be adapted to incorporate facilities for in-
+ter- and intra-nets. Large portions of the software industry
+have tried to tackle this market with component technology:
+desktop publishing software provide components that gener-
+ate HTML and PDF; database vendors sell components that
+translate “search and query applications” into HTML forms;
+Java component environments provide support for building
+attractive user interfaces using native widgets. And this list
+continues to grow.
+One of the main reasons why web applications embrace
+component technology is the ability for dynamic reconfigu-
+ration by means of plug-in components [16]. Indeed, since
+web applications operate in heterogeneous contexts, they
+need to encapsulate all platform dependent behaviour into
+separate components. And since there is no way to freeze the
+internet while reconfiguring, web applications must plug-in
+new functionality at run-time.
+Despite the increasing maturity of middle-ware standards
+like CORBA and Microsoft’s ActiveX, component technol-
+ogy has not been applied to one of the most critical aspects of
+web-applications, namely the coordination of the distributed
+activities [13]. The reason for this is twofold: first, coordina-
+tion is difficult to shrink-wrap into an off-the-shelf compo-
+nent [23], implying that application developers will not
+easily be able to buy “coordination components” like they
+buy GUI-components. Second, code for coordinating dis-
+tributed activities is typically spread over all subsystems that
+make up the web-application, implying that dynamic recon-
+figuration of coordination policies is usually impossible.
+Since dynamic reconfiguration of coordination policies
+is often necessary (e.g., for load-balancing) and since it is un-
+likely that one will be able to buy off-the-shelf solutions, ap-
+plication developers are obliged to implement their own
+coordination components. Yet, implementing your own so-
+lution has considerable drawbacks and must —among other
+things— be guided by solid design guidelines. This paper
+presents two design guidelines in object-oriented framework
+technology (i.e., turn contracts into objects and turn config-
+uration into a factory object), which provide support for en-
+capsulating coordination into special-purpose plug-in
+components that can be dynamically exchanged. The paper
+introduces the design guidelines by means of an example (a
+web-application for managing bank accounts), gradually
+adding requirements to show how the resulting coordination
+component allows for dynamic system reconfiguration.
+</bodyText>
+<sectionHeader confidence="0.993644" genericHeader="method">
+2 AN EXAMPLE: INTERNET
+BANKING
+</sectionHeader>
+<bodyText confidence="0.9973954">
+Consider the example of a bank that provides its customers
+with internet banking services. Customers use a web browser
+to consult the balance on their accounts and may transfer
+money from one account to another. The requirements we
+impose on our example application are:
+</bodyText>
+<listItem confidence="0.99801075">
+• Fundamental Requirements
+1. Security. Only authorised users should have ac-
+cess to an account.
+2. Reliability. Any operation must leave the system
+</listItem>
+<bodyText confidence="0.9387134">
+in a consistent state, i.e. while seeing the balance
+of an account, or while transferring money from
+one account to another, no money may disappear.
+Thus, the sum of the balances of all accounts re-
+mains constant over time.
+</bodyText>
+<listItem confidence="0.992817166666667">
+• Additional requirements for a dynamic environment
+3. Performance Tuning. For optimal throughput, the
+system should be able to switch policies, for instance
+between an optimistic or pessimistic locking proto-
+col [17].
+4. Replication. To be able to handle lots of requests in
+</listItem>
+<bodyText confidence="0.963124055555556">
+parallel, it should be possible to replicate the web
+server on different machines.
+5. Dynamic Reconfiguration. In the above two cases all
+reconfiguration of the web server should be dynamic.
+Thus, switching between policies and adding extra
+servers, should be possible without terminating the
+system.
+This set of requirements has the following implications: firstly,
+to provide reliability for multiple concurrent clients coordina-
+tion of actions is needed. Secondly, the additional requirements
+demand for a way to easily exchange solutions to this coordina-
+tion problem.
+We start with an initial design and implementation that fulfils
+the two fundamental requirements (section 2.1 and section 2.2).
+This elementary version doesn’t, however, satisfy the additional
+requirements for a dynamic environment. To resolve that we ap-
+ply two design guidelines (section 2.3) including the additional
+technology we need to be able to apply them (section 2.4).
+</bodyText>
+<subsectionHeader confidence="0.9929">
+2.1 An Initial Design
+</subsectionHeader>
+<bodyText confidence="0.998883">
+An initial design for our banking system is shown in Figure 1,
+where we see that a customer owns a number of accounts
+within abank, and that a customer may request the bank tosee
+the balance of an account and to transfer money from one
+account to another. When the bank object is answering such re-
+quests, it guarantees the “security” and “reliability” require-
+ments, phrased in the “account access contract”1 on the class
+Bank. That contract states (i) as invariant that the sum of the bal-
+ances of all accounts remains equal; (ii) as precondition for both
+the transfer and seeBalance operation that the request-
+ing customer is authorised to issue the request; (iii) as postcon-
+dition for the transfer operation that the balances of the
+involved accounts have been updated accordingly.
+</bodyText>
+<subsectionHeader confidence="0.975003">
+2.2 Naive Implementation
+</subsectionHeader>
+<bodyText confidence="0.99931396969697">
+To satisfy the “Reliability” requirement the internet banking
+system must incorporate concurrency control facilities, thus a
+per-account locking mechanism. A naive implementation —i.e.
+one that does not have to deal with the “Dynamic Reconfigura-
+tion” requirement— might achieve this via some additional
+locking code on the class Account and some transaction man-
+agement code on the class Bank. Typical code —adapted from
+[17]— is shown in Figure 2. To meet the “Security” requirement
+the call isAuthorised is added.
+A first observation to be made at this point is that concurren-
+cy control adjusts the public interface of the domain objects. In
+particular, thegetBalance andsetBalance operations re-
+quire an extra parameter (the transaction identifier), and the
+class Account contains additional operations (lock, com-
+mit, abort). A second observation is that we are forced to
+wrap a considerable amount of code around the domain specific
+functionality to meet the non-functional requirements (i.e., the
+greyed-out code in Figure 2). Finally, this design does not cope
+well with the “Dynamic Reconfiguration” requirement. Adding
+extra servers requires a new implementation of the Account
+class that is impossible to load at run-time without halting the
+system. And once the replicated servers are running, dynamic
+switching of the locking policy is impossible, because it requires
+loading new versions of the Bank and Account classes on all
+replicas simultaneously.
+The diagnosis of the problem —as should not come as a sur-
+prise— is an incorrect separation of concerns: functional as well
+as non-functional behaviour is mixed into the same class. To
+remedy this situation, we must factor out the state and behaviour
+for the transaction from the domain-specific code. In section 2.3
+through section 2.6 we show how a redesign leads to coordina-
+tion components that encapsulate non-functional behaviour and
+allow for dynamic reconfiguration.
+</bodyText>
+<subsectionHeader confidence="0.9977">
+2.3 Design Guidelines
+</subsectionHeader>
+<bodyText confidence="0.991003125">
+To tackle the problem of dynamic reconfigurability we apply --
+similar to what is proposed in [10] -- two design guidelines,
+namely “turn contracts into objects” and “turn configuration
+into a factory object”. The guidelines provide a step-by-step
+recipe to introduce components that encapsulate coordination,
+as proposed in [8]. Applying the guidelines to coordination is
+not trivial as we need to deal with concurrent interdependent ac-
+cesses to the domain objects (namely, the different transactions
+</bodyText>
+<listItem confidence="0.750291">
+1. In this paper, we use the notion of contracts as explained in “Design by Contract”[19].
+</listItem>
+<figureCaption confidence="0.931239">
+Figure 1 Initial design for an internet banking system, including the account access contract
+</figureCaption>
+<figure confidence="0.969071071428571">
+Customer * Account
+getBalance()
+setBalance(amount)
+accountNr: AccountNr
+balance: Amount
+customerNr: CustomerNr
+... Bank
+account
+access
+contract
+seeBalance(Customer,
+AccountNr): Amount
+transfer(Customer, Amount,
+AccountNr, AccountNr)
+</figure>
+<bodyText confidence="0.9920316">
+accessing the accounts). Therefore, in addition to what is pro-
+posed in [10], we need to wrap the domain objects individually
+to (1) control the access to these domain objects and (2) control
+the state of the domain objects in the presence of multiple trans-
+actions.
+Following the first guideline, we introduce an explicit repre-
+sentation of the “Account Access” contract (see Figure 3). This
+explicit contract object checks the pre- and postconditions of the
+contract with the pre and post operations. Following the sec-
+ond guideline, we introduce an explicit factory object (cf. the
+“Abstract Factory” design pattern [12]) that is responsible for
+supplying an appropriate set of domain objects according to the
+system configuration.
+The interaction diagram in Figure 3 illustrates the effect of
+introducing an explicit contract and a configuration object on the
+transfer operation. Basically, whenever a bank receives a re-
+quest (transfer or seeBalance), it first asks the global
+factory to supply the necessary objects (usingretrieveCon-
+tract and retrieveAccount). Next, it registers the par-
+ticipating objects on the contract (using register); requests
+the contract object to check the precondition (using pre); then
+does whatever is required to satisfy the actual request (a se-
+quence of getBalance and setBalance) and finally
+checks the postcondition (using post).
+if (not locked)
+</bodyText>
+<equation confidence="0.9764">
+lockedBy = id;
+copyBalance = balance;
+else fail;
+if this.lockedBy(id)
+return balance;
+else fail;
+Bank
+isAuthorised(customer);
+id = transactionMgr.newTransaction();
+// transfer amount from acc1 to acc2
+acc1.lock(id);
+acc2.lock(id);
+balance = acc1.getBalance(id);
+acc1.setBalance(id,balance-amount);
+balance = acc2.getBalance(id);
+acc2.setBalance(id,balance+amount);
+transactionMgr.commitTransaction (id)
+</equation>
+<figure confidence="0.929257789473684">
+Account
+getBalance(id)
+setBalance(id, amount)
+accountNr: AccountNr
+balance: Amount
+lock(id)
+if this.lockedBy(id)
+balance = newBalance;
+else fail;
+Figure 2 Naive implementation violating the “separation of concerns” principle.
+Grey regions denote non-functional code.
+copyBalance: Amount
+lockedBy: TransactionID
+commit(id)
+abort(id)
+seeBalance(Customer,
+AccountNr): Amount
+transfer(Customer, Amount,
+AccountNr, AccountNr)
+</figure>
+<figureCaption confidence="0.9662">
+Figure 3 Sequence diagram for “transfer” operation using explicit contract and factory objects.
+</figureCaption>
+<equation confidence="0.973685733333333">
+aBank
+transfer (acc1Nr, acc2Nr, amount)
+anAccountAccessContract
+retrieveContract (“transfer”)
+globalFactory
+acc1
+retrieveAccount (acc1Nr, “transfer”)
+acc2
+retrieveAccount (acc2Nr, “transfer”)
+register (acc1);
+register (acc2)
+pre()
+setBalance (getBalance() - amount)
+setBalance (getBalance() + amount)
+post()
+</equation>
+<bodyText confidence="0.999421">
+An important property of the turn contracts into objects and
+turn configuration into a factory object design guidelines is that
+these objects never introduce any behaviour outside the domain.
+However, they do introduce a number of hook methods (i.e.,
+retrieveContract, retrieveAccount, pre and
+post) that enable us (i) to separate transactional state from do-
+main specific state and (ii) to wrap additional transactional be-
+haviour around the domain specific operations. In the next
+sections we show how to make use of these hook methods to deal
+with the additional requirements for a dynamic environment.
+</bodyText>
+<subsectionHeader confidence="0.968308">
+2.4 Wrapping the Domain
+Objects
+</subsectionHeader>
+<bodyText confidence="0.985826461538462">
+To address the three requirements for a dynamic environment,
+we encapsulate the per-account locking mechanism into a set of
+collaborating wrapper objects. The transaction mechanism re-
+quires additional behaviour on pre and post (to initialize and
+terminate the transaction) and ongetBalance andsetBal-
+ance (to check the lock before performing the actual get- or set
+operation). This behaviour is added by wrapping the contract
+object and the account objects. Wrapping allows us to leave the
+protocol inside the existing transfer operation untouched. Fig-
+ure 4 shows the details: the greyed code shows the wrappers call-
+Figure 4 Sequence diagram with wrapped objects implementing per-account locking.
+The grey areas correspond to added details with respect to Figure 3: wrappers calling each other to pro-
+vide coordination of the wrapped objects.
+</bodyText>
+<equation confidence="0.925531741935484">
+post()
+newTransaction()
+TransactionMgr
+balance := getBalance()
+wrappedAccount.getBalance()
+setBalance(balance + amount)
+wrappedAccount.setBalance(balance
+commitTransaction(id)
+setBalance (getBalance() + amount)
+Forwards to wrapped
+wrappedContract.pre()
+wrappedContract.post()
+domain object
+aBank
+transfer (acc1Nr, acc2Nr, amount)
+aTransactionalContractWrapper
+retrieveContract (“transfer”)
+accWrapper1
+accWrapper2
+retrieveAccount (acc2Nr, “transfer”)
+register (acc1);
+globalFactory
+register (acc2)
+pre()
++amount)
+lock(id)
+lock(id)
+retrieveAccount (acc1Nr, “transfer”)
+if (lockedBy(id))
+if (lockedBy(id))
+ing each other (to provide the coordination) or the action they
+</equation>
+<listItem confidence="0.873010333333333">
+wrap. The details are explained in the following list:
+1. The retrieveContract operation wraps the
+original contract object to patch the pre and post
+operations.
+2. The retrieveAccount operation returns
+wrapped account objects with the original getBal-
+ance and setBalance operations patched.
+3. The patched pre operation initializes the transaction
+by issuing newTransaction on a global transac-
+tion manager and locking the accounts. Finally, it
+forwards the call to the wrapped contract object, to
+check the original preconditions as well.
+4. The patched getBalance and setBalance op-
+erations participate in the transaction by checking the
+lock and forwarding to the wrapped account object.
+5. The patched post operation forwards to the
+wrapped contract objects and then issues the final
+commitTransaction.
+</listItem>
+<bodyText confidence="0.988178333333333">
+Finally, a note on how a transaction may abort. This may happen
+after the lock or commitTransaction requests because
+the transaction system could not satisfy the request because of
+collisions with other transactions. Aborts may also happen just
+after the forwarded pre orpost operations return, because the
+contract object decides that the pre or post conditions are not sat-
+isfied. In all these cases, an exception is raised which handler
+gracefully cleans up all resources and terminates the transaction,
+leaving all the domain objects in their original state.
+</bodyText>
+<subsectionHeader confidence="0.789769">
+2.5 Reconfiguration of Locking
+Protocol
+</subsectionHeader>
+<bodyText confidence="0.9979683">
+Once we have introduced the per-account locking mechanism
+using the protocol in Figure 4, it is possible to switch from opti-
+mistic to pessimistic locking transparently. Indeed, the only dif-
+ference lies in the implementation of the lock operation:
+optimistic locking aborts immediately when it can not acquire a
+lock; pessimistic locking waits until the lock comes available
+[17]. Consequently, it suffices that the globalFactory instantiates
+the appropriate wrapper class --eitherOptimisticLockAc-
+count or PessimisticLockAccount (see Figure 5)-- to
+make the accounts lockable. The contract wrapper then provides
+all transaction related state needed by the lockable accounts
+(namely the transaction id). Figure 5 shows a possible class hier-
+archy to implement such locking functionality, similar to what is
+described in [24].
+Note that the wrappers around the domain objects expand the
+basic interaction protocol, as they interact with each other to
+provide the coordination service. Therefore, they are not inde-
+pendent and can only be used as a group. Consequently, we have
+but one global factory object (globalFactory) which is re-
+sponsible for instantiating the appropriate set of wrappers.
+</bodyText>
+<subsectionHeader confidence="0.998989">
+2.6 Replication of Services
+</subsectionHeader>
+<bodyText confidence="0.996439636363636">
+With the per-account locking protocol from Figure 4, it is possi-
+ble to replicate the individual account objects within several
+servers. To achieve this, all replicated account objects are
+wrapped into one CompositeLockAccount using a variant
+of the “Composite” design pattern [12] (see Figure 6). On re-
+ceiving a lock or setBalance operation, the composite for-
+wards to all contained accounts, while the getBalance
+operation is forwarded to a single account object only. Again, by
+instantiating the appropriate wrapping objects into the factory
+object, the replicated services of our system can be dynamically
+reconfigured.
+</bodyText>
+<sectionHeader confidence="0.998813" genericHeader="method">
+3 DISCUSSION
+</sectionHeader>
+<bodyText confidence="0.970758333333333">
+To achieve the goal of dynamic reconfigurability of non-func-
+tional behaviour we have introduced explicit contracts and con-
+figuration objects as a way to encapsulate coordination
+behaviour into a special-purpose component. The example of
+the internet banking illustrates the typical steps involved in de-
+signing coordination components:
+</bodyText>
+<listItem confidence="0.842753">
+1. Start with an initial design for the domain, including
+</listItem>
+<figureCaption confidence="0.792767">
+contracts that state the obligations of the participat-
+ing classes. Define the contracts according to “De-
+Figure 5 Class hierarchy for reconfigurable locking protocols
+</figureCaption>
+<figure confidence="0.957845217391305">
+Lockable
+lock(id: TransactionID)
+Contract
+pre()
+post()
+register(Object)
+LockingContract
+OptimisticLockAccount
+getBalance()
+setBalance()
+wrappedAccount:Account
+PessimisticLockAccount
+getBalance()
+setBalance()
+wrappedAccount:Account
+OptimisticLockable
+lock(id: TransactionID)
+PessimisticLockable
+lock(id: TransactionID)
+wrappedContract: Contract
+id: TransactionID
+pre()
+post()
+</figure>
+<listItem confidence="0.862128083333333">
+sign by Contract” principle [19], i.e. using pre- and
+postconditions.
+2. Apply the design guideline “turn contracts into ob-
+jects”. Thus, define a separate object per contract,
+providing pre and post operations for checking
+the contractual obligations. Also, have the domain
+objects invoke these pre and post operations.
+3. Apply the design guideline “turn configuration into
+a factory object”. Thus, introduce an object that
+knows which wrappers and domain objects to create
+for a certain configuration.
+4. Add non-functional behaviour by providing wrap-
+</listItem>
+<bodyText confidence="0.992699180327869">
+pers around the original domain objects. The wrap-
+pers instrument the domain-specific operations with
+the non-functional coordination behaviour. A partic-
+ular configuration of wrapper objects is then a coor-
+dination component.
+The fact that the explicit representations of the contracts provide
+the necessary hooks for coping with non-functional require-
+ments is not coincidence. Indeed, a contract object forces the de-
+signer to make the important sequence of domain operations
+explicit, thus providing the ideal place to factor out non-func-
+tional state and wrap non-functional behaviour.
+We call a configuration of wrapper objects containing a par-
+ticular locking or replication policy a coordination component.
+According to the definition “components are static abstractions
+with plugs” ([20], p.5), this corresponds indeed to a component.
+The configuration is (a) static because it can be stored inside a
+component-base to be reused across different applications; it’s
+an (b) abstraction because it encapsulates well-defined coordi-
+nation behaviour and it has (c) plugs by means of the wrapped
+operations.
+Although the solution provides for dynamic reconfiguration
+of coordination aspects of a system, it also makes the system in-
+herently more complex. Instead of only having the domain ob-
+jects altered with some coordination code, the management of
+coordination is delegated to a set of specialized objects which
+can be exchanged at run-time. This implies that the design steps
+should only be applied when dynamic reconfiguration is a re-
+quirement.
+Finally, dynamically exchanging coordination protocols
+may be eased by reflection support in the underlying program-
+ming language. In languages such as CLOS [3] or Smalltalk
+[11], domain specific operations can be explicitly manipulated
+to wrap additional state and behaviour. We have used the wrap-
+pers together with the factory object as a kind of “poor men’s re-
+flection”, to achieve the necessary method instrumentation in
+mainstream object-oriented languages such as C++ and Java.
+Past, Present and Future
+The initial ideas on coordination components appeared in [25],
+later summarized in [8]. On the other hand, the role of explicit
+contract and configuration objects in framework design has been
+explored in [9], later refined in [10]. In the paper you are reading
+now, both the ideas on pluggable coordination policies and the
+explicit objects have been combined into a series of design steps
+that lead to coordination components.
+A prototype with the presented design has been successfully
+built. Indeed, switching the banking system from a non-transac-
+tional system to a transactional system requires only to make the
+factory provide the right set of wrappers. Similarly, switching
+between transaction policies is done by making the factory pro-
+vide a different set of transactional wrappers.
+Future work includes extending the framework to use COR-
+BA’s and COM’s transactional systems and test the applicability
+of the approach in a real-world context. In particular, more work
+needs to be done on examining the effects of dynamically
+changing the policies. Future work also includes a survey of
+contracts as the basis for the development of a coordination
+framework. Special emphasis within this framework is on coor-
+dination contracts as the means for governing the collaborations
+between objects or components in a software system. A coordi-
+nation contract makes explicit what the minimal and sufficient
+conditions are for the different parts to work together.
+</bodyText>
+<sectionHeader confidence="0.999912" genericHeader="related work">
+4 RELATED WORK
+</sectionHeader>
+<bodyText confidence="0.977034444444444">
+This work is located in the area between coordination and ob-
+ject-oriented framework technology. Therefore, we discuss re-
+lated work out of both these areas. Note that we build upon
+established ideas from well-known concurrent systems technol-
+ogy as well, but we do not refer to these.
+Coordination languages
+Coordination languages, such as Gamma [4] and all kinds of
+Linda-flavours [7], typically provide a single paradigm to sepa-
+rate the coordination part of an application from the computa-
+</bodyText>
+<figureCaption confidence="0.699718">
+Figure 6 Class hierarchy for replicated services
+</figureCaption>
+<figure confidence="0.774200090909091">
+LockableAccount
+lock(id: TransactionID)
+CompositeLockAccount
+getBalance()
+wrapped:[0..n] LockableAccount
+setBalance()
+lock(id: TransactionID)
+Forward to 1 wrapped object
+Forward to all wrapped objects
+getBalance()
+setBalance()
+</figure>
+<bodyText confidence="0.976455229508197">
+tional part. For instance, Gamma supports a chemical reaction
+model for the definition of programs without artificial sequenti-
+ality, while Linda provides tuple-spaces for generative commu-
+nication with some basic synchronization.
+The idea of coordination components is not new, as illustrat-
+ed by work such as Manifold [1]. This language coordinates the
+global behaviour of a number of black box components by con-
+necting their respective communication ports. Systems can be
+reconfigured by dynamically rewiring its constituting compo-
+nents.
+The TOOLBUS coordination architecture [6] provides a
+communication bus to connect components in a distributed en-
+vironment. The communication bus is controlled by process-
+oriented scripts, which formalize the interaction between the
+components. The approach provide a clean separation of con-
+cerns, as the components only compute and the scripts describe
+the interaction.
+Like promoted by coordination languages, our approach
+provides explicit separation of coordination and computation.
+However, we do not investigate a particular paradigm or formal-
+ization of coordination. We focus on wrapping technology in
+mainstream object-oriented languages. Consequently, our de-
+sign guidelines are directly applicable in object-oriented appli-
+cations that need dynamic reconfiguration of coordination
+policies.
+What we don’t address in this paper is the coordination prob-
+lem of inter-activity coordination as for instance known in work-
+flow systems. Examples of coordination research in this area are
+CLF [2] and Sonia [4].
+Object-Oriented Framework
+Technology
+Today, a few commercial frameworks deal with coordination is-
+sues, most notably CORBA implementations and Microsoft’s
+ActiveX. These frameworks provide basic services for coordi-
+nating distributed communication, e.g. the CORBA transaction
+service. Our approach is complementary to these, in the sense
+that --like promoted by coordination languages-- we advocate
+for a separation of coordination from computation. As such, the
+guidelines help to encapsulate the dependencies on such com-
+mercial services, so that we for instance would be able switch
+transparently and dynamically between a CORBA and DCOM
+implementation.
+The ADAPTIVE Communication Environment (ACE) [22]
+of Doug Schmidt implements a set of design patterns for concur-
+rent event-driven communication software. It simplifies the de-
+velopment, configuration and reconfiguration of distributed
+applications and services that use interprocess communication,
+event demultiplexing, explicit dynamic linking and concurren-
+cy.
+In [24], a transaction framework is presented that provides
+ways to dynamically adapt the transaction semantics of a system
+for optimal transactional behaviour at all times. This work
+shows the feasibility of dynamic exchange of transaction poli-
+cies.
+Coda [14] has been used to open up the implementation of
+Smalltalk message passing and is able to add meta-level infra-
+structure to Smalltalk objects, so that additional behaviour such
+as concurrency or distribution can be added. The Coda experi-
+ment is especially important as it shows that a meta-level is “just
+another application” and that traditional software design tech-
+niques such as abstraction and decomposition remain valuable.
+</bodyText>
+<subsectionHeader confidence="0.4601515">
+Implementational Reflection and
+Aspect Oriented Programming
+</subsectionHeader>
+<bodyText confidence="0.999464111111111">
+A major source of inspiration for our work, called implementa-
+tional reflection, is presented in [21]. It is an approach that
+“opens up” implementations by exposing their meta-level. On
+one hand a system has a base-level interface which is the com-
+mon interface for such a system, where on the other hand the
+system has a meta-level interface that reveals how some aspects
+of the system are implemented. The meta-level interface pro-
+vides the possibility to change the default base-level behaviour
+to behaviour that differs in semantics and/or performance. In
+[21] the approach is illustrated by a windowing system. In the
+context of this approach our work can be viewed as providing a
+meta-level for coordination where coordination policies can be
+switched.
+In Aspect Oriented Programming [15],[18], systems are
+viewed as a set of components and aspects. Components are
+properties of systems that are easily encapsulated in a generic
+way, and aspects are properties that effect many other compo-
+nents and therefore cannot be cleanly encapsulated. Both these
+kinds of properties will cross-cut each other in a system’s imple-
+mentation. The solution they propose is to describe the compo-
+nents and the aspects in their own languages, thereby ensuring
+separation of concerns, and then mix the properties using a spe-
+cial language processor. Although the solution provides a clean
+separation of concerns, it doesn’t support the coordination of
+off-the-shelf components. Aspects and components are mixed at
+compile time, leaving out the possibility to plug-in other compo-
+nents afterwards.
+</bodyText>
+<sectionHeader confidence="0.999807" genericHeader="conclusions">
+5 CONCLUSION
+</sectionHeader>
+<bodyText confidence="0.9987071875">
+The very nature of web-like environments --with its rapid evolu-
+tion of standards and protocols-- demands for dynamic reconfig-
+uration. Component technology as a means to dynamically plug
+in new functionality is becoming increasingly important. Yet,
+truly distributed web systems are scarce, partly because compo-
+nent technology has not yet been able to deliver reusable coordi-
+nation abstractions.
+In this paper we have shown that it is possible to provide re-
+usable coordination solutions as dynamically pluggable compo-
+nents. Explicit contract and factory objects form the key to the
+solution: they provide the right set of hooks to wrap additional
+non-functional coordination behaviour. This in turn gives rise to
+what we call a coordination component. The explicit contract
+and factory objects follow naturally from applying two frame-
+work design guidelines: “turn contracts into objects” and “turn
+configuration into a factory object”.
+</bodyText>
+<sectionHeader confidence="0.977958" genericHeader="acknowledgments">
+ACKNOWLEGDEMENTS
+</sectionHeader>
+<bodyText confidence="0.995196166666667">
+We would like to thank all members of the SCG who have
+carefully reviewed earlier drafts of this paper. Furthermore, this
+work has been funded by the Swiss Government under Project
+no. NFS-2000-46947.96 and BBW-96.0015 as well as by the
+European Union under the ESPRIT programme Project no.
+21975.
+</bodyText>
+<sectionHeader confidence="0.996507" genericHeader="references">
+REFERENCES
+</sectionHeader>
+<reference confidence="0.998138319587629">
+[1] Arbad, A., “The IWIM Model for Coordination of
+Concurrent Activities,” Proceedings of COORDINA-
+TION’96, Ciancarini, P. and Hankin, C. (Eds), LNCS
+1061, Springer Verlag, April 1996.
+[2] Andreoli, J.-M., Freeman, S. and Pareschi, R., ‘‘The
+Coordination Language Facility: Coordination of
+Distributed Objects,’’ TAPOS, vol. 2, no. 2, 1996,
+pp. 635-667.
+[3] Attardi, G., Bonini, C., Boscotrecase, M. R., Flagel-
+la, T. and Gaspari, M., ‘‘Metalevel Programming in
+CLOS,’’ Proceedings ECOOP’89, S. Cook (Ed.),
+Cambridge University Press, Nottingham, July 10-
+14, 1989, pp. 243-256.
+[4] Banâtre, J.-P. and Le Métayer, D., “Gamma and the
+Chemical Reaction Model,” Proceedings of the Co-
+ordination’95 Workshop, IC Press, London, 1995.
+[5] Banville, M., ‘‘Sonia: an Adaptation of Linda for Co-
+ordination of Activities in Organizations,’’ Proceed-
+ings of COOORDINATION’96, Ciancarini, P. and
+Hankin, C. (Eds), LNCS 1061, Springer-Verlag,
+Cesena, Italy, April 1996, pp. 57-74.
+[6] Bergstra, J. A. and Klint, P., ‘‘The ToolBus Coordi-
+nation Architecture,’’ Proceedings of COORDINA-
+TION’96, Ciancarini, P. and Hankin, C. (Eds), LNCS
+1061, Springer-Verlag, Cesena, Italy, 1996, pp. 75-
+88.
+[7] Carriero, N. and Gelernter, D., “Linda in Context,”
+Communications of the ACM, vol. 32, no. 4, April
+1989, pp. 444-458.
+[8] Cruz, J. C. and Tichelaar, S., ‘‘Managing Evolution
+Of Coordination Aspects In Open Systems,’’ Ninth
+International Workshop On Database And Expert
+Systems Applications, Wagner, R. R. (Ed.), IEEE
+Computer Press, Vienna, Austria, August 1998, pp.
+578-582.
+[9] Demeyer, S., ZYPHER Tailorability as a link from
+Object-Oriented Software Engineering to Open Hy-
+permedia, Ph.D. Thesis, Vrije Universiteit Brussel,
+Brussels, Belgium, July, 1996.
+[10] Demeyer, S., Meijler, T. D., Nierstrasz, O. and Stey-
+aert, P., “Design Guidelines for Tailorable Frame-
+works,” Communications of the ACM, vol. 40, no.
+10, October 1997, pp. 60-64.
+[11] Ducasse, S., ‘‘Evaluating Message Passing Control
+Techniques in Smalltalk,’’ Journal of Object-Orient-
+ed Programming (JOOP), vol. 12, no. 6, SIGS Press,
+June 1999.
+[12] Gamma, E., Helm, R., Johnson, R. and Vlissides, J.,
+Design Patterns, Addison- Wesley, Reading, MA,
+1995.
+[13] Guerraoui, R. and Fayad, M. E., “Object-Oriented
+Abstractions for Distributed Programming,” Com-
+munications of the ACM, vol. 42, no. 8, August 1999,
+pp. 125-127.
+[14] McAffer, J., ‘‘Meta-level Programming with Co-
+dA,’’ Proceedings ECOOP’95, Olthoff, W. (Ed.),
+LNCS 952, Springer-Verlag, Aarhus, Denmark, Au-
+gust 1995, pp. 190-214.
+[15] Kiczales, G. et al., “Aspect-Oriented Programming,”
+Proceedings ECOOP’97, Aksit, M. and Matsuoka,
+S. (Eds), LNCS 1241, Springer-Verlag, Jyväskylä,
+June 1997, pp. 220-242.
+[16] Laddaga, R. and Veitch, J., ‘‘Dynamic Object Tech-
+nology,’’ Communications of the ACM, vol. 40, no.
+5, ACM Press, May 1997, pp. 36-38.
+[17] Lea, D., Concurrent Programming in Java -- Design
+principles and Patterns, The Java Series, Addison-
+Wesley, 1996.
+[18] Lopes, C., “Aspect Oriented Programming”, Object-
+Oriented Technology (ECOOP’98 Workshop Read-
+er), Demeyer, S. and Bosch, J. (Eds), LNCS 1543,
+Springer-Verlag, July 1998, pp. 394-443.
+[19] Meyer, B., Object-Oriented Software Construction,
+Prentice Hall, 1997, second edition.
+[20] Nierstrasz, O. and Tsichritzis, D., Object-Oriented
+Software Composition, Prentice Hall, 1995.
+[21] Rao, R., “Implementational Reflection in Silica,”
+Proceedings ECOOP’91, America, P. (Ed.), LNCS
+512, Springer-Verlag, Geneva, Switzerland, July
+1991, pp. 251-267.
+[22] Schmidt, D. C., “The ADAPTIVE Communication
+Environment: An O.O. Network Programming
+Toolkit for developing Communication Software,”
+Technical Report, Department of Computer Science,
+Washington University, 1994.
+[23] Schmidt, D. C., and Fayad, M. E., “Lessons Learned
+Building Reusable OO Frameworks for Distributed
+Software,” Communications of the ACM, vol. 40, no.
+10, October 1997, pp. 85-87.
+[24] Tekinerdogan, B., “An Application Framework for
+Building Dynamically Configurable Transaction
+Systems,” OOPSLA’96, Development of Object-
+Oriented Frameworks Workshop, San Jose, USA,
+1996.
+[25] Tichelaar, S., A Coordination Component Frame-
+work for Open Distributed Systems, Master’s Thesis,
+University of Groningen, May 1997.
+</reference>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.720166">
+<title confidence="0.9903885">Design Guidelines for Coordination Components</title>
+<author confidence="0.973076">Sander Tichelaar</author>
+<author confidence="0.973076">Juan Carlos Cruz</author>
+<author confidence="0.973076">Serge Demeyer</author>
+<address confidence="0.91016">Institut für Informatik (IAM), Universität Bern, Neubrückstrasse 10, CH-3012 Berne, Switzerland.</address>
+<email confidence="0.90751">E-mail:{tichel,cruz,demeyer}@iam.unibe.ch.WWW:http://www.iam.unibe.ch/~scg/.</email>
+<keyword confidence="0.9549225">Keywords: coordination component, object-orientation, contracts, transactions, design guidelines</keyword>
+<abstract confidence="0.997249466666667">The distributed nature of a typical web application combined with the rapid evolution of underlying platforms demands for a plug-in component architecture. Nevertheless, code for controlling distributed activities is usually spread over multiple subsystems, which makes it hard to dynamically reconfigure coordination services. This paper investigates coordination components as a way to encapsulate the coordination of a distributed system into a separate, pluggable entity. In an object-oriented context we introduce two design guidelines (namely, “turn contracts into objects” and “turn configuration into a factory object”) that help developers to separate coordination from computation and to develop reusable and flexible solutions for coordination in distributed systems.</abstract>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>A Arbad</author>
+</authors>
+<title>The IWIM Model for Coordination of Concurrent Activities,”</title>
+<date>1996</date>
+<booktitle>Proceedings of COORDINATION’96, Ciancarini,</booktitle>
+<publisher>Springer Verlag,</publisher>
+<contexts>
+<context position="23504" citStr="[1]" startWordPosition="3393" endWordPosition="3393">computaFigure 6 Class hierarchy for replicated services LockableAccount lock(id: TransactionID) CompositeLockAccount getBalance() wrapped:[0..n] LockableAccount setBalance() lock(id: TransactionID) Forward to 1 wrapped object Forward to all wrapped objects getBalance() setBalance() tional part. For instance, Gamma supports a chemical reaction model for the definition of programs without artificial sequentiality, while Linda provides tuple-spaces for generative communication with some basic synchronization. The idea of coordination components is not new, as illustrated by work such as Manifold [1]. This language coordinates the global behaviour of a number of black box components by connecting their respective communication ports. Systems can be reconfigured by dynamically rewiring its constituting components. The TOOLBUS coordination architecture [6] provides a communication bus to connect components in a distributed environment. The communication bus is controlled by processoriented scripts, which formalize the interaction between the components. The approach provide a clean separation of concerns, as the components only compute and the scripts describe the interaction. Like promoted</context>
+</contexts>
+<marker>[1]</marker>
+<rawString>Arbad, A., “The IWIM Model for Coordination of Concurrent Activities,” Proceedings of COORDINATION’96, Ciancarini, P. and Hankin, C. (Eds), LNCS 1061, Springer Verlag, April 1996.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J-M Andreoli</author>
+<author>S Freeman</author>
+<author>R Pareschi</author>
+</authors>
+<title>The Coordination Language Facility:</title>
+<date>1996</date>
+<journal>Coordination of Distributed Objects,’’ TAPOS,</journal>
+<volume>2</volume>
+<pages>635--667</pages>
+<contexts>
+<context position="24715" citStr="[2]" startWordPosition="3565" endWordPosition="3565">dination languages, our approach provides explicit separation of coordination and computation. However, we do not investigate a particular paradigm or formalization of coordination. We focus on wrapping technology in mainstream object-oriented languages. Consequently, our design guidelines are directly applicable in object-oriented applications that need dynamic reconfiguration of coordination policies. What we don’t address in this paper is the coordination problem of inter-activity coordination as for instance known in workflow systems. Examples of coordination research in this area are CLF [2] and Sonia [4]. Object-Oriented Framework Technology Today, a few commercial frameworks deal with coordination issues, most notably CORBA implementations and Microsoft’s ActiveX. These frameworks provide basic services for coordinating distributed communication, e.g. the CORBA transaction service. Our approach is complementary to these, in the sense that --like promoted by coordination languages-- we advocate for a separation of coordination from computation. As such, the guidelines help to encapsulate the dependencies on such commercial services, so that we for instance would be able switch t</context>
+</contexts>
+<marker>[2]</marker>
+<rawString>Andreoli, J.-M., Freeman, S. and Pareschi, R., ‘‘The Coordination Language Facility: Coordination of Distributed Objects,’’ TAPOS, vol. 2, no. 2, 1996, pp. 635-667.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>G Attardi</author>
+<author>C Bonini</author>
+<author>M R Boscotrecase</author>
+<author>T Flagella</author>
+<author>M Gaspari</author>
+</authors>
+<title>Metalevel Programming</title>
+<date>1989</date>
+<booktitle>in CLOS,’’ Proceedings ECOOP’89, S. Cook (Ed.),</booktitle>
+<pages>243--256</pages>
+<publisher>Cambridge University Press,</publisher>
+<location>Nottingham,</location>
+<contexts>
+<context position="20596" citStr="[3]" startWordPosition="2952" endWordPosition="2952">. Although the solution provides for dynamic reconfiguration of coordination aspects of a system, it also makes the system inherently more complex. Instead of only having the domain objects altered with some coordination code, the management of coordination is delegated to a set of specialized objects which can be exchanged at run-time. This implies that the design steps should only be applied when dynamic reconfiguration is a requirement. Finally, dynamically exchanging coordination protocols may be eased by reflection support in the underlying programming language. In languages such as CLOS [3] or Smalltalk [11], domain specific operations can be explicitly manipulated to wrap additional state and behaviour. We have used the wrappers together with the factory object as a kind of “poor men’s reflection”, to achieve the necessary method instrumentation in mainstream object-oriented languages such as C++ and Java. Past, Present and Future The initial ideas on coordination components appeared in [25], later summarized in [8]. On the other hand, the role of explicit contract and configuration objects in framework design has been explored in [9], later refined in [10]. In the paper you ar</context>
+</contexts>
+<marker>[3]</marker>
+<rawString>Attardi, G., Bonini, C., Boscotrecase, M. R., Flagella, T. and Gaspari, M., ‘‘Metalevel Programming in CLOS,’’ Proceedings ECOOP’89, S. Cook (Ed.), Cambridge University Press, Nottingham, July 10-14, 1989, pp. 243-256.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J-P Banâtre</author>
+<author>D Le Métayer</author>
+</authors>
+<title>Gamma and the Chemical Reaction Model,”</title>
+<date>1995</date>
+<booktitle>Proceedings of the Coordination’95 Workshop,</booktitle>
+<publisher>IC Press,</publisher>
+<location>London,</location>
+<contexts>
+<context position="22766" citStr="[4]" startWordPosition="3293" endWordPosition="3293">tion contracts as the means for governing the collaborations between objects or components in a software system. A coordination contract makes explicit what the minimal and sufficient conditions are for the different parts to work together. 4 RELATED WORK This work is located in the area between coordination and object-oriented framework technology. Therefore, we discuss related work out of both these areas. Note that we build upon established ideas from well-known concurrent systems technology as well, but we do not refer to these. Coordination languages Coordination languages, such as Gamma [4] and all kinds of Linda-flavours [7], typically provide a single paradigm to separate the coordination part of an application from the computaFigure 6 Class hierarchy for replicated services LockableAccount lock(id: TransactionID) CompositeLockAccount getBalance() wrapped:[0..n] LockableAccount setBalance() lock(id: TransactionID) Forward to 1 wrapped object Forward to all wrapped objects getBalance() setBalance() tional part. For instance, Gamma supports a chemical reaction model for the definition of programs without artificial sequentiality, while Linda provides tuple-spaces for generative </context>
+<context position="24729" citStr="[4]" startWordPosition="3568" endWordPosition="3568">ages, our approach provides explicit separation of coordination and computation. However, we do not investigate a particular paradigm or formalization of coordination. We focus on wrapping technology in mainstream object-oriented languages. Consequently, our design guidelines are directly applicable in object-oriented applications that need dynamic reconfiguration of coordination policies. What we don’t address in this paper is the coordination problem of inter-activity coordination as for instance known in workflow systems. Examples of coordination research in this area are CLF [2] and Sonia [4]. Object-Oriented Framework Technology Today, a few commercial frameworks deal with coordination issues, most notably CORBA implementations and Microsoft’s ActiveX. These frameworks provide basic services for coordinating distributed communication, e.g. the CORBA transaction service. Our approach is complementary to these, in the sense that --like promoted by coordination languages-- we advocate for a separation of coordination from computation. As such, the guidelines help to encapsulate the dependencies on such commercial services, so that we for instance would be able switch transparently a</context>
+</contexts>
+<marker>[4]</marker>
+<rawString>Banâtre, J.-P. and Le Métayer, D., “Gamma and the Chemical Reaction Model,” Proceedings of the Coordination’95 Workshop, IC Press, London, 1995.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>M Banville</author>
+</authors>
+<title>Sonia: an Adaptation of Linda for Coordination of Activities in Organizations,’’</title>
+<date>1996</date>
+<booktitle>Proceedings of COOORDINATION’96, Ciancarini, P. and Hankin, C. (Eds), LNCS 1061, Springer-Verlag,</booktitle>
+<pages>57--74</pages>
+<location>Cesena, Italy,</location>
+<marker>[5]</marker>
+<rawString>Banville, M., ‘‘Sonia: an Adaptation of Linda for Coordination of Activities in Organizations,’’ Proceedings of COOORDINATION’96, Ciancarini, P. and Hankin, C. (Eds), LNCS 1061, Springer-Verlag, Cesena, Italy, April 1996, pp. 57-74.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J A Bergstra</author>
+<author>P Klint</author>
+</authors>
+<title>The ToolBus Coordination Architecture,’’</title>
+<date>1996</date>
+<booktitle>Proceedings of COORDINATION’96, Ciancarini, P. and Hankin, C. (Eds), LNCS 1061, Springer-Verlag,</booktitle>
+<pages>75--88</pages>
+<location>Cesena, Italy,</location>
+<contexts>
+<context position="23763" citStr="[6]" startWordPosition="3429" endWordPosition="3429">tBalance() setBalance() tional part. For instance, Gamma supports a chemical reaction model for the definition of programs without artificial sequentiality, while Linda provides tuple-spaces for generative communication with some basic synchronization. The idea of coordination components is not new, as illustrated by work such as Manifold [1]. This language coordinates the global behaviour of a number of black box components by connecting their respective communication ports. Systems can be reconfigured by dynamically rewiring its constituting components. The TOOLBUS coordination architecture [6] provides a communication bus to connect components in a distributed environment. The communication bus is controlled by processoriented scripts, which formalize the interaction between the components. The approach provide a clean separation of concerns, as the components only compute and the scripts describe the interaction. Like promoted by coordination languages, our approach provides explicit separation of coordination and computation. However, we do not investigate a particular paradigm or formalization of coordination. We focus on wrapping technology in mainstream object-oriented languag</context>
+</contexts>
+<marker>[6]</marker>
+<rawString>Bergstra, J. A. and Klint, P., ‘‘The ToolBus Coordination Architecture,’’ Proceedings of COORDINATION’96, Ciancarini, P. and Hankin, C. (Eds), LNCS 1061, Springer-Verlag, Cesena, Italy, 1996, pp. 75-88.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>N Carriero</author>
+<author>D Gelernter</author>
+</authors>
+<title>Linda in Context,”</title>
+<date>1989</date>
+<journal>Communications of the ACM,</journal>
+<volume>32</volume>
+<pages>444--458</pages>
+<contexts>
+<context position="22802" citStr="[7]" startWordPosition="3299" endWordPosition="3299">rning the collaborations between objects or components in a software system. A coordination contract makes explicit what the minimal and sufficient conditions are for the different parts to work together. 4 RELATED WORK This work is located in the area between coordination and object-oriented framework technology. Therefore, we discuss related work out of both these areas. Note that we build upon established ideas from well-known concurrent systems technology as well, but we do not refer to these. Coordination languages Coordination languages, such as Gamma [4] and all kinds of Linda-flavours [7], typically provide a single paradigm to separate the coordination part of an application from the computaFigure 6 Class hierarchy for replicated services LockableAccount lock(id: TransactionID) CompositeLockAccount getBalance() wrapped:[0..n] LockableAccount setBalance() lock(id: TransactionID) Forward to 1 wrapped object Forward to all wrapped objects getBalance() setBalance() tional part. For instance, Gamma supports a chemical reaction model for the definition of programs without artificial sequentiality, while Linda provides tuple-spaces for generative communication with some basic synchr</context>
+</contexts>
+<marker>[7]</marker>
+<rawString>Carriero, N. and Gelernter, D., “Linda in Context,” Communications of the ACM, vol. 32, no. 4, April 1989, pp. 444-458.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J C Cruz</author>
+<author>S Tichelaar</author>
+</authors>
+<title>Managing Evolution Of Coordination Aspects In</title>
+<date>1998</date>
+<booktitle>Open Systems,’’ Ninth International Workshop On Database And Expert Systems Applications,</booktitle>
+<pages>578--582</pages>
+<publisher>IEEE Computer Press,</publisher>
+<location>Vienna, Austria,</location>
+<contexts>
+<context position="8801" citStr="[8]" startWordPosition="1306" endWordPosition="1306">r out the state and behaviour for the transaction from the domain-specific code. In section 2.3 through section 2.6 we show how a redesign leads to coordination components that encapsulate non-functional behaviour and allow for dynamic reconfiguration. 2.3 Design Guidelines To tackle the problem of dynamic reconfigurability we apply -- similar to what is proposed in [10] -- two design guidelines, namely “turn contracts into objects” and “turn configuration into a factory object”. The guidelines provide a step-by-step recipe to introduce components that encapsulate coordination, as proposed in [8]. Applying the guidelines to coordination is not trivial as we need to deal with concurrent interdependent accesses to the domain objects (namely, the different transactions 1. In this paper, we use the notion of contracts as explained in “Design by Contract”[19]. Figure 1 Initial design for an internet banking system, including the account access contract Customer * Account getBalance() setBalance(amount) accountNr: AccountNr balance: Amount customerNr: CustomerNr ... Bank account access contract seeBalance(Customer, AccountNr): Amount transfer(Customer, Amount, AccountNr, AccountNr) accessin</context>
+<context position="21031" citStr="[8]" startWordPosition="3019" endWordPosition="3019">irement. Finally, dynamically exchanging coordination protocols may be eased by reflection support in the underlying programming language. In languages such as CLOS [3] or Smalltalk [11], domain specific operations can be explicitly manipulated to wrap additional state and behaviour. We have used the wrappers together with the factory object as a kind of “poor men’s reflection”, to achieve the necessary method instrumentation in mainstream object-oriented languages such as C++ and Java. Past, Present and Future The initial ideas on coordination components appeared in [25], later summarized in [8]. On the other hand, the role of explicit contract and configuration objects in framework design has been explored in [9], later refined in [10]. In the paper you are reading now, both the ideas on pluggable coordination policies and the explicit objects have been combined into a series of design steps that lead to coordination components. A prototype with the presented design has been successfully built. Indeed, switching the banking system from a non-transactional system to a transactional system requires only to make the factory provide the right set of wrappers. Similarly, switching betwee</context>
+</contexts>
+<marker>[8]</marker>
+<rawString>Cruz, J. C. and Tichelaar, S., ‘‘Managing Evolution Of Coordination Aspects In Open Systems,’’ Ninth International Workshop On Database And Expert Systems Applications, Wagner, R. R. (Ed.), IEEE Computer Press, Vienna, Austria, August 1998, pp. 578-582.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Demeyer</author>
+</authors>
+<title>ZYPHER Tailorability as a link from Object-Oriented Software Engineering to Open Hypermedia,</title>
+<date>1996</date>
+<tech>Ph.D. Thesis,</tech>
+<institution>Vrije Universiteit Brussel,</institution>
+<location>Brussels, Belgium,</location>
+<contexts>
+<context position="21152" citStr="[9]" startWordPosition="3039" endWordPosition="3039">ramming language. In languages such as CLOS [3] or Smalltalk [11], domain specific operations can be explicitly manipulated to wrap additional state and behaviour. We have used the wrappers together with the factory object as a kind of “poor men’s reflection”, to achieve the necessary method instrumentation in mainstream object-oriented languages such as C++ and Java. Past, Present and Future The initial ideas on coordination components appeared in [25], later summarized in [8]. On the other hand, the role of explicit contract and configuration objects in framework design has been explored in [9], later refined in [10]. In the paper you are reading now, both the ideas on pluggable coordination policies and the explicit objects have been combined into a series of design steps that lead to coordination components. A prototype with the presented design has been successfully built. Indeed, switching the banking system from a non-transactional system to a transactional system requires only to make the factory provide the right set of wrappers. Similarly, switching between transaction policies is done by making the factory provide a different set of transactional wrappers. Future work inclu</context>
+</contexts>
+<marker>[9]</marker>
+<rawString>Demeyer, S., ZYPHER Tailorability as a link from Object-Oriented Software Engineering to Open Hypermedia, Ph.D. Thesis, Vrije Universiteit Brussel, Brussels, Belgium, July, 1996.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Demeyer</author>
+<author>T D Meijler</author>
+<author>O Nierstrasz</author>
+<author>P Steyaert</author>
+</authors>
+<title>Design Guidelines for Tailorable Frameworks,”</title>
+<date>1997</date>
+<journal>Communications of the ACM,</journal>
+<volume>40</volume>
+<pages>60--64</pages>
+<contexts>
+<context position="8571" citStr="[10]" startWordPosition="1274" endWordPosition="1274">taneously. The diagnosis of the problem —as should not come as a surprise— is an incorrect separation of concerns: functional as well as non-functional behaviour is mixed into the same class. To remedy this situation, we must factor out the state and behaviour for the transaction from the domain-specific code. In section 2.3 through section 2.6 we show how a redesign leads to coordination components that encapsulate non-functional behaviour and allow for dynamic reconfiguration. 2.3 Design Guidelines To tackle the problem of dynamic reconfigurability we apply -- similar to what is proposed in [10] -- two design guidelines, namely “turn contracts into objects” and “turn configuration into a factory object”. The guidelines provide a step-by-step recipe to introduce components that encapsulate coordination, as proposed in [8]. Applying the guidelines to coordination is not trivial as we need to deal with concurrent interdependent accesses to the domain objects (namely, the different transactions 1. In this paper, we use the notion of contracts as explained in “Design by Contract”[19]. Figure 1 Initial design for an internet banking system, including the account access contract Customer * </context>
+<context position="21175" citStr="[10]" startWordPosition="3043" endWordPosition="3043">anguages such as CLOS [3] or Smalltalk [11], domain specific operations can be explicitly manipulated to wrap additional state and behaviour. We have used the wrappers together with the factory object as a kind of “poor men’s reflection”, to achieve the necessary method instrumentation in mainstream object-oriented languages such as C++ and Java. Past, Present and Future The initial ideas on coordination components appeared in [25], later summarized in [8]. On the other hand, the role of explicit contract and configuration objects in framework design has been explored in [9], later refined in [10]. In the paper you are reading now, both the ideas on pluggable coordination policies and the explicit objects have been combined into a series of design steps that lead to coordination components. A prototype with the presented design has been successfully built. Indeed, switching the banking system from a non-transactional system to a transactional system requires only to make the factory provide the right set of wrappers. Similarly, switching between transaction policies is done by making the factory provide a different set of transactional wrappers. Future work includes extending the frame</context>
+</contexts>
+<marker>[10]</marker>
+<rawString>Demeyer, S., Meijler, T. D., Nierstrasz, O. and Steyaert, P., “Design Guidelines for Tailorable Frameworks,” Communications of the ACM, vol. 40, no. 10, October 1997, pp. 60-64.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Ducasse</author>
+</authors>
+<title>Evaluating Message Passing Control Techniques in Smalltalk,’’</title>
+<date>1999</date>
+<journal>Journal of Object-Oriented Programming (JOOP),</journal>
+<volume>12</volume>
+<publisher>SIGS Press,</publisher>
+<contexts>
+<context position="20614" citStr="[11]" startWordPosition="2955" endWordPosition="2955">lution provides for dynamic reconfiguration of coordination aspects of a system, it also makes the system inherently more complex. Instead of only having the domain objects altered with some coordination code, the management of coordination is delegated to a set of specialized objects which can be exchanged at run-time. This implies that the design steps should only be applied when dynamic reconfiguration is a requirement. Finally, dynamically exchanging coordination protocols may be eased by reflection support in the underlying programming language. In languages such as CLOS [3] or Smalltalk [11], domain specific operations can be explicitly manipulated to wrap additional state and behaviour. We have used the wrappers together with the factory object as a kind of “poor men’s reflection”, to achieve the necessary method instrumentation in mainstream object-oriented languages such as C++ and Java. Past, Present and Future The initial ideas on coordination components appeared in [25], later summarized in [8]. On the other hand, the role of explicit contract and configuration objects in framework design has been explored in [9], later refined in [10]. In the paper you are reading now, bot</context>
+</contexts>
+<marker>[11]</marker>
+<rawString>Ducasse, S., ‘‘Evaluating Message Passing Control Techniques in Smalltalk,’’ Journal of Object-Oriented Programming (JOOP), vol. 12, no. 6, SIGS Press, June 1999.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>E Gamma</author>
+<author>R Helm</author>
+<author>R Johnson</author>
+<author>J Vlissides</author>
+</authors>
+<title>Design Patterns,</title>
+<date>1995</date>
+<publisher>Addison- Wesley,</publisher>
+<location>Reading, MA,</location>
+<contexts>
+<context position="10012" citStr="[12]" startWordPosition="1485" endWordPosition="1485">ccounts). Therefore, in addition to what is proposed in [10], we need to wrap the domain objects individually to (1) control the access to these domain objects and (2) control the state of the domain objects in the presence of multiple transactions. Following the first guideline, we introduce an explicit representation of the “Account Access” contract (see Figure 3). This explicit contract object checks the pre- and postconditions of the contract with the pre and post operations. Following the second guideline, we introduce an explicit factory object (cf. the “Abstract Factory” design pattern [12]) that is responsible for supplying an appropriate set of domain objects according to the system configuration. The interaction diagram in Figure 3 illustrates the effect of introducing an explicit contract and a configuration object on the transfer operation. Basically, whenever a bank receives a request (transfer or seeBalance), it first asks the global factory to supply the necessary objects (usingretrieveContract and retrieveAccount). Next, it registers the participating objects on the contract (using register); requests the contract object to check the precondition (using pre); then does </context>
+<context position="17050" citStr="[12]" startWordPosition="2451" endWordPosition="2451">action protocol, as they interact with each other to provide the coordination service. Therefore, they are not independent and can only be used as a group. Consequently, we have but one global factory object (globalFactory) which is responsible for instantiating the appropriate set of wrappers. 2.6 Replication of Services With the per-account locking protocol from Figure 4, it is possible to replicate the individual account objects within several servers. To achieve this, all replicated account objects are wrapped into one CompositeLockAccount using a variant of the “Composite” design pattern [12] (see Figure 6). On receiving a lock or setBalance operation, the composite forwards to all contained accounts, while the getBalance operation is forwarded to a single account object only. Again, by instantiating the appropriate wrapping objects into the factory object, the replicated services of our system can be dynamically reconfigured. 3 DISCUSSION To achieve the goal of dynamic reconfigurability of non-functional behaviour we have introduced explicit contracts and configuration objects as a way to encapsulate coordination behaviour into a special-purpose component. The example of the inte</context>
+</contexts>
+<marker>[12]</marker>
+<rawString>Gamma, E., Helm, R., Johnson, R. and Vlissides, J., Design Patterns, Addison- Wesley, Reading, MA, 1995.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R Guerraoui</author>
+<author>M E Fayad</author>
+</authors>
+<title>Object-Oriented Abstractions for Distributed Programming,”</title>
+<date>1999</date>
+<journal>Communications of the ACM,</journal>
+<volume>42</volume>
+<pages>125--127</pages>
+<contexts>
+<context position="2411" citStr="[13]" startWordPosition="329" endWordPosition="329">ability for dynamic reconfiguration by means of plug-in components [16]. Indeed, since web applications operate in heterogeneous contexts, they need to encapsulate all platform dependent behaviour into separate components. And since there is no way to freeze the internet while reconfiguring, web applications must plug-in new functionality at run-time. Despite the increasing maturity of middle-ware standards like CORBA and Microsoft’s ActiveX, component technology has not been applied to one of the most critical aspects of web-applications, namely the coordination of the distributed activities [13]. The reason for this is twofold: first, coordination is difficult to shrink-wrap into an off-the-shelf component [23], implying that application developers will not easily be able to buy “coordination components” like they buy GUI-components. Second, code for coordinating distributed activities is typically spread over all subsystems that make up the web-application, implying that dynamic reconfiguration of coordination policies is usually impossible. Since dynamic reconfiguration of coordination policies is often necessary (e.g., for load-balancing) and since it is unlikely that one will be </context>
+</contexts>
+<marker>[13]</marker>
+<rawString>Guerraoui, R. and Fayad, M. E., “Object-Oriented Abstractions for Distributed Programming,” Communications of the ACM, vol. 42, no. 8, August 1999, pp. 125-127.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>J McAffer</author>
+</authors>
+<title>Meta-level Programming with CodA,’’</title>
+<date>1995</date>
+<booktitle>Proceedings ECOOP’95, Olthoff, W. (Ed.), LNCS 952,</booktitle>
+<pages>190--214</pages>
+<publisher>Springer-Verlag,</publisher>
+<location>Aarhus, Denmark,</location>
+<contexts>
+<context position="26006" citStr="[14]" startWordPosition="3745" endWordPosition="3745">unication Environment (ACE) [22] of Doug Schmidt implements a set of design patterns for concurrent event-driven communication software. It simplifies the development, configuration and reconfiguration of distributed applications and services that use interprocess communication, event demultiplexing, explicit dynamic linking and concurrency. In [24], a transaction framework is presented that provides ways to dynamically adapt the transaction semantics of a system for optimal transactional behaviour at all times. This work shows the feasibility of dynamic exchange of transaction policies. Coda [14] has been used to open up the implementation of Smalltalk message passing and is able to add meta-level infrastructure to Smalltalk objects, so that additional behaviour such as concurrency or distribution can be added. The Coda experiment is especially important as it shows that a meta-level is “just another application” and that traditional software design techniques such as abstraction and decomposition remain valuable. Implementational Reflection and Aspect Oriented Programming A major source of inspiration for our work, called implementational reflection, is presented in [21]. It is an ap</context>
+</contexts>
+<marker>[14]</marker>
+<rawString>McAffer, J., ‘‘Meta-level Programming with CodA,’’ Proceedings ECOOP’95, Olthoff, W. (Ed.), LNCS 952, Springer-Verlag, Aarhus, Denmark, August 1995, pp. 190-214.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>G Kiczales</author>
+</authors>
+<date>1997</date>
+<booktitle>Aspect-Oriented Programming,” Proceedings ECOOP’97, Aksit, M. and Matsuoka, S. (Eds), LNCS 1241, Springer-Verlag,</booktitle>
+<pages>220--242</pages>
+<location>Jyväskylä,</location>
+<contexts>
+<context position="27284" citStr="[15]" startWordPosition="3944" endWordPosition="3944">e hand a system has a base-level interface which is the common interface for such a system, where on the other hand the system has a meta-level interface that reveals how some aspects of the system are implemented. The meta-level interface provides the possibility to change the default base-level behaviour to behaviour that differs in semantics and/or performance. In [21] the approach is illustrated by a windowing system. In the context of this approach our work can be viewed as providing a meta-level for coordination where coordination policies can be switched. In Aspect Oriented Programming [15],[18], systems are viewed as a set of components and aspects. Components are properties of systems that are easily encapsulated in a generic way, and aspects are properties that effect many other components and therefore cannot be cleanly encapsulated. Both these kinds of properties will cross-cut each other in a system’s implementation. The solution they propose is to describe the components and the aspects in their own languages, thereby ensuring separation of concerns, and then mix the properties using a special language processor. Although the solution provides a clean separation of concer</context>
+</contexts>
+<marker>[15]</marker>
+<rawString>Kiczales, G. et al., “Aspect-Oriented Programming,” Proceedings ECOOP’97, Aksit, M. and Matsuoka, S. (Eds), LNCS 1241, Springer-Verlag, Jyväskylä, June 1997, pp. 220-242.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R Laddaga</author>
+<author>J Veitch</author>
+</authors>
+<title>Dynamic Object Technology,’’</title>
+<date>1997</date>
+<journal>Communications of the ACM,</journal>
+<volume>40</volume>
+<pages>36--38</pages>
+<publisher>ACM Press,</publisher>
+<contexts>
+<context position="1878" citStr="[16]" startWordPosition="254" endWordPosition="254">te facilities for inter- and intra-nets. Large portions of the software industry have tried to tackle this market with component technology: desktop publishing software provide components that generate HTML and PDF; database vendors sell components that translate “search and query applications” into HTML forms; Java component environments provide support for building attractive user interfaces using native widgets. And this list continues to grow. One of the main reasons why web applications embrace component technology is the ability for dynamic reconfiguration by means of plug-in components [16]. Indeed, since web applications operate in heterogeneous contexts, they need to encapsulate all platform dependent behaviour into separate components. And since there is no way to freeze the internet while reconfiguring, web applications must plug-in new functionality at run-time. Despite the increasing maturity of middle-ware standards like CORBA and Microsoft’s ActiveX, component technology has not been applied to one of the most critical aspects of web-applications, namely the coordination of the distributed activities [13]. The reason for this is twofold: first, coordination is difficult </context>
+</contexts>
+<marker>[16]</marker>
+<rawString>Laddaga, R. and Veitch, J., ‘‘Dynamic Object Technology,’’ Communications of the ACM, vol. 40, no. 5, ACM Press, May 1997, pp. 36-38.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Lea</author>
+</authors>
+<title>Concurrent Programming in Java -- Design principles and Patterns, The Java Series,</title>
+<date>1996</date>
+<publisher>AddisonWesley,</publisher>
+<contexts>
+<context position="4679" citStr="[17]" startWordPosition="666" endWordPosition="666">application are: • Fundamental Requirements 1. Security. Only authorised users should have access to an account. 2. Reliability. Any operation must leave the system in a consistent state, i.e. while seeing the balance of an account, or while transferring money from one account to another, no money may disappear. Thus, the sum of the balances of all accounts remains constant over time. • Additional requirements for a dynamic environment 3. Performance Tuning. For optimal throughput, the system should be able to switch policies, for instance between an optimistic or pessimistic locking protocol [17]. 4. Replication. To be able to handle lots of requests in parallel, it should be possible to replicate the web server on different machines. 5. Dynamic Reconfiguration. In the above two cases all reconfiguration of the web server should be dynamic. Thus, switching between policies and adding extra servers, should be possible without terminating the system. This set of requirements has the following implications: firstly, to provide reliability for multiple concurrent clients coordination of actions is needed. Secondly, the additional requirements demand for a way to easily exchange solutions </context>
+<context position="6940" citStr="[17]" startWordPosition="1021" endWordPosition="1021">thorised to issue the request; (iii) as postcondition for the transfer operation that the balances of the involved accounts have been updated accordingly. 2.2 Naive Implementation To satisfy the “Reliability” requirement the internet banking system must incorporate concurrency control facilities, thus a per-account locking mechanism. A naive implementation —i.e. one that does not have to deal with the “Dynamic Reconfiguration” requirement— might achieve this via some additional locking code on the class Account and some transaction management code on the class Bank. Typical code —adapted from [17]— is shown in Figure 2. To meet the “Security” requirement the call isAuthorised is added. A first observation to be made at this point is that concurrency control adjusts the public interface of the domain objects. In particular, thegetBalance andsetBalance operations require an extra parameter (the transaction identifier), and the class Account contains additional operations (lock, commit, abort). A second observation is that we are forced to wrap a considerable amount of code around the domain specific functionality to meet the non-functional requirements (i.e., the greyed-out code in Figur</context>
+<context position="15930" citStr="[17]" startWordPosition="2286" endWordPosition="2286">fied. In all these cases, an exception is raised which handler gracefully cleans up all resources and terminates the transaction, leaving all the domain objects in their original state. 2.5 Reconfiguration of Locking Protocol Once we have introduced the per-account locking mechanism using the protocol in Figure 4, it is possible to switch from optimistic to pessimistic locking transparently. Indeed, the only difference lies in the implementation of the lock operation: optimistic locking aborts immediately when it can not acquire a lock; pessimistic locking waits until the lock comes available [17]. Consequently, it suffices that the globalFactory instantiates the appropriate wrapper class --eitherOptimisticLockAccount or PessimisticLockAccount (see Figure 5)-- to make the accounts lockable. The contract wrapper then provides all transaction related state needed by the lockable accounts (namely the transaction id). Figure 5 shows a possible class hierarchy to implement such locking functionality, similar to what is described in [24]. Note that the wrappers around the domain objects expand the basic interaction protocol, as they interact with each other to provide the coordination servic</context>
+</contexts>
+<marker>[17]</marker>
+<rawString>Lea, D., Concurrent Programming in Java -- Design principles and Patterns, The Java Series, AddisonWesley, 1996.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>C Lopes</author>
+</authors>
+<title>Aspect Oriented Programming”,</title>
+<date>1998</date>
+<booktitle>ObjectOriented Technology (ECOOP’98 Workshop</booktitle>
+<pages>394--443</pages>
+<contexts>
+<context position="27289" citStr="[18]" startWordPosition="3944" endWordPosition="3944">d a system has a base-level interface which is the common interface for such a system, where on the other hand the system has a meta-level interface that reveals how some aspects of the system are implemented. The meta-level interface provides the possibility to change the default base-level behaviour to behaviour that differs in semantics and/or performance. In [21] the approach is illustrated by a windowing system. In the context of this approach our work can be viewed as providing a meta-level for coordination where coordination policies can be switched. In Aspect Oriented Programming [15],[18], systems are viewed as a set of components and aspects. Components are properties of systems that are easily encapsulated in a generic way, and aspects are properties that effect many other components and therefore cannot be cleanly encapsulated. Both these kinds of properties will cross-cut each other in a system’s implementation. The solution they propose is to describe the components and the aspects in their own languages, thereby ensuring separation of concerns, and then mix the properties using a special language processor. Although the solution provides a clean separation of concerns, i</context>
+</contexts>
+<marker>[18]</marker>
+<rawString>Lopes, C., “Aspect Oriented Programming”, ObjectOriented Technology (ECOOP’98 Workshop Reader), Demeyer, S. and Bosch, J. (Eds), LNCS 1543, Springer-Verlag, July 1998, pp. 394-443.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>B Meyer</author>
+</authors>
+<title>Object-Oriented Software Construction,</title>
+<date>1997</date>
+<publisher>Prentice Hall,</publisher>
+<note>second edition.</note>
+<contexts>
+<context position="9064" citStr="[19]" startWordPosition="1348" endWordPosition="1348">n Guidelines To tackle the problem of dynamic reconfigurability we apply -- similar to what is proposed in [10] -- two design guidelines, namely “turn contracts into objects” and “turn configuration into a factory object”. The guidelines provide a step-by-step recipe to introduce components that encapsulate coordination, as proposed in [8]. Applying the guidelines to coordination is not trivial as we need to deal with concurrent interdependent accesses to the domain objects (namely, the different transactions 1. In this paper, we use the notion of contracts as explained in “Design by Contract”[19]. Figure 1 Initial design for an internet banking system, including the account access contract Customer * Account getBalance() setBalance(amount) accountNr: AccountNr balance: Amount customerNr: CustomerNr ... Bank account access contract seeBalance(Customer, AccountNr): Amount transfer(Customer, Amount, AccountNr, AccountNr) accessing the accounts). Therefore, in addition to what is proposed in [10], we need to wrap the domain objects individually to (1) control the access to these domain objects and (2) control the state of the domain objects in the presence of multiple transactions. Follow</context>
+<context position="18371" citStr="[19]" startWordPosition="2619" endWordPosition="2619">sign for the domain, including contracts that state the obligations of the participating classes. Define the contracts according to “DeFigure 5 Class hierarchy for reconfigurable locking protocols Lockable lock(id: TransactionID) Contract pre() post() register(Object) LockingContract OptimisticLockAccount getBalance() setBalance() wrappedAccount:Account PessimisticLockAccount getBalance() setBalance() wrappedAccount:Account OptimisticLockable lock(id: TransactionID) PessimisticLockable lock(id: TransactionID) wrappedContract: Contract id: TransactionID pre() post() sign by Contract” principle [19], i.e. using pre- and postconditions. 2. Apply the design guideline “turn contracts into objects”. Thus, define a separate object per contract, providing pre and post operations for checking the contractual obligations. Also, have the domain objects invoke these pre and post operations. 3. Apply the design guideline “turn configuration into a factory object”. Thus, introduce an object that knows which wrappers and domain objects to create for a certain configuration. 4. Add non-functional behaviour by providing wrappers around the original domain objects. The wrappers instrument the domain-spe</context>
+</contexts>
+<marker>[19]</marker>
+<rawString>Meyer, B., Object-Oriented Software Construction, Prentice Hall, 1997, second edition.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>O Nierstrasz</author>
+<author>D Tsichritzis</author>
+</authors>
+<title>Object-Oriented Software Composition,</title>
+<date>1995</date>
+<publisher>Prentice Hall,</publisher>
+<contexts>
+<context position="19681" citStr="[20]" startWordPosition="2811" endWordPosition="2811">ects is then a coordination component. The fact that the explicit representations of the contracts provide the necessary hooks for coping with non-functional requirements is not coincidence. Indeed, a contract object forces the designer to make the important sequence of domain operations explicit, thus providing the ideal place to factor out non-functional state and wrap non-functional behaviour. We call a configuration of wrapper objects containing a particular locking or replication policy a coordination component. According to the definition “components are static abstractions with plugs” ([20], p.5), this corresponds indeed to a component. The configuration is (a) static because it can be stored inside a component-base to be reused across different applications; it’s an (b) abstraction because it encapsulates well-defined coordination behaviour and it has (c) plugs by means of the wrapped operations. Although the solution provides for dynamic reconfiguration of coordination aspects of a system, it also makes the system inherently more complex. Instead of only having the domain objects altered with some coordination code, the management of coordination is delegated to a set of speci</context>
+</contexts>
+<marker>[20]</marker>
+<rawString>Nierstrasz, O. and Tsichritzis, D., Object-Oriented Software Composition, Prentice Hall, 1995.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>R Rao</author>
+</authors>
+<title>Implementational Reflection in Silica,”</title>
+<date>1991</date>
+<booktitle>Proceedings ECOOP’91, America, P. (Ed.), LNCS 512,</booktitle>
+<pages>251--267</pages>
+<publisher>Springer-Verlag,</publisher>
+<location>Geneva, Switzerland,</location>
+<contexts>
+<context position="26593" citStr="[21]" startWordPosition="3833" endWordPosition="3833">licies. Coda [14] has been used to open up the implementation of Smalltalk message passing and is able to add meta-level infrastructure to Smalltalk objects, so that additional behaviour such as concurrency or distribution can be added. The Coda experiment is especially important as it shows that a meta-level is “just another application” and that traditional software design techniques such as abstraction and decomposition remain valuable. Implementational Reflection and Aspect Oriented Programming A major source of inspiration for our work, called implementational reflection, is presented in [21]. It is an approach that “opens up” implementations by exposing their meta-level. On one hand a system has a base-level interface which is the common interface for such a system, where on the other hand the system has a meta-level interface that reveals how some aspects of the system are implemented. The meta-level interface provides the possibility to change the default base-level behaviour to behaviour that differs in semantics and/or performance. In [21] the approach is illustrated by a windowing system. In the context of this approach our work can be viewed as providing a meta-level for co</context>
+</contexts>
+<marker>[21]</marker>
+<rawString>Rao, R., “Implementational Reflection in Silica,” Proceedings ECOOP’91, America, P. (Ed.), LNCS 512, Springer-Verlag, Geneva, Switzerland, July 1991, pp. 251-267.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D C Schmidt</author>
+</authors>
+<title>The ADAPTIVE Communication Environment: An O.O. Network Programming Toolkit for developing Communication Software,”</title>
+<date>1994</date>
+<tech>Technical Report,</tech>
+<institution>Department of Computer Science, Washington University,</institution>
+<contexts>
+<context position="25434" citStr="[22]" startWordPosition="3665" endWordPosition="3665">es, most notably CORBA implementations and Microsoft’s ActiveX. These frameworks provide basic services for coordinating distributed communication, e.g. the CORBA transaction service. Our approach is complementary to these, in the sense that --like promoted by coordination languages-- we advocate for a separation of coordination from computation. As such, the guidelines help to encapsulate the dependencies on such commercial services, so that we for instance would be able switch transparently and dynamically between a CORBA and DCOM implementation. The ADAPTIVE Communication Environment (ACE) [22] of Doug Schmidt implements a set of design patterns for concurrent event-driven communication software. It simplifies the development, configuration and reconfiguration of distributed applications and services that use interprocess communication, event demultiplexing, explicit dynamic linking and concurrency. In [24], a transaction framework is presented that provides ways to dynamically adapt the transaction semantics of a system for optimal transactional behaviour at all times. This work shows the feasibility of dynamic exchange of transaction policies. Coda [14] has been used to open up th</context>
+</contexts>
+<marker>[22]</marker>
+<rawString>Schmidt, D. C., “The ADAPTIVE Communication Environment: An O.O. Network Programming Toolkit for developing Communication Software,” Technical Report, Department of Computer Science, Washington University, 1994.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D C Schmidt</author>
+<author>M E Fayad</author>
+</authors>
+<title>Lessons Learned Building Reusable OO Frameworks for Distributed Software,”</title>
+<date>1997</date>
+<journal>Communications of the ACM,</journal>
+<volume>40</volume>
+<pages>85--87</pages>
+<contexts>
+<context position="2529" citStr="[23]" startWordPosition="348" endWordPosition="348">erogeneous contexts, they need to encapsulate all platform dependent behaviour into separate components. And since there is no way to freeze the internet while reconfiguring, web applications must plug-in new functionality at run-time. Despite the increasing maturity of middle-ware standards like CORBA and Microsoft’s ActiveX, component technology has not been applied to one of the most critical aspects of web-applications, namely the coordination of the distributed activities [13]. The reason for this is twofold: first, coordination is difficult to shrink-wrap into an off-the-shelf component [23], implying that application developers will not easily be able to buy “coordination components” like they buy GUI-components. Second, code for coordinating distributed activities is typically spread over all subsystems that make up the web-application, implying that dynamic reconfiguration of coordination policies is usually impossible. Since dynamic reconfiguration of coordination policies is often necessary (e.g., for load-balancing) and since it is unlikely that one will be able to buy off-the-shelf solutions, application developers are obliged to implement their own coordination components</context>
+</contexts>
+<marker>[23]</marker>
+<rawString>Schmidt, D. C., and Fayad, M. E., “Lessons Learned Building Reusable OO Frameworks for Distributed Software,” Communications of the ACM, vol. 40, no. 10, October 1997, pp. 85-87.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>B Tekinerdogan</author>
+</authors>
+<title>An Application Framework for Building Dynamically Configurable Transaction Systems,”</title>
+<date>1996</date>
+<booktitle>OOPSLA’96, Development of ObjectOriented Frameworks Workshop,</booktitle>
+<location>San Jose, USA,</location>
+<contexts>
+<context position="16373" citStr="[24]" startWordPosition="2347" endWordPosition="2347">tation of the lock operation: optimistic locking aborts immediately when it can not acquire a lock; pessimistic locking waits until the lock comes available [17]. Consequently, it suffices that the globalFactory instantiates the appropriate wrapper class --eitherOptimisticLockAccount or PessimisticLockAccount (see Figure 5)-- to make the accounts lockable. The contract wrapper then provides all transaction related state needed by the lockable accounts (namely the transaction id). Figure 5 shows a possible class hierarchy to implement such locking functionality, similar to what is described in [24]. Note that the wrappers around the domain objects expand the basic interaction protocol, as they interact with each other to provide the coordination service. Therefore, they are not independent and can only be used as a group. Consequently, we have but one global factory object (globalFactory) which is responsible for instantiating the appropriate set of wrappers. 2.6 Replication of Services With the per-account locking protocol from Figure 4, it is possible to replicate the individual account objects within several servers. To achieve this, all replicated account objects are wrapped into on</context>
+<context position="25753" citStr="[24]" startWordPosition="3707" endWordPosition="3707">oordination from computation. As such, the guidelines help to encapsulate the dependencies on such commercial services, so that we for instance would be able switch transparently and dynamically between a CORBA and DCOM implementation. The ADAPTIVE Communication Environment (ACE) [22] of Doug Schmidt implements a set of design patterns for concurrent event-driven communication software. It simplifies the development, configuration and reconfiguration of distributed applications and services that use interprocess communication, event demultiplexing, explicit dynamic linking and concurrency. In [24], a transaction framework is presented that provides ways to dynamically adapt the transaction semantics of a system for optimal transactional behaviour at all times. This work shows the feasibility of dynamic exchange of transaction policies. Coda [14] has been used to open up the implementation of Smalltalk message passing and is able to add meta-level infrastructure to Smalltalk objects, so that additional behaviour such as concurrency or distribution can be added. The Coda experiment is especially important as it shows that a meta-level is “just another application” and that traditional so</context>
+</contexts>
+<marker>[24]</marker>
+<rawString>Tekinerdogan, B., “An Application Framework for Building Dynamically Configurable Transaction Systems,” OOPSLA’96, Development of ObjectOriented Frameworks Workshop, San Jose, USA, 1996.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Tichelaar</author>
+</authors>
+<title>A Coordination Component Framework for Open Distributed Systems, Master’s Thesis,</title>
+<date>1997</date>
+<institution>University of Groningen,</institution>
+<contexts>
+<context position="21006" citStr="[25]" startWordPosition="3015" endWordPosition="3015"> reconfiguration is a requirement. Finally, dynamically exchanging coordination protocols may be eased by reflection support in the underlying programming language. In languages such as CLOS [3] or Smalltalk [11], domain specific operations can be explicitly manipulated to wrap additional state and behaviour. We have used the wrappers together with the factory object as a kind of “poor men’s reflection”, to achieve the necessary method instrumentation in mainstream object-oriented languages such as C++ and Java. Past, Present and Future The initial ideas on coordination components appeared in [25], later summarized in [8]. On the other hand, the role of explicit contract and configuration objects in framework design has been explored in [9], later refined in [10]. In the paper you are reading now, both the ideas on pluggable coordination policies and the explicit objects have been combined into a series of design steps that lead to coordination components. A prototype with the presented design has been successfully built. Indeed, switching the banking system from a non-transactional system to a transactional system requires only to make the factory provide the right set of wrappers. Si</context>
+</contexts>
+<marker>[25]</marker>
+<rawString>Tichelaar, S., A Coordination Component Framework for Open Distributed Systems, Master’s Thesis, University of Groningen, May 1997.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>

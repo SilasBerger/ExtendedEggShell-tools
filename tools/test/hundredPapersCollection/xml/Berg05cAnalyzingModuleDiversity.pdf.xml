@@ -1,0 +1,2217 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<algorithms version="110505">
+<algorithm name="SectLabel" version="110505">
+<variant no="0" confidence="0.000000">
+<title confidence="0.744356">
+Analyzing Module Diversity
+</title>
+<author confidence="0.637541">
+Alexandre Bergel1, Stéphane Ducasse1,2, Oscar Nierstrasz1
+</author>
+<footnote confidence="0.9064342">
+1Software Composition Group, University of Bern, Switzerland
+www.iam.unibe.ch/∼scg
+2LISTIC — Language and Software Evolution Group, University of Savoie,
+France
+www.listic.univ-savoie.fr
+</footnote>
+<bodyText confidence="0.931756428571428">
+Abstract: Each object-oriented programming language proposes various grouping
+mechanisms to bundle interacting classes (i.e., packages, modules, selector namespaces,
+etc). To understand this diversity and to compare the different approaches, a common
+foundation is needed. In this paper we present a simple module calculus consisting
+of a small set of operators over environments and modules. Using these operators,
+we are then able to specify a set of module combinators that capture the semantics
+of Java packages, C# namespaces, Ruby modules, selector namespaces, gbeta classes,
+classboxes, MZScheme units, and MixJuice modules. We develop a simple taxonomy
+of module systems, and show how particular combinations of module operators help
+us to draw sharp distinctions between classes of module systems that share similar
+characteristics.
+Key Words: package, module, selector namespaces, classboxes, virtual classes, Small-
+talk, Java, Ruby, C#
+Category: D.1.5, D.2.1, D.2.2, D.3.2, D.3.3
+</bodyText>
+<sectionHeader confidence="0.997849" genericHeader="abstract">
+1 Introduction
+</sectionHeader>
+<bodyText confidence="0.9739954375">
+Object-oriented languages support the construction of applications based on sets
+of interacting classes. Classes, methods and global definitions are then grouped
+together as packages or modules for deployment reasons or for delimiting ab-
+straction layers. Unfortunately, though the intent behind packages and modules
+is clear, their semantics often is not. The simple fact that the terms module and
+package are overloaded with different semantics reveals a larger problem: the
+diversity of grouping mechanisms hampers their comparison and understanding.
+Numerous researchers have proposed module calculi as a medium for reason-
+ing about the properties of module systems (e.g., [2, 8, 11, 31, 32]). These calculi
+have been used to study various issues such as mutual recursion and high order
+features [2] or to model classes and mixins in a typed setting [8]. As far as we
+are aware, however, module calculi have not yet been proposed as a means to
+study and compare the diverse approaches to module systems that are used in
+practice.
+For example, classical module systems, like those of Modula-3 [16], Oberon-
+2 [36], Ada [40], Java [28], C++, C# [14], and Eiffel [33] do not support class
+extensions (i.e., the fact that a method can be added or redefined from an-
+other package). However, class extensions are widely used in the languages that
+support it, such as Smalltalk [44], CLOS [29] and gbeta [21]. OpenClasses [17],
+Keris [45] and MixJuice [25] offer packaging systems that introduce class exten-
+sions, virtual classes and other new features to packages.
+Other languages such as Ruby and Unit [24] support the definition and ap-
+plication of mixins to modules at different levels. Languages such as Visual-
+Works [43] totally decouple the issues of namespaces from those of code packag-
+ing, hence a package in VisualWorks does not provide any support for scoping
+of names.
+In this paper we introduce a simple calculus of modules, together with a set of
+operators designed to express various encapsulation policies, composition rules,
+and extensibility mechanisms. Our work does not include deployment mecha-
+nisms, therefore the study of each language is limited in expressing operators
+applicable to grouping units (i.e., modules, packages). The contributions of this
+paper are:
+</bodyText>
+<listItem confidence="0.98648475">
+– A formalism for expressing semantics of different module systems,
+– The identification of a set of properties useful to characterize different lan-
+guages, and
+– A taxonomy of different module systems.
+</listItem>
+<bodyText confidence="0.999292944444444">
+The goal of the approach presented in this paper is to enable the language
+designer to compare features of module systems for various object-oriented pro-
+gramming languages.
+In Section 2 we define the calculus and its operators. In Sections 3 through
+10 we use the calculus to develop various module combinators that capture Java
+packages, C# namespaces, Ruby modules, selector namespaces, gbeta virtual
+classes, classboxes, MZScheme units and MixJuice modules. We chose Java and
+C# as they are mainstream languages, Ruby as it defines the notion of module
+mixin, Modular Smalltalk [44] and Smallscript [39] as they define changes that
+crosscut classes with selector namespaces, Beta [30] as it introduces the notion
+of virtual classes, classboxes [6, 7] as they illustrate the local rebinding property,
+MZScheme unit [23] as it separates the unit definition from the dependency
+statements, and MixJuice [25] as it constrains only one class version to be present
+in the system.
+In Section 11 we develop a taxonomy to characterize the studied module
+systems according to the set of properties we modeled. In Section 12 we describe
+related work. In Section 13 we conclude by summarizing the results obtained
+and outlining future work.
+</bodyText>
+<sectionHeader confidence="0.994044" genericHeader="keywords">
+2 A Simple Module Calculus
+</sectionHeader>
+<bodyText confidence="0.996017571428571">
+The module calculus we propose makes use of the primitive notion of an en-
+vironment. In Section 2.1 we define environments and the basic operators for
+manipulating them. In Section 2.2 we define modules as abstractions over envi-
+ronments, and we propose combinators for composing and manipulating mod-
+ules. Note that the module calculus and the various combinators have been
+implemented in DrScheme [20]. The source code, accompanied with test units,
+is available at www.iam.unibe.ch/∼scg/Research/Classboxes/module.scm.
+</bodyText>
+<subsectionHeader confidence="0.8224">
+2.1 Environments
+</subsectionHeader>
+<bodyText confidence="0.9963458">
+Definition 1 (Environment). An environment  : D → R? , is a mapping
+from some domain D to an extended range R? = R∪{⊥}, such that the inverse
+image −1(R) is finite. The set of environments is E and we assume it to be a
+subset of R.
+We will represent environments as finite sets of mappings, for example:
+</bodyText>
+<equation confidence="0.62805">
+1 = {a 7→ x, b 7→ y}
+</equation>
+<bodyText confidence="0.99587425">
+is an environment that maps a to x and b to y. All other values in the domain
+of this environment (for example, c 6∈ {a, b}) are mapped to ⊥.
+We will normally leave out unessential parentheses. Since an environment is
+a function, we simply invoke it to look up a binding. In this case, 1 a = x,
+</bodyText>
+<construct confidence="0.610928857142857">
+1 b = y and 1 c = ⊥.
+Definition 2 (Keys). The set of keys of an environment  : D → R? is κ :
+κ 
+def= {x ∈ D  | x 6= ⊥}
+For instance, κ 1 = {a, b}.
+Definition 3 (Override). An environment  : D → R? may override another
+environment ′. We define  B ′ : D → R? as follows:
+</construct>
+<equation confidence="0.81989525">
+( B ′) x def=
+{
+′ x if  x = ⊥
+ x otherwise
+</equation>
+<bodyText confidence="0.967448">
+Note that B is associative but not symmetric.
+For example, if 2 = {b 7→ z, c 7→ w}, then (1 B 2) a = x, (1 B 2) b = y,
+and (1 B 2) c = w.
+Definition 4 (Extend). An environment  : D → R? such that  a = ⊥may be
+extended to produce a new environment ‖{a 7→ x} containing all the mappings
+of  plus a 7→ x.
+</bodyText>
+<equation confidence="0.84640875">
+‖{a 7→ x} def=
+{
+ B {a 7→ x} if  a = ⊥
+⊥ otherwise
+</equation>
+<bodyText confidence="0.975033666666667">
+Note that the ‖ operator does not allow an entry to be added if the key is
+already present.
+Definition 5 (Exclusion). Given an environment  : D → R? and a key a, the
+</bodyText>
+<figure confidence="0.835155833333333">
+exclusion \a is:
+(\a) x def=
+{
+ x if x 6= a
+⊥ otherwise
+Exclusion simply removes any binding present for the given key.
+</figure>
+<subsectionHeader confidence="0.976661">
+2.2 Modules
+</subsectionHeader>
+<bodyText confidence="0.99838575">
+Definition 6 (Module). A module m : E → E? , is a mapping from an envi-
+ronment to an environment. We denote E? = E ∪{⊥} andM the set of modules.
+Example. We represent modules as functions taking an environment and re-
+turning an environment. An example of two modules m1 and m2 follows:
+</bodyText>
+<equation confidence="0.988647">
+m1 = λ. {a 7→ 1, b 7→ 2}
+m2 = λ. {a 7→ 3, b 7→  a}
+</equation>
+<bodyText confidence="0.977382166666667">
+As we see in m2, the  parameter makes it possible for entries in a module to
+look up other bindings in the parameter environment. Shortly we will see how
+a module can be instantiated to an environment by taking its fixpoint with the
+fix operator. Therefore, an instantiated module can look up bindings in itself.
+We overload the operators previously introduced, and from the context it is
+always clear whether we mean the environment or module operator.
+</bodyText>
+<construct confidence="0.94854075">
+Definition 7 (Override). A module m can override another module m′ to
+produce m B m′.
+m B m′
+def= λ. (m ) B (m′ )
+</construct>
+<bodyText confidence="0.94600475">
+Note thatm andm′ both have access to the parameter , thus effectively merging
+the two modules. Note that this operator is associative but not symmetric. As
+is the case with the other operators, we unambiguously overload the operator
+B for modules, defining it in terms of B for environments. It is easy to check
+that module overriding, like environment overriding, is also associative but not
+symmetric.
+Definition 8 (Extend). A module can be extended with a new mapping using
+the ‖ operator:
+</bodyText>
+<equation confidence="0.8560355">
+m‖{a 7→ x} def=
+{
+λ. (m ) ‖ {a 7→ x} if (m ) a = ⊥
+⊥ otherwise
+</equation>
+<bodyText confidence="0.959433">
+Definition 9 (Exclusion). Exclusion on modules is expressed using \:
+m\x def= λ. (m )\x
+Restricting a key on a module removes the key from the environment that
+this module defines.
+</bodyText>
+<subsectionHeader confidence="0.992239">
+2.3 Module Encapsulation Operators
+</subsectionHeader>
+<bodyText confidence="0.9923742">
+Module encapsulation is articulated by operators manipulating the set of keys
+visible from outside the module. We call this set the module’s interface. Three
+operators are here involved: fix is used to instantiate a module, κ to extract
+all the keys (i.e., defined names) of a module, and hide to remove one mapping
+from a module interface.
+Definition 10 (Fix). A module m : E → E? can be instantiated to an environ-
+ment as follows:
+fix m def= µ.m
+(We assume the usual definition of µ, where µx.e reduces to e[µx.e/x], so fix m =
+m(fix m).)
+Since m is a function from environments to environments, fix m represents a
+fixpoint in which all the mappings provided by the module are made available to
+each other. This is analogous to Cardelli’s use of fixpoints to model self-references
+in object-oriented languages [15].
+Example. For instance, for the two modules m1 = λ. {a 7→ 1, b 7→ } and
+</bodyText>
+<equation confidence="0.9837865">
+m2 = λ. {a 7→ 2} we have:
+(fix (m2B m1 )) b a = 2
+</equation>
+<bodyText confidence="0.9609605">
+(fix (m2B λ. {b 7→ (fix m1) b} )) b a = 1
+In the first example, let Φ = fix(m2 B m1). By unfolding the fixpoint, this
+gives Φ = {a 7→ 2}B {a 7→ 1, b 7→ Φ}, so Φ b a = Φ a = 2. Since m1 and m2 are
+effectively merged, m2’s binding of a becomes visible within m1.
+In the second example, let Φ1 = (fix m1) = {a 7→ 1, b 7→ Φ1} and Φ2 =
+fix(m2 Bλ. {b 7→ Φ1 b}) = {a 7→ 2}B {b 7→ Φ1}. So Φ2 b a = Φ1 a = 1. Here m1
+</bodyText>
+<construct confidence="0.847876">
+is effectively closed, so merging it with m2 has no effect on the binding of a.
+Definition 11 (Keys). The set of keys of a module m is defined as:
+κ m
+def= κ (fix m)
+Definition 12 (Hide). Given a module m : E → E? , a binding to the key a
+</construct>
+<bodyText confidence="0.975555846153846">
+can be removed from its interface using the hide operator:
+hide a def= λm. λ. m\a ({a 7→ (fix m) a}B )
+hide {x1, x2, . . . , xn}
+def= (hide x1)(hide {x2, . . . , xn})
+The hide operator makes a binding inaccessible from outside a module. It
+can still be accessed from within it (cf. example below). This is different from
+simply removing a binding, because there is no distinction between the interface
+and the implementation of a module.
+Example. Hiding a binding of a module removes the entry from the module’s
+interface, but the binding’s value is still internally accessible through other bind-
+ings. For example, for the two modules m = λ. {a 7→ 1, b 7→ }, we have:
+(fix (hide a)(m)) a = ⊥
+(fix (hide a)(m)) b a = 1
+</bodyText>
+<subsectionHeader confidence="0.994435">
+2.4 Class Definition
+</subsectionHeader>
+<bodyText confidence="0.904069904761905">
+Within a module, a value associated to a key represents a definition. If the cal-
+culus is intended to express the semantics of a module system which is part of a
+procedural (or functional) language, values of bindings describe functions [1, 31].
+In the rest of this paper we will focus only on expressing semantics of module
+systems for class-based object-oriented programming languages. Definitions con-
+tained within a module describe classes. A class is represented as an environment
+whose mappings define state and methods. We also do not model class instanti-
+ation. Note that we do not model the pseudo-variable super because this would
+add unnecessary complexity to the calculus and shift the focus of the paper.
+Moreover, super is not present in all the languages we consider here. We also
+do not model classes as modules because our goal is to study module operators,
+not class operators. An attempt to unify modules and classes would generate
+unnecessary confusion.
+We define the following domains:
+– The set of modules is represented by M.
+– The set of class names by C. It represents keys of the mappings defining a
+module.
+– The set of definitions defining the state and behavior of a class is denoted
+by D.
+Example. For instance a module containing Point and PointFactory classes
+can be defined as:
+</bodyText>
+<equation confidence="0.894516625">
+GraphicsModule = λ. {
+Point 7→ {
+x 7→ 0,
+y 7→ 0,
+moveBy 7→λdx. λdy. λself. {
+x 7→ self x + dx,
+y 7→ self y + dy } B self},
+PointFactory 7→ { newPoint 7→ λself.  Point } }
+</equation>
+<bodyText confidence="0.987381741935484">
+By accessing a binding within a given environment we obtain a copy of the
+bound value. New objects are therefore obtained by simply accessing a class in
+a fixed module. For instance, a new point is obtained by evaluating:
+aPoint = (fix GraphicsModule) Point.
+Messages are sent by passing a message name and arguments to an object.
+Note that a reference to self has to be provided. For instance, a point can be
+moved by performing: aPoint moveBy 2 3 aPoint.
+The self-reference is supplied as a trailing argument. The reason for this is that
+we do not model a dynamic environment (i.e., a runtime stack that would contain
+the self reference and other arguments).
+Inner classes [26] treat their enclosing class as a kind of module that restricts
+the scope of their definition. However, inner classes are mainly used as a con-
+venient mechanism for defining callback classes and other small helper classes.
+To the best of our knowledge, no major application has ever been developed
+using inner classes as the sole module mechanism. We therefore do not consider
+this form of modularization in our comparison and classes do not contain inner
+classes.
+Within our calculus, inheritance over classes is expressed by the extend-
+Class operator, defined below.
+Definition 13 (ExtendClass). In a module m, a class c extends a superclass
+sup with a set of definitions d using the extendClass combinator defined as:
+extendClass : M→ C → C → D →M
+extendClass = λm. λsup. λc. λd. λ. m ‖{c 7→ d B (m  sup)}
+Class members are denoted by d. When creating a new class, these simply over-
+ride definitions provided by the superclass (m  sup) by performing d B (m 
+sup).
+Example. The previously described GraphicsModule is refined into a Colored-
+GraphicsModule as:
+ColoredGraphicsModule = extendClass GraphicsModule Point ColoredPoint ext
+where ext = { color 7→ nil,
+setColor 7→ λ newCol. λself. {color 7→ newCol} B self }
+</bodyText>
+<subsectionHeader confidence="0.950862">
+2.5 The Calculus in Action
+</subsectionHeader>
+<bodyText confidence="0.996487266666667">
+The following sections illustrate the calculus by expressing the semantics of var-
+ious module systems. For each of these module systems we use the calculus to
+define a set of module combinators that express the module composition mech-
+anisms provided by the programming language in question. Depending on the
+language under consideration, a module may represent a Java package, a C#
+namespace, a selector namespace (Modular Smalltalk [44]), a Ruby module [42],
+a virtual pattern in gbeta [21], a classbox [6, 7], a MZScheme unit [23], or a
+MixJuice module [25].
+A typical combinator is applied to a modulemt with some argumentsms and
+some classnames c. We make use of the following conventions: (i) each combinator
+is expressed as a module generator (combining two modules together yielding a
+new module), (ii) a t subscript (e.g., mt) refers to a input “template module”
+to be modified: the result of applying the combinator is a modified copy of the
+template module, (iii) an s subscript (e.g., ms) refers to the module provided as
+argument.
+</bodyText>
+<sectionHeader confidence="0.997866" genericHeader="introduction">
+3 Java
+</sectionHeader>
+<bodyText confidence="0.992683411764706">
+Java [4] classes are grouped within packages. Packages can be “composed” with
+each other by means of the import relationship. (In this paper, we do not consider
+the use of fully qualified names in Java or other languages, i.e., a class name
+preceded by the name of the package.) We also did not model the CLASSPATH
+mechanism as it is not particularly relevant to the paper’s focus on the expression
+of grouping unit operators. A package that imports a class from another package
+simply references this class by its name. There are two levels of granularity of
+the import relationship: (i) a package may import a single class from another
+package, and (ii) a package may import all visible classes (i.e., public at the
+package level).
+The semantics of Java packages is expressed using two different import com-
+binators (importClass and importPackage) corresponding to the two granularity
+levels. Class privacy is expressed using the private combinator, which is described
+later.
+Individual class import. A package mt that imports a class c defined in a
+package ms yields a copy of mt augmented with a new mapping for the imported
+class.
+importClass : M→M→ C →M
+importClass = λmt. λms. λc. (hide c)(mt ‖ {c 7→ (fix ms) c})
+A package that imports a class cannot re-export it. This is expressed by (hide c).
+According to Definition 12, (hide c) is a function that takes a module as argument
+and returns a copy of it where c is removed from its interface only. This class c is
+accessible to definitions in the importing package, however it cannot be accessed
+from another package.
+A conflict occurs when a defined and an imported class have the same name.
+The restriction on key uniqueness is expressed by the ‖ operator, which does not
+allow a key to be added if it is already present. A name that already refers to a
+defined class cannot be used to refer to an imported one and vice-versa.
+References between classes are static, which means that importing a class
+does not rebind the references. Let’s suppose a package graphics contains a class
+PointFactory that refers to a class Point. Importing the class PointFactory (in
+another package) does not impact the original references between PointFactory
+and Point, even if in the importing package a class Point is present. This re-
+striction is expressed by (fix ms). An example of a graphics package is:
+</bodyText>
+<equation confidence="0.891030952380953">
+package graphics;
+public class Point {
+int x = 0, y = 0;
+void moveBy (int dx, int dy) {
+x = x + dx; y = y + dy;
+}
+}
+public class PointFactory {
+static void newPoint () {
+return new Point();
+}
+}
+graphics = λ . {
+Point 7→
+{x 7→ 0,
+y 7→ 0,
+moveBy 7→ λ self. λ dx. λ dy.
+{ x 7→ self x + dx,
+y 7→ self y + dy} B self},
+PointFactory =
+{ newPoint 7→  Point }}
+</equation>
+<bodyText confidence="0.880115866666667">
+Importing the class PointFactory from graphics in a new package graphics2
+where a class Point already exists does not make PointFactory use Point of graph-
+ics2.
+graphics2 = importClass λ. {Point 7→ {}} graphics PointFactory
+Evaluating graphics2 PointFactory newPoint returns an environment con-
+taining the keys x, y, and moveBy. However, evaluating graphics2 Point yields
+an environment with no mapping in it (according to the definition of Point in
+graphics2.
+Individual package import. Importing a whole package is equivalent to im-
+porting individually each class defined in the imported module. In a Java pro-
+gram, this is expressed as package mt; import ms.*;.
+importPackage : M→M→M
+importPackage = λmt. λms. (hide (κ ms))(λ. (mt ) B (fix ms))
+When importing a whole package, locally-defined classes mask the classes
+that are imported. For instance, the following code is correct:
+</bodyText>
+<listItem confidence="0.550443166666667">
+package p1;
+public class A{}
+public class B{}
+package p2;
+import p1.*;
+public class A extends B{}
+</listItem>
+<bodyText confidence="0.832100166666667">
+In the package p2, a class named A is locally defined, which masks the class
+A implicitly imported from p1. The name A within p2 refers to the p2 imple-
+mentation of A, whereas in p1 the name A refers to the p1 implementation of
+A.
+This is expressed by the B operator (which allows one mapping to be re-
+placed by a new one) used in importPackage.
+Class privacy. Classes declared as private in a package cannot be imported to
+other packages.
+private : M→ C →M
+private = λm. λc. (hide c) m
+Syntactically this is written package m; class C {...}. The class C is vi-
+sible only within m and is not accessible from outside.
+</bodyText>
+<sectionHeader confidence="0.978067" genericHeader="method">
+4 C#
+</sectionHeader>
+<bodyText confidence="0.994888">
+In C# a unit of modularization is called a namespace. Classes defined in a
+namespace can be imported under a different name (alias) in the importing
+namespace. C# provides a unique directive using to import a class (aliased or
+not) to a namespace and to import a whole namespace.
+We express the semantics of the using directive with the three combinators
+usingClassAs, usingClass and usingNamespace.
+Using alias and class directives. An imported class can be aliased. This
+means that this class is accessed within the importing namespace under a dif-
+ferent name. This is expressed in C# as namespace MT { using A = MS.C; }.
+usingClassAs : M→M→ C → C →M
+usingClassAs = λmt. λms. λa. λc. (hide a)(mt‖{a 7→ (fix ms)c})
+The value a refers to the new name given to the class c. The need for (hide a) and
+(fix ms) is similar to that in Java’s case: (hide a) constrains the imported class
+to be imported from another module, and (fix ms) binds all classes contained
+in ms to their dependencies. Also, when importing c in mt, dependencies of c
+are preserved.
+Importing a class without renaming it is expressed as an import aliased to
+the class name. This is expressed in C# as namespace MT { using MS.C;}.
+usingClass : M→M→ C →M
+usingClass = λmt. λms. λc. usingClassAs mt ms c c
+Note that usingClass is equivalent to importClass previously described for
+Java.
+Using the namespace directive. As in Java, all the classes defined in a name-
+space can be imported using a single directive. In a C# program, this would be
+expressed as namespace MT { using MS; }.
+usingNamespace = importPackage
+The combinator usingNamespace is equivalent to importPackage described
+previously.
+C# provides the extern alias keywords to enable references to two different
+versions of deployment units (i.e., assemblies) that have the same fully-qualified
+type names. This allows two or more versions of a given deployment unit to
+be used in the same application. Since the focus of this paper is on code pack-
+aging mechanisms rather than application deployment, we do not consider this
+mechanism in our comparison.
+</bodyText>
+<sectionHeader confidence="0.995359" genericHeader="method">
+5 Ruby
+</sectionHeader>
+<bodyText confidence="0.892635928571429">
+In Ruby, modules serve two distinct purposes: (i) modules encapsulate functions,
+methods, classes, and constants, and (ii) a module is a namespace of methods
+that can also be used as a mixin. In this section we therefore separately consider
+two operators, includeModule and newClassWithMixin, that respectively express
+these two purposes.
+Modules as namespaces. A module mt uses the code provided by another
+module ms by means of an include directive. This directive takes as parame-
+ter the name of the module intended to be reused. In the following example a
+module named MPoint defines a class Point containing a constructor. Another
+module MColoredPoint imports the definitions of MPoint and defines a subclass
+ColoredPoint of Point.
+#Defined in a file MPoint.rb
+module MPoint
+class Point
+</bodyText>
+<equation confidence="0.905080666666667">
+def initialize(x, y)
+@x = x
+@y = y
+</equation>
+<listItem confidence="0.804069">
+end end end
+#Defined in a file MColorPoint.rb
+load ”MPoint.rb”
+module MColoredPoint
+include MPoint
+class ColoredPoint &amp;lt; Point
+# ...
+end end
+</listItem>
+<bodyText confidence="0.994260285714286">
+We define an includeModule combinator that expresses the semantics of this
+include relationship between two modules. The resulting module of this combi-
+nator is a merge between the two where (i) local definitions hide those of the
+imported module, and (ii) references of classes contained in the provider module
+are preserved.
+includeModule : M→M→ C →M
+includeModule = λmt. λms. λ. mt  B (fix ms)
+Definitions contained in the importing module mt have precedence over those
+of the imported module ms in case of duplicate definitions. Before including a
+module, this one needs to be fixed because references between classes in this
+module are preserved.
+Modules as mixins. As defined by Bracha and Cook [10], a mixin is a subclass
+definition that may be applied to different superclasses to create a related family
+of modified classes. In Ruby, a module mixin is a set of methods intended to be
+used as part of class definitions. When a module mixin defines only a set of
+functions, a module can be used as a mixin using an include construct stated
+within a class. In that case all the functions defined in the module are methods
+applicable to any instance of the class.
+The following example shows the definition of a module mixin named MColor
+and a class ColoredPoint that uses it:
+#Defined in a file MColor.rb
+</bodyText>
+<equation confidence="0.955087818181818">
+module MColor
+def getColor()
+@color
+end
+def setColor(col)
+@color = col
+end
+def setToBlack()
+self.setColor(”Black”)
+end
+end
+load ”MColor.rb”
+class ColoredPoint
+include MColor
+def initialize (x, y)
+@x = x
+@y = y
+self.setToBlack()
+end
+def getX() @x end
+def getY() @y end
+end
+</equation>
+<bodyText confidence="0.963995">
+The two methods getColor() and setColor() can be invoked on instances cre-
+ated by the class ColoredPoint. For example, the following code yields 5 and
+</bodyText>
+<equation confidence="0.868801">
+Black.
+@p = ColoredPoint.new(2,3)
+puts @p.getX() + @p.getY(); puts @p.getColor()
+</equation>
+<bodyText confidence="0.933438071428571">
+The semantics of the include construct which treats a module as a mixin can
+be expressed within the calculus as follows:
+newClassWithMixin : M→M→ C → D →M
+newClassWithMixin = λmt. λmixin. λc. λd.
+mt‖{c 7→ fix(λσ. d B mixin σ)}
+The module mixin intended to be included in the class c is named mixin.
+The self-reference contained in the module mixin is rebound to the class being
+created by the fix operator.
+A mixin can only be used by creating a new class. To represent this, we
+defined the newClassWithMixin combinator expressing the semantics of creating
+a new class composed of one mixin. To keep the model concise, we do not handle
+situations (i) where a subclass includes some mixins and (ii) when a class can
+be composed of several mixins. These can easily be expressed by a combinator
+that would accept a superclass and a set of mixins.
+</bodyText>
+<sectionHeader confidence="0.945453" genericHeader="method">
+6 Selector Namespaces
+</sectionHeader>
+<bodyText confidence="0.997725409090909">
+It is a tradition for Smalltalk and Lisp-based programming languages to offer
+a mechanism for introducing class extensions [6]. A class extension is a method
+addition or a redefinition applied to a class already present in a system. The
+result is an evolution of the behavior defined by this class without introducing
+a subclass. The intent of this mechanism is to enable better distribution of
+responsibility among the involved classes.
+The concept of selector namespaces was first introduced in Modular Smalltalk [44],
+and more recently in Smallscript [39], a Smalltalk implementation for .Net. A
+selector namespace defines a namespace for methods and is used to manage con-
+flicting class extensions. Within such a namespace one can extend any class in
+the system without producing conflict: another namespace can contain a class
+extension having the same name. This is illustrated by Figure 1 where the class
+String is extended by two namespaces UrlNamespace and NetPackage, each of
+them adding a method asUrl.
+For instance, Figure 2 shows a class Object defined in a namespace English.
+This class contains a method printOnStream: and two methods printString. A first
+implementation of printString is provided by the selector namespace English, and
+the second one by German. A possible implementation is presented on the right
+side of Figure 2, the class Object contains three entries in its method dictionary.
+Each method has its name preceded by the name of the selector namespace
+that implements it. The method lookup is done according to which namespace
+messages are sent from.
+</bodyText>
+<figure confidence="0.9777725">
+String
+System
+URL
+UrlNamespace
+asUrl
+asUrl
+URL
+NetNamespace
+</figure>
+<figureCaption confidence="0.923">
+Figure 1: Two class extensions occur on the class String: two methods asUrl are
+</figureCaption>
+<figure confidence="0.99216775">
+added by two different namespaces UrlNamespace and NetNamespace.
+EnglishGerman
+printString
+Object
+printOnStream:
+Model Memory
+German.printString
+Object
+English.printOnStream:
+printString
+stream
+nextPutAll:
+self printString
+&amp;quot;German
+version&amp;quot;
+English.printString
+</figure>
+<figureCaption confidence="0.999246">
+Figure 2: The class Object is composed of three methods: two versions of
+</figureCaption>
+<bodyText confidence="0.987830051282051">
+printString and a printOnStream: method.
+Sending the message printOnStream: within the selector namespace German
+results in the following steps: (i) look up for German.printOnStream:, (ii) Ger-
+man.printOnStream: does not exist, therefore, (iii) because German imports Ob-
+ject from English, lookup continues by searching for English.printOnStream:. (iv)
+This method is found and invoked.
+Selector namespaces are non reentrant. If within a selector namespace a
+particular method is not found, then the lookup is pursued in the selector name-
+space from which the class is imported. However, a method implementation is
+always looked up according to the namespace within which the message is ac-
+tually sent. For instance, invoking printOnStream: within the namespace German
+triggers the method English.printOnStream:. This method triggers printString,
+also the implementation used is English.printString because the call for it occurs
+in the namespace English. Even if called from within German, the method En-
+glish.printOnStream: cannot invoke German.printString. We qualify this lookup as
+non reentrant.
+Importing and extending. Two combinators can be applied to a selector
+namespace: (i) import and extend a class (extend), or simply (ii) import (import)
+a class. Importing from a namespace ms and extending a class c with a set of
+methods d is expressed with the extend combinator:
+extend : M→M→ C →M→M
+extend = λmt. λms. λc. λd. mt‖{c 7→ (fix d) B ((fix ms) c)}
+When a selector namespace extends a class, the extending methods need to
+keep a reference to the scope that contains them. In order to keep this reference,
+a set of methods is a module (note that for the above formula d ∈M) and it is
+fixed when used to extend a class (fix d).
+For instance, a namespace English containing a class Object (Figure 2) is
+defined as:
+English = extend λ. {} Object
+λs. {printString 7→ λself. englishVersion},
+printOnStream 7→ λself. (s B self) printString}
+This class Object is extended with a German implementation of the printString
+method. The German namespace is defined as:
+German = extend λ. {} English Object
+λs. {printString 7→ λself. germanVersion}
+The second combinator associated to selector namespace is the import. A
+namespace imports a class without extending with:
+import : M→M→ C →M
+import = λmt. λms. λc. extend mt ms c λ. {}
+</bodyText>
+<sectionHeader confidence="0.981347" genericHeader="method">
+7 Virtual Classes
+</sectionHeader>
+<bodyText confidence="0.992269857142857">
+The notion of virtual classes offered by gbeta [22], Caesar [34] or Keris [45] al-
+lows class names to be dynamically looked up (rather than statically, at compi-
+lation time). Virtual classes unify the method and class lookup under a common
+lookup algorithm: as well as methods, class definitions are looked up along the
+inheritance of outer classes.
+In gbeta, virtual classes are implemented as inner classes, and outer classes
+define the unit of modularization. Class names are looked up in the same way
+</bodyText>
+<figure confidence="0.984160090909091">
+Widgets
+Point
+x, y
+moveBy(int ,int)
+PointFactory
+newPoint()
+ColoredWidgets
+Point
+color
+setColor (Color)
+new Point()
+</figure>
+<figureCaption confidence="0.999938">
+Figure 3: The outer class ColoredWidgets refines the class Point. Because classes
+</figureCaption>
+<bodyText confidence="0.8853892">
+are looked up, points produced from a factory obtained from ColoredWidgets are
+colored.
+methods are looked up: inner classes can be refined within subclasses of the outer
+class.
+Figure 3 shows the case where a set of inner classes contained in an outer
+class Widgets is refined in ColoredWidgets. The class Point defined in Widgets
+is subclassed into a new class Point in ColoredWidgets. The class PointFactory
+is visible into this last class because inherited. When the method newPoint() is
+triggered, the class Point is looked up according to the hierarchy of outer classes.
+If the factory is obtained from an instance of the outer class ColoredWidgets,
+then the points produced are colored.
+Two operations modeling inheritance are involved when handling virtual
+classes: (i) inheritance between outer classes and (ii) inheritance between inner
+classes. Within our calculus the semantics of these two operations are expressed
+with the combinators extendEncapsulated and extendInner.
+Elements in the subclass hide ones defined in the superclass. Inheritance
+between outer classes is simply expressed using the operator B. The extendEn-
+capsulated combinator is defined as:
+extendEncapsulated : M→M→M
+extendEncapsulated = λmt. λms. mt B ms
+Inheritance between inner classes is defined in a similar way that classical
+inheritance (Definition 13). The extendInner combinator is:
+extendInner : M→ C → D →M
+extendInner = λmt. λc. λd. λ. (mt\c) ‖{c 7→ d B (mt  c)}
+For instance, assuming an outer class Widgets, ColoredWidgets is defined as:
+</bodyText>
+<figure confidence="0.9889020625">
+ColoredWidgets = extendInner (extendEncapsulated λ. {} Widgets)
+Morph
+WidgetsClassbox
+paint()
+repaint()
+Button
+Morph
+EnhWidgetsClassbox
+paint()
+Button
+Button new repaint Button new repaint
+Old
+Implementation
+self paint
+Enhanced
+Implementation
+</figure>
+<figureCaption confidence="0.999911">
+Figure 4: Implicitly rebinding classes within classboxes.
+</figureCaption>
+<subsectionHeader confidence="0.396945">
+Point colorExtensions
+</subsectionHeader>
+<bodyText confidence="0.8496005">
+where colorExtensions ={color 7→ black,
+setColor 7→ λnewCol. λself.{color 7→ newCol} B self}
+</bodyText>
+<sectionHeader confidence="0.987273" genericHeader="method">
+8 Classboxes
+</sectionHeader>
+<bodyText confidence="0.994553804347826">
+The classbox model [6] is a module system that supports local rebinding. A class
+defined in one particular classbox can be extended via method addition or redef-
+inition in other classboxes. The changes made by a classbox are only visible to
+that extending classbox and classboxes that import it. Moreover, redefined meth-
+ods take precedence over existing one when invoked from an extending classboxes,
+and this even if the methods are called via methods only defined in the extended
+classbox. Whereas virtual classes (i.e., gbeta) unify the lookup of methods and
+the lookup of classes under a common algorithm, classboxes offer a scoping
+mechanism to limit the visibility of class extensions.
+The following example illustrates a method extension with local rebinding [6].
+Figure 4 depicts a classbox WidgetsClassbox that defines a class Morph, which
+is the root of the graphic element hierarchy in Squeak [27] (a smalltalk dialect
+in which classboxes are implemented), and a subclass Button. Morph contains a
+paint() method and a repaint() that calls paint(). The classbox EnhWidgetsClass-
+box imports Morph and redefines the paint() method. It also imports the sub-
+class Button. In the context of WidgetsClassbox, invoking the repaint() method
+on an instance of Button invokes the definition of paint() in Morph defined by
+this classbox. Within EnhWidgetsClassbox, invoking repaint() triggers the new
+implementation of paint() defined in this classbox.
+Within our calculus the semantics of classboxes are expressed using the
+extend operation. Within a classbox, it imports a class defined in another class-
+box and extends it using a set of definitions.
+This combinator is defined as:
+extend : M→M→ C → D →M
+extend = λmt. λms. λc. λd. λ. mt ‖{cms 7→ d B (ms  c)}
+For instance, the extension between EnhWidgetsClassbox andWidgetsClassbox
+is stated:
+EnhWidgetsClassbox = extend λ. {} WidgetsClassbox Morph {paint 7→ . . . }
+The superscript (e.g., cms) is used to identify the originating classbox in
+which a class is first defined. This makes it possible to distinguish classes that are
+defined from those that are imported and extended, even if they have the same
+name. Let’s suppose that classbox WidgetsClassbox defines two classes Morph
+and Button, where Button makes use of Morph. If a classbox EnhWidgetsClassbox
+imports Button from WidgetsClassbox and defines a new class Morph, then this
+new class has nothing to do with the Morph originating in WidgetsClassbox and
+should not affect the imported Button class. The superscript identifying the
+originating classbox ensures that no confusion will result. If, on the other hand,
+EnhWidgetsClassbox imports and extends Morph from WidgetsClassbox, then this
+extended Morph will have the same originating classbox superscript, and will
+affect the imported Button class.
+In the same way, new classes are defined as
+newClass : M→ C → C → D →M
+newClass = λmt. λsup. λc. λd. λ. ms ‖{cmt 7→ d B  sup}
+A shortcut to extend a class with an empty set of definition is stated as:
+import : M→M→ C →M
+import = λmt. λms. λc. extend mt ms c {}
+</bodyText>
+<sectionHeader confidence="0.957932" genericHeader="method">
+9 Units
+</sectionHeader>
+<bodyText confidence="0.993646777777778">
+MZScheme [23] offers an advanced module system based on units. A program
+unit is an unevaluated fragment of code intended to be linked with other units
+in order to form executable programs. There is no global namespace of units.
+A unit describes its import requirements without specifying a particular unit
+that supplies those imports. The actual linking of the unit is specified externally
+at a later stage. Unlike in ML, unit linking is specified for groups of units with
+a graph of connections, which allows mutual recursion across unit boundaries.
+Furthermore, the result of linking a collection of units is a new (compound)
+unit that is available for further linking. One important point of this module
+</bodyText>
+<figure confidence="0.977940611111111">
+Point
+x
+y
+Circle
+radius
+center
+Factory
+newPoint
+newCircle
+Point Circle
+Point Circle
+import
+export
+Unit
+Link
+compound1
+widgets
+widgetsFactory
+</figure>
+<figureCaption confidence="0.8468935">
+Figure 5: Composing two units, widgets and widgetsFactory, into one compound,
+compound1.
+</figureCaption>
+<bodyText confidence="0.837473">
+system is that connections between modules are specified separately from their
+definitions.
+The link combinator is defined as:
+</bodyText>
+<equation confidence="0.7980475">
+link : M→M→ C → C →M
+link = λmt. λms. λa. λc. λ. mt ‖{a 7→ ms  c}
+</equation>
+<bodyText confidence="0.994009">
+Applying a link combinator between a unit mt and ms makes the value
+associated to c in ms available in mt under the alias a. For instance, Figure 5
+shows a widgets unit defining two classes Point and Circle and a widgetsFactory
+unit defining a class Factory. The corresponding expression is:
+</bodyText>
+<equation confidence="0.701167666666667">
+widgets = λ. {Point 7→ { x 7→ 0, y 7→ 0},
+Circle 7→ {radius 7→ 0, center 7→  Point}}
+widgetsFactory = λ. {Factory 7→ {newPoint 7→  Point},
+</equation>
+<figure confidence="0.935384695652174">
+newCircle 7→  Circle}}
+To make widgetsFactory use the widgets a new compound compound1 is
+created using:
+compound1 = link (link widgetsFactory widgets Point Point)
+widgets Circle Circle
+ColoredPoint
+color
+x, y
+ColoredCircle
+color
+radius, center
+Factory
+newPoint
+newCircle
+Point Circle
+ColoredPoint ColoredCircle
+import
+export
+Unit
+Link
+compound2
+coloredWidgets
+widgetsFactory
+</figure>
+<figureCaption confidence="0.999969">
+Figure 6: The unit widgetsFactory is composed with a new unit coloredWidgets.
+</figureCaption>
+<bodyText confidence="0.968555375">
+The unit compound1 is the result of linking classes Point and Circle defined in
+widgets under their original names (Point and Circle) in the unit widgetsFactory.
+This compound is obtained by linking the class Point obtained from widgets to
+the name Point in the unit widgetsFactory. Then, the class Circle of widgets is
+linked to the name Circle in widgetsFactory.
+As illustrated in Figure 6, the widget factory is used by colored widgets,
+without altering the original definition of widgetsFactory. This is expressed with:
+coloredWidgets = λ. {ColoredPoint 7→ { color 7→ blue, x 7→ 0, y 7→ 0},
+</bodyText>
+<table confidence="0.457022714285714">
+ColoredCircle 7→ {color 7→ blue, radius 7→ 0,
+center 7→  Point}}
+compound2 = link (link widgetsFactory coloredWidgets ColoredPoint Point)
+coloredWidgets ColoredCircle Circle
+The unit compound2 is the result of linking the class ColoredPoint and Col-
+oredCircle obtained from coloredWidgets to the unit widgetsFactory under the
+names Point and Circle.
+</table>
+<sectionHeader confidence="0.831023" genericHeader="method">
+10 MixJuice
+</sectionHeader>
+<bodyText confidence="0.898125473684211">
+MixJuice [25] is a module system for Java in which a module encapsulates the
+differences between the original program and the extended program. The differ-
+ence is a set of definitions of additions and modifications of classes, fields and
+methods. Modules may inherit other modules. As explained below, an important
+distinction between MixJuice module system and classboxes is that an original
+and a modified version of a set of classes cannot be present at the same time in
+the same system.
+For instance, a module defining a point is defined as:
+module point {
+define class Point {
+define int x = 0;
+define int y = 0;
+define void moveBy (int dx, int dy) { x += dx; y+= dy;}
+define String toString () { return ”point ”+x+”,”+y;}
+}
+}
+The keyword define is used to define a new class member. Without this keyword,
+the class is refined. Here the class Point is refined to a colored point:
+module coloredPoint extends point {
+</bodyText>
+<figure confidence="0.756279166666667">
+class Point {
+define Color c; // Variable addition
+// Redefinition of the method toString()
+String toString () { return ”colored point ”+x+”,”+y;}
+}
+}
+</figure>
+<bodyText confidence="0.990368235294118">
+The example above uses a single inheritance link between modules. However,
+multiple inheritance is permitted. In that case, all modules are linearized by
+topological sort (similar to the class linearization done in CLOS [19]).
+Within our calculus, semantics of MixJuice modules are expressed using two
+combinators: extends to express inheritance between modules, and refineClass
+to refine some part of a class using redefinition of its class members.
+Inheritance of modules is expressed as:
+extends : M→M→M
+extends = λmt. λms. mt B ms
+This combinator is the same as that expressing inheritance between outer classes
+(extendEncapsulated) for gbeta.
+Classes are refined using refineClass:
+refineClass : M→ C → D →M
+refineClass = λmt. λc. λd. λ. (mt\c) ‖{c 7→ d B (mt  c)}
+MixJuice does not allow multiple versions of a given class to be present at the
+same time in the same running system. This is the major difference with class-
+boxes apart from the import relationship being specified as inheritance between
+</bodyText>
+<figure confidence="0.98267684">
+yes no
+Java, C#
+Unextensible classes
+class creator class user
+Ruby
+noyes
+Selector namespaces
+noyes
+MixJuice
+Local
+rebinding
+Supporting class
+extension
+Responsibility
+of extending
+Multiple class versions
+at the same time
+noyes
+Virtual ClassesClassboxes
+Keeping identity
+when extending
+noyes
+MZScheme
+Connections separated
+from definitions
+</figure>
+<figureCaption confidence="0.999945">
+Figure 7: Taxonomy of different module systems.
+</figureCaption>
+<bodyText confidence="0.9852492">
+modules. As a consequence, a program can be composed either of colorless points
+(i.e., using the point module) or of colored points (i.e., using the coloredPoint
+module). But a colorless point and a colored point cannot coexist in the same
+system. Note that this restriction is not expressed in the combinators described
+above because the calculus does not handle program execution.
+</bodyText>
+<sectionHeader confidence="0.536478" genericHeader="method">
+11 Module System Analysis
+</sectionHeader>
+<bodyText confidence="0.9999025">
+We present some of the key characteristics that the different module systems
+exhibit and that the calculus helps to clearly identify. Figure 7 presents a clas-
+sification of the module systems we have discussed. The module systems are
+classified according to properties that enable extension.
+</bodyText>
+<subsubsectionHeader confidence="0.516866">
+11.1 Unextensible Classes
+</subsubsectionHeader>
+<bodyText confidence="0.9995">
+With Java or C#, classes can only be refined through subclassing. The definition
+of the imported class cannot be enlarged with a set of new definitions (method or
+field addition or method change) from a package other than the package defining
+it. We refer to such imported classes as unextensible. These extensions have to
+be defined on subclasses.
+This restriction is expressed within the calculus by (i) fixing the module from
+which the imported class comes from and (ii) not extending this class with B
+(override) or ‖ (extend). Basically, this is identified by (i) the pattern (fix ms) c
+present in the import statement and by (ii) the absence of B or ‖.
+For instance, importing a class in Java (Section 3) is defined as:
+importClass = λmt. λms. λc. (hide c)(mt ‖ {c 7→ (fix ms) c})
+The new class c is defined as ((fixms) c) which makes it unextensible because
+it contains fix and no overriding or extension operations.
+</bodyText>
+<subsubsectionHeader confidence="0.414468">
+11.2 Class Extensions
+</subsubsectionHeader>
+<bodyText confidence="0.998823275862069">
+Some module systems allow methods to be added or redefined separately from
+the definition of the class they belong to. The specification of the class is therefore
+spread over more than one module. This mechanism complements subclassing.
+A class extension is the result of a separation between a definition of a class and
+definitions that compose this class (i.e.,method definitions). AspectJ [5] with the
+notion of inter-type declaration, MultiJava [35] with open-classes, HyperJ [41]
+with hyper-slices, Smalltalk, CLOS, and Objective-C offer such a mechanism.
+Within such systems, there is a conceptual difference between a class definition
+and its method definitions: a method definition is not physically included in a
+class definition but can be defined externally to the class it belongs to.
+The ability of a module system to offer class extensions is expressed in apply-
+ing an B or a ‖ operator to the imported class. For instance, ModularSmalltalk
+(Section 6) and classboxes (Section 8) allow a class to be extended by adding
+or redefining methods. This is illustrated in the extend combinator for selector
+namespaces (Section 6):
+extend = λmt. λms. λc. λd. mt‖{c 7→ d B ((fix ms) c)}
+The imported class c is the result of ((fix ms) c), i.e., the definition of the
+class c looked up in the fixed (self-rebound) module. A set of new definitions is
+added to it by using d B . The class obtained from the provider module ms is
+extended with a set of definitions d.
+With virtual classes, class extensions and mixins, a part of the definitions
+composing a class can be stated at a different location than the class declaration.
+Gbeta allows a class to be refined in another unit of modularization (i.e., outer
+classes). With selector namespaces, part of the behavior can be defined in a
+namespace different from the one where the class is declared.
+Aspect languages offer certain features similar to those offered by module
+systems. We do not consider these in our comparison, however, for the simple
+reason that aspects refer to runtime semantics in the specification of pointcuts.
+This is out of the scope of the present work.
+</bodyText>
+<subsectionHeader confidence="0.441114">
+11.3 Extension Responsibility
+</subsectionHeader>
+<bodyText confidence="0.9994643">
+We defined a class extension as a method addition or redefinition for an already
+existing class (Section 6). The responsibility of extending a class belongs to its
+users. For instance, with selector namespaces or classboxes, a class is imported,
+and then extended. This responsibility belongs to user of this class, and not to its
+creator. With classboxes this is expressed with the extend combinator intended
+to be applied to an already existing class (Section 8).
+extend = λmt. λms. λc. λd. λ. mt ‖{cms 7→ d B (ms  c)}
+The (ms  c) contained in extend assumes that the class already exists in ms.
+The variable d contains features used to extend the class c defined in ms with.
+The decision to use a mixin or not when creating a class is made by the
+creator of the class. This is why, in Ruby, including a module mixin in the
+definition of a class is not a class extension in the sense we defined previously.
+The choice of using a mixin is taken when the class is created. This is expressed
+with the newClassWithMixin combinator where the mixin to use is designated
+when the class is created.
+newClassWithMixin = λmt. λmixin. λc. λd.
+mt‖{c 7→ fix(λσ. d B mixin σ)}
+No previous class definition is looked up in a provider module. The variable
+d contains the features that the new class c will be composed of, and mixin
+contains the mixin module used by c.
+</bodyText>
+<subsubsectionHeader confidence="0.527784">
+11.4 Local Rebinding
+</subsubsectionHeader>
+<bodyText confidence="0.997303222222222">
+The local rebinding property is provided by an extension mechanism in which
+extensions are visible by and see former definitions of the code. A change defined
+by some class extensions can invoke the former definitions, and former definitions
+can invoke the new extensions.
+A module system offers a local rebinding property if within an import state-
+ment a fix operator is not applied on the module from which a class is imported.
+The effect of this fixpoint is to make the imported class use definitions of the im-
+porter module. In the studied module systems, gbeta, classboxes, and MixJuice
+have the local rebinding property but not selector namespaces.
+</bodyText>
+<figure confidence="0.780214">
+Object
+English
+asString
+asString
+German
+printOn(aStream)
+^ &apos;Object of class &apos;, self class
+^ &apos;Objekt der Klasse &apos;, self class
+^ aStream printOn: self asString
+Object new asString
+=&amp;gt; &apos;Objekt der Klasse Object&apos; Object new asString =&amp;gt; &apos;Object of class Object&apos;
+Object new printOn: Stdout
+=&amp;gt; &apos;Object of class Object&apos;
+Object new printOn: Stdout
+=&amp;gt; &apos;Object of class Object&apos;
+</figure>
+<figureCaption confidence="0.99426">
+Figure 8: In Modular Smalltalk, namespace selectors are not reentrant: invoking
+</figureCaption>
+<bodyText confidence="0.977608551724138">
+printOn() from the German namespace does not invoke the German version of
+asString.
+For instance, in gbeta (Section 7), refinements over a set of inner classes are
+defined within a subclass of the encapsulating class using the extendEncapsula-
+ted combinator:
+extendEncapsulated = λmt. λms. mt B ms
+As no fix operator is involved, the class definition in the parent encapsulating
+class can introduce further refinements.
+In the same way the extend combinator used to express the class extension
+with classboxes is:
+extend = λmt. λms. λc. λd. λ. mt ‖{cms 7→ d B (ms  c)}
+The extended class is the value given by dB ms  c. The extensions d override the
+definition of c obtained from ms s (the module from which the class is obtained).
+Methods originally defined in ms s c can call methods defined in d.
+Selector namespaces (Section 6) allow a class to be imported and then ex-
+tended with new methods. These new methods can invoke the former methods.
+However, the other direction is not possible: former methods cannot invoke re-
+defined definitions. We call this property non-reentrance. Selector namespaces
+do not support local rebinding because they are not reentrant. For instance, in
+Smallscript [39] a German translation could be defined as shown in Figure 8. A
+namespace German extends the class Object with a German translation of as-
+String. However, the English version of this method belongs to the namespace
+English where printOn(aStream) is specified. Therefore, the English version of
+asString is always invoked by printOn(aStream) even if the execution occurs from
+within the German namespace.
+The extend combinator used to express the class extension semantics with
+selectors namespace is:
+extend = λmt. λms. λc. λd. mt‖{c 7→ d B ((fix ms) c)}
+The module ms is fixed before taking the definition of the class c intended to be
+extended. The definition obtained from ((fix ms) c) cannot call the extensions
+defined by d.
+With virtual classes or classboxes, on the other hand, a German translation
+would be printed whenever the printOn(aStream) is invoked from within the
+package German. These two systems exhibit the local rebinding property. Local
+rebinding is characterized by taking into account the calling context.
+11.5 Privacy in a Module
+Module privacy is expressed using the hide operator. For example to declare a
+class as private within a Java package, one may use:
+private = λm. λc. (hide c) m
+With Java and C#, an imported class may be referred to only within the
+importing package or namespace. An imported class does not belong to the
+module’s interface, and so, cannot be imported from that module by yet another
+module. This is expressed by the hide operator applied to the result of the import.
+For instance, the C# usingClassAs combinator (Section 4) which expresses class
+import with an alias, is defined as:
+usingClassAs = λmt. λms. λa.λc. (hide a)(mt‖{a 7→ (fix ms) c})
+The use of (hide a) prevents one from importing the class from another module.
+An imported class cannot be re-imported by another module. For instance, the
+following Java code is illegal:
+package a; class C { };
+package b; import a.C;
+package c; import b.C; // Error, class C is not accessible from package b
+On the other hand, with classboxes (Section 8), a class can be imported,
+extended and then imported again by another classbox. The extend combinator
+used to express extension is:
+extend = λmt. λms. λc. λd. λ. mt ‖{cms 7→ d B (ms  c)}
+A class that is imported by a classbox and extended is available to clients of
+that classbox.
+</bodyText>
+<sectionHeader confidence="0.407313" genericHeader="method">
+11.6 Mixin Behavior
+</sectionHeader>
+<bodyText confidence="0.993498042553191">
+A Ruby module may define functions that are turned into methods whenever
+they are used by a class (Section 5). Such a behavior is called a module mixin
+in the Ruby community. The module mixin is applied to the environment rep-
+resenting the class being defined. This is expressed by the use of the fixpoint
+operator fix within newClassWithMixin.
+newClassWithMixin = λmt. λmixin. λc. λd.
+mt‖{c 7→ fix(λσ. d B mixin σ)}
+The expression mixin σ binds the class being defined σ to the module argu-
+ment  of mixin. This mechanism is illustrated here with Ruby’s module mixin
+but it is also applicable to other mixin mechanisms like those of MzScheme [24]
+or Jigsaw [9].
+11.7 Identity of the Extended Classes
+Refining a class by subclassing it does not preserve class identity: the original
+and refined definitions are implemented by two distinct classes. With virtual
+classes (Section 7), a class is refined by creating a new class that substitutes the
+first one when a class lookup is performed. As a consequence, an instance of a
+class is not an instance of the refined class.
+With classboxes, new methods can be added or redefined on an imported
+class. The new methods are part of the class behavior but they are only visible
+from the context of the classbox that defines them. As a consequence, these
+methods are only accessible in this classbox and in other classboxes that import
+the class from the extending classbox. The identity of the class is preserved. As a
+consequence, the set of methods understandable by an instance of a class created
+by a classbox CB1 may be enlarged if this instance is referenced by some code
+in a classbox CB2. This is expressed in our calculus by making the originating
+classbox explicit by means of a superscript (e.g., cms).
+11.8 Multiple Class Versions at the Same Time
+A class defined in a classbox can be refined in another without conflicting with
+the original definition. This is a result of allowing multiple versions of the same
+class to coexist in the same system. Each version of a given class can have
+different collaborating classes present in the same system.
+MixJuice offers the possibility of extending a system by defining differential
+modules. Such modules are then composed to form a executable system. How-
+ever, one strong constraint is that only one particular version of a class can be
+present in a system. Therefore, a particular combination of modules may lead
+to some unexpected results because some modifications might be propagated to
+clients that rely on the original version only.
+One current limitation of our formalism is that the restriction of having only
+one particular version of a class present in a system is not reflected by the
+combinators described above. The notion of executable system is not defined,
+therefore no restriction related to the execution can be formulated.
+11.9 Connections Separated from Module Definitions
+The advantage of units over conventional module and class languages is that
+connections between modules or classes are separately specified from their def-
+initions. Separating the definition of classes from their use in different modules
+makes it easy to replace the original classes with new classes without modifying
+the client.
+</bodyText>
+<sectionHeader confidence="0.996184" genericHeader="related work">
+12 Related Work
+</sectionHeader>
+<bodyText confidence="0.99976805">
+Considerable effort has been invested in studying theoretical foundations of mod-
+ule systems, but to the best of our knowledge there is no work defining a calculus
+to compare existing object-oriented module systems. We limit this section to
+summarizing work done in expressing module systems of various object-oriented
+languages.
+In their work on mixins operators Van Limberghen and Mens [32] present the
+operator encaps appropriated to deal with multiple inheritance problems, which
+is an alternative to the hide operator proposed by Bracha and Lindstrom [12].
+They mainly focused on multi-inheritance mechanisms.
+Ancona and Zucca [2] define a module calculus suitable for encoding various
+existing mechanism for composing modules. They define a module as a set of
+imports, a set of exports, and a set of function definitions, i.e., components.
+Modules are composed using a set of operators: sum, reduct, freeze, selection.
+The operator sum glues two modules together, and is roughly equivalent to
+our override (in our calculus, import and export are not explicitly part of a
+module). The operator reduct is a form of renaming; import and export com-
+ponents are separately renamed via two renamings. The freeze operators binds
+input to output names. Finally, selection is used by clients of a module to access
+its components. Their approach enables a large variety of existing mechanisms
+for combining software components to be expressed (e.g., ML functions, mixin
+modules). However, no attempt has been made to express module systems of
+mainstream object-oriented languages.
+Bono et al., [8], define some basic object-oriented constructs in a lambda-
+calculus with records. While they focus on expressing mixin composition as the
+primary extension mechanism, they do not address the notion of modules and
+composition operators.
+Leroy [31] presents an implementation of an SML-like module system. The
+SML module system consists of three notions: a structure which is a set of named
+components, a signature which is an interface for a structure, and a functor
+which is a function that maps a structure into a new structure. A module is
+defined by a structure which can be associated with more than one signature. A
+module can either be user-defined, or the result of applying a functor to another
+module. Leroy describes an attempt at transferring thus module system to other
+languages such as core C and mini-ML which are subsets of C and of ML,
+respectively.
+Linking modules together by functor application prevents the definition of
+mutually recursive types or procedures across modules boundaries [23]. Objec-
+tive Caml [38] provides an object-oriented layer as well as an SML-like module
+system. We did not include this in our comparison because it would be redundant
+with the study of MZScheme units.
+</bodyText>
+<sectionHeader confidence="0.952526" genericHeader="conclusions">
+13 Conclusion
+</sectionHeader>
+<bodyText confidence="0.985116447368421">
+We have defined a simple calculus in which modules and classes are combined
+using a set of basic operators like hide and fix. Then, for various object-oriented
+programing languages, we expressed their module systems (i.e., Java packages,
+C# namespaces, gbeta virtual classes, . . . ) by defining combinators like im-
+port or extend . The focus of this work is to express various packaging mecha-
+nisms using a common foundation. Results of this analysis are summarized in
+the taxonomy presented in Section 11. Even if only a very few languages are
+treated in this paper compared to the number of module systems proposed over
+the last decades, mainstream languages as well as representative languages are
+studied.
+When defining the representation of classes, we expressed inheritance with
+the extendClass combinator. However, we did not model the super reference.
+This would have introduced additional complexity to the calculus that would
+have shifted the focus of this paper. Furthermore, not all the of languages we
+considered support super (e.g., gbeta).
+The presented calculus is untyped. As a future work we plan to explore typing
+rules for this calculus in order to express, for instance, which compositions of
+modules are type safe. Virtual classes (like in Eiffel) represent an unchecked use
+of covariance, which is not type-safe [13], whereas the gbeta approach was always
+based on checking for covariance (which is possible because, in contrast to Eiffel,
+covariance is always explicitly declared).
+In this paper we mainly focused on expressing import and extend relation-
+ship. Our future work is to apply our approach to other systems such as Modula-
+3 [16], ModularJava [18], JavaMod [3] and Nested Inheritance [37] as they offer
+the notion of explicit interface.
+Numerous formalisms have been developed in recent years to model new
+kinds of module systems and their features. However, to our knowledge, ours
+is the first attempt to develop a general calculus for modeling and comparing
+the diversity of module systems provided by various mainstream object-oriented
+programming languages.
+Acknowledgments. We gratefully acknowledge the financial support of the
+Swiss National Science Foundation for the projects “A Unified Approach to
+Composition and Extensibility” (SNF Project No. 200020-105091/1, Oct. 2004
+- Sept. 2006) and “Recast: Evolution of Object-Oriented Applications” (SNF
+2000-061655.00/1).
+We would like to thank Gilad Bracha, William Cook, Erik Ernst, and Eric
+Tanter for the valuable discussions we have had, which helped to improve the
+presentation of this paper.
+</bodyText>
+<sectionHeader confidence="0.990276" genericHeader="references">
+References
+</sectionHeader>
+<reference confidence="0.999710625">
+1. D. Ancona and E. Zucca. A theory of mixin modules: Basic and derived operators.
+Mathematical Structures in Computer Science, 8(4):401–446, August 1998.
+2. D. Ancona and E. Zucca. A primitive calculus for module systems. In
+G. Nadathur, editor, Principles and Practice of Declarative Programming, num-
+ber 1702 in LNCS, pages 62–79. Springer Verlag, 1999.
+3. D. Ancona and E. Zucca. True modules for Java-like languages. In J. L. Knudsen,
+editor, ECOOP 2001, number 2072 in LNCS, pages 354–380. Springer Verlag, 2001.
+4. Ken Arnold and James Gosling. The Java Programming Language. Addison Wes-
+ley, 1996.
+5. AspectJ home page. http://eclipse.org/aspectj/.
+6. Alexandre Bergel, Stéphane Ducasse, Oscar Nierstrasz, and Roel Wuyts. Class-
+boxes: Controlling visibility of class extensions. Computer Languages, Systems and
+Structures, 31(3-4):107–126, May 2005.
+7. Alexandre Bergel, Stéphane Ducasse, and Roel Wuyts. Classboxes: A minimal
+module model supporting local rebinding. In Proceedings of JMLC 2003 (Joint
+Modular Languages Conference), volume 2789 of LNCS, pages 122–131. Springer-
+Verlag, 2003.
+8. Viviana Bono, Amit Patel, and Vitaly Shmatikov. A core calculus of classes and
+mixins. In R. Guerraoui, editor, Proceedings ECOOP ’99, volume 1628 of LNCS,
+pages 43–66, Lisbon, Portugal, June 1999. Springer-Verlag.
+9. Gilad Bracha. The Programming Language Jigsaw: Mixins, Modularity and Multi-
+ple Inheritance. PhD thesis, Dept. of Computer Science, University of Utah, March
+1992.
+10. Gilad Bracha and William Cook. Mixin-based inheritance. In Proceedings OOP-
+SLA/ECOOP ’90, ACM SIGPLAN Notices, volume 25, pages 303–311, October
+1990.
+11. Gilad Bracha and Gary Lindstrom. Modularity meets inheritance. Uucs-91-017,
+University of Utah, Dept. Comp. Sci., October 1991.
+12. Gilad Bracha and Gary Lindstrom. Modularity meets inheritance. In Proceedings
+of the IEEE International Conference on Computer Languages, pages 282–290,
+April 1992.
+13. Kim B. Bruce, Martin Odersky, and Philip Wadler. A statically safe alternative to
+virtual types. In Proceedings ECOOP ’98, pages 523–549. Springer-Verlag, 1998.
+14. C#. http://www.ecma-international.org/publications/standards/Ecma-334.htm.
+15. Luca Cardelli. A semantics of multiple inheritance. Information and Computation,
+76:138–164, 1988.
+16. Luca Cardelli, Jim Donahue, Lucille Glassman, Mick Jordan, Bill Kalsow, and
+Greg Nelson. Modula-3 language definition. ACM SIGPLAN Notices, 27(8):15–
+42, August 1992.
+17. Curtis Clifton, Gary T. Leavens, Craig Chambers, and Todd Millstein. MultiJava:
+Modular open classes and symmetric multiple dispatch for Java. In OOPSLA
+2000 Conference on Object-Oriented Programming, Systems, Languages, and Ap-
+plications, pages 130–145, 2000.
+18. John Corwin, David F. Bacon, David Grove, and Chet Murthy. MJ: a rational
+module system for Java and its applications. In Proceedings of the 18th ACM
+SIGPLAN conference on Object-oriented programing, systems, languages, and ap-
+plications, pages 241–254. ACM Press, 2003.
+19. Linda G. DeMichiel and Richard P. Gabriel. The common lisp object system:
+An overview. In J. Bézivin, J-M. Hullot, P. Cointe, and H. Lieberman, editors,
+Proceedings ECOOP ’87, volume 276 of LNCS, pages 151–170, Paris, France, June
+1987. Springer-Verlag.
+20. DrScheme. http://www.drscheme.org/.
+21. Erik Ernst. Propagating class and method combination. In R. Guerraoui, editor,
+Proceedings ECOOP ’99, volume 1628 of LNCS, pages 67–91, Lisbon, Portugal,
+June 1999. Springer-Verlag.
+22. Erik Ernst. Family polymorphism. In J. L. Knudsen, editor, ECOOP 2001, num-
+ber 2072 in LNCS, pages 303–326. Springer Verlag, 2001.
+23. Matthew Flatt and Matthias Felleisen. Units: Cool modules for hot languages.
+In Proceedings of PLDI ’98 Conference on Programming Language Design and
+Implementation, pages 236–248. ACM Press, 1998.
+24. Matthew Flatt, Shriram Krishnamurthi, and Matthias Felleisen. Classes and mix-
+ins. In Proceedings of the 25th ACM SIGPLAN-SIGACT Symposium on Principles
+of Programming Languages, pages 171–183. ACM Press, 1998.
+25. Yuuji Ichisugi and Akira Tanaka. Difference-based modules: A class independent
+module mechanism. In Proceedings ECOOP 2002, volume 2374 of LNCS, Malaga,
+Spain, June 2002. Springer Verlag.
+26. Atsushi Igarashi and Benjamin C. Pierce. On inner classes. Lecture Notes in
+Computer Science, 1850, 2000.
+27. Dan Ingalls, Ted Kaehler, John Maloney, Scott Wallace, and Alan Kay. Back to the
+future: The story of Squeak, A practical Smalltalk written in itself. In Proceedings
+OOPSLA ’97, ACM SIGPLAN Notices, pages 318–326. ACM Press, November
+1997.
+28. Java. http://java.sun.com/.
+29. Sonia E. Keene. Object-Oriented Programming in Common-Lisp. Addison Wesley,
+1989.
+30. Bent Bruun Kristensen, Ole Lehrmann Madsen, Birger Moller-Pedersen, and Kris-
+ten Nygaard. The BETA programming language. In B. Shriver and P. Wegner,
+editors, Research Directions in Object-Oriented Programming, pages 7–48. MIT
+Press, Cambridge, Mass., 1987.
+31. Xavier Leroy. A modular module system. Journal of Functional Programming,
+10(3):269–303, 2000.
+32. Tom Mens and Marc van Limberghen. Encapsulation and composition as orthog-
+onal operators on mixins: A solution to multiple inheritance problems. Object
+Oriented Systems, 3(1):1–30, 1996.
+33. Bertrand Meyer. Eiffel: The Language. Prentice-Hall, 1992.
+34. Mira Mezini and Klaus Ostermann. Conquering aspects with caesar. In Proceed-
+ings of the 2nd international conference on Aspect-oriented software development,
+pages 90–99. ACM Press, 2003.
+35. Todd Millstein, Mark Reay, and Craig Chambers. Relaxed multijava: balancing ex-
+tensibility and modular typechecking. In Proceedings of the 18th ACM SIGPLAN
+conference on Object-oriented programing, systems, languages, and applications,
+pages 224–240. ACM Press, 2003.
+36. Hanspeter Mössenböck. Object-Oriented Programming in Oberon-2. Springer-
+Verlag, 1993.
+37. Nathaniel Nystrom, Stephen Chong, and Andrew C. Myers. Scalable extensibility
+via nested inheritance. In OOPSLA ’04: Proceedings of the 19th annual ACM
+SIGPLAN Conference on Object-oriented programming, systems, languages, and
+applications, pages 99–115. ACM Press, 2004.
+38. Ocaml. http://caml.inria.fr/.
+39. Dave Simmons. Smallscript, 2002. http://www.smallscript.com.
+40. S. Tucker Taft. Ada 9x: From abstraction-oriented to object-oriented. In Proceed-
+ings OOPSLA ’93, volume 28, pages 127–143, October 1993.
+41. Peri Tarr, Harold Ossher, William Harrison, and Stanley M. Sutton, Jr. N Degrees
+of Separation: Multi-dimensional Separation of Concerns. In Proceedings of ICSE
+’99, pages 107–119, Los Angeles CA, USA, 1999.
+42. David Thomas and Andrew Hunt. Programming Ruby. Addison Wesley, 2001.
+43. Cincom Smalltalk, September 2003. http://www.cincom.com/scripts/smalltalk.dll/.
+44. Allen Wirfs-Brock and Brian Wilkerson. An overview of modular Smalltalk. In
+Proceedings OOPSLA ’88, pages 123–134, November 1988.
+45. Matthias Zenger. Type-safe prototype-based component evolution. In Proceedings
+ECOOP 2002, volume 2374 of LNCS, pages 470–497, Malaga, Spain, June 2002.
+Springer Verlag.
+</reference>
+</variant>
+</algorithm>
+<algorithm name="ParsHed" version="110505">
+<variant no="0" confidence="0.206246">
+<title confidence="0.999742">Analyzing Module Diversity</title>
+<author confidence="0.950613">Alexandre Bergel</author>
+<author confidence="0.950613">Stéphane Ducasse</author>
+<address confidence="0.913082">1Software Composition Group, University of Bern, Switzerland</address>
+<email confidence="0.977497">www.iam.unibe.ch/∼scg</email>
+<affiliation confidence="0.935618">2LISTIC — Language and Software Evolution Group, University of Savoie,</affiliation>
+<address confidence="0.937053">France</address>
+<email confidence="0.993437">www.listic.univ-savoie.fr</email>
+<abstract confidence="0.999410818181818">Each object-oriented programming language proposes various grouping mechanisms to bundle interacting classes (i.e., packages, modules, selector namespaces, etc). To understand this diversity and to compare the different approaches, a common foundation is needed. In this paper we present a simple module calculus consisting of a small set of operators over environments and modules. Using these operators, we are then able to specify a set of module combinators that capture the semantics of Java packages, C# namespaces, Ruby modules, selector namespaces, gbeta classes, classboxes, MZScheme units, and MixJuice modules. We develop a simple taxonomy of module systems, and show how particular combinations of module operators help us to draw sharp distinctions between classes of module systems that share similar characteristics.</abstract>
+<keyword confidence="0.835161">Key Words: package, module, selector namespaces, classboxes, virtual classes, Smalltalk, Java, Ruby, C#</keyword>
+<note confidence="0.386188">Category: D.1.5, D.2.1, D.2.2, D.3.2, D.3.3</note>
+</variant>
+</algorithm>
+<algorithm name="ParsCit" version="110505">
+<citationList>
+<citation valid="true">
+<authors>
+<author>D Ancona</author>
+<author>E Zucca</author>
+</authors>
+<title>A theory of mixin modules: Basic and derived operators.</title>
+<date>1998</date>
+<journal>Mathematical Structures in Computer Science,</journal>
+<volume>8</volume>
+<issue>4</issue>
+<contexts>
+<context position="11436" citStr="[1, 31]" startWordPosition="2044" endWordPosition="2045">on between the interface and the implementation of a module. Example. Hiding a binding of a module removes the entry from the module’s interface, but the binding’s value is still internally accessible through other bindings. For example, for the two modules m = λ. {a 7→ 1, b 7→ }, we have: (fix (hide a)(m)) a = ⊥ (fix (hide a)(m)) b a = 1 2.4 Class Definition Within a module, a value associated to a key represents a definition. If the calculus is intended to express the semantics of a module system which is part of a procedural (or functional) language, values of bindings describe functions [1, 31]. In the rest of this paper we will focus only on expressing semantics of module systems for class-based object-oriented programming languages. Definitions contained within a module describe classes. A class is represented as an environment whose mappings define state and methods. We also do not model class instantiation. Note that we do not model the pseudo-variable super because this would add unnecessary complexity to the calculus and shift the focus of the paper. Moreover, super is not present in all the languages we consider here. We also do not model classes as modules because our goal i</context>
+</contexts>
+<marker>1.</marker>
+<rawString>D. Ancona and E. Zucca. A theory of mixin modules: Basic and derived operators. Mathematical Structures in Computer Science, 8(4):401–446, August 1998.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Ancona</author>
+<author>E Zucca</author>
+</authors>
+<title>A primitive calculus for module systems.</title>
+<date>1999</date>
+<booktitle>Principles and Practice of Declarative Programming, number 1702 in LNCS,</booktitle>
+<pages>62--79</pages>
+<editor>In G. Nadathur, editor,</editor>
+<publisher>Springer Verlag,</publisher>
+<contexts>
+<context position="1971" citStr="[2, 8, 11, 31, 32]" startWordPosition="268" endWordPosition="272"> sets of interacting classes. Classes, methods and global definitions are then grouped together as packages or modules for deployment reasons or for delimiting abstraction layers. Unfortunately, though the intent behind packages and modules is clear, their semantics often is not. The simple fact that the terms module and package are overloaded with different semantics reveals a larger problem: the diversity of grouping mechanisms hampers their comparison and understanding. Numerous researchers have proposed module calculi as a medium for reasoning about the properties of module systems (e.g., [2, 8, 11, 31, 32]). These calculi have been used to study various issues such as mutual recursion and high order features [2] or to model classes and mixins in a typed setting [8]. As far as we are aware, however, module calculi have not yet been proposed as a means to study and compare the diverse approaches to module systems that are used in practice. For example, classical module systems, like those of Modula-3 [16], Oberon2 [36], Ada [40], Java [28], C++, C# [14], and Eiffel [33] do not support class extensions (i.e., the fact that a method can be added or redefined from another package). However, class ex</context>
+<context position="55044" citStr="[2]" startWordPosition="9300" endWordPosition="9300">vested in studying theoretical foundations of module systems, but to the best of our knowledge there is no work defining a calculus to compare existing object-oriented module systems. We limit this section to summarizing work done in expressing module systems of various object-oriented languages. In their work on mixins operators Van Limberghen and Mens [32] present the operator encaps appropriated to deal with multiple inheritance problems, which is an alternative to the hide operator proposed by Bracha and Lindstrom [12]. They mainly focused on multi-inheritance mechanisms. Ancona and Zucca [2] define a module calculus suitable for encoding various existing mechanism for composing modules. They define a module as a set of imports, a set of exports, and a set of function definitions, i.e., components. Modules are composed using a set of operators: sum, reduct, freeze, selection. The operator sum glues two modules together, and is roughly equivalent to our override (in our calculus, import and export are not explicitly part of a module). The operator reduct is a form of renaming; import and export components are separately renamed via two renamings. The freeze operators binds input to</context>
+</contexts>
+<marker>2.</marker>
+<rawString>D. Ancona and E. Zucca. A primitive calculus for module systems. In G. Nadathur, editor, Principles and Practice of Declarative Programming, number 1702 in LNCS, pages 62–79. Springer Verlag, 1999.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>D Ancona</author>
+<author>E Zucca</author>
+</authors>
+<title>True modules for Java-like languages. In</title>
+<date>2001</date>
+<booktitle>ECOOP 2001, number 2072 in LNCS,</booktitle>
+<pages>354--380</pages>
+<editor>J. L. Knudsen, editor,</editor>
+<publisher>Springer Verlag,</publisher>
+<contexts>
+<context position="58917" citStr="[3]" startWordPosition="9923" endWordPosition="9923">As a future work we plan to explore typing rules for this calculus in order to express, for instance, which compositions of modules are type safe. Virtual classes (like in Eiffel) represent an unchecked use of covariance, which is not type-safe [13], whereas the gbeta approach was always based on checking for covariance (which is possible because, in contrast to Eiffel, covariance is always explicitly declared). In this paper we mainly focused on expressing import and extend relationship. Our future work is to apply our approach to other systems such as Modula3 [16], ModularJava [18], JavaMod [3] and Nested Inheritance [37] as they offer the notion of explicit interface. Numerous formalisms have been developed in recent years to model new kinds of module systems and their features. However, to our knowledge, ours is the first attempt to develop a general calculus for modeling and comparing the diversity of module systems provided by various mainstream object-oriented programming languages. Acknowledgments. We gratefully acknowledge the financial support of the Swiss National Science Foundation for the projects “A Unified Approach to Composition and Extensibility” (SNF Project No. 2000</context>
+</contexts>
+<marker>3.</marker>
+<rawString>D. Ancona and E. Zucca. True modules for Java-like languages. In J. L. Knudsen, editor, ECOOP 2001, number 2072 in LNCS, pages 354–380. Springer Verlag, 2001.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Ken Arnold</author>
+<author>James Gosling</author>
+</authors>
+<title>The Java Programming Language.</title>
+<date>1996</date>
+<publisher>Addison Wesley,</publisher>
+<contexts>
+<context position="15657" citStr="[4]" startWordPosition="2774" endWordPosition="2774">42], a virtual pattern in gbeta [21], a classbox [6, 7], a MZScheme unit [23], or a MixJuice module [25]. A typical combinator is applied to a modulemt with some argumentsms and some classnames c. We make use of the following conventions: (i) each combinator is expressed as a module generator (combining two modules together yielding a new module), (ii) a t subscript (e.g., mt) refers to a input “template module” to be modified: the result of applying the combinator is a modified copy of the template module, (iii) an s subscript (e.g., ms) refers to the module provided as argument. 3 Java Java [4] classes are grouped within packages. Packages can be “composed” with each other by means of the import relationship. (In this paper, we do not consider the use of fully qualified names in Java or other languages, i.e., a class name preceded by the name of the package.) We also did not model the CLASSPATH mechanism as it is not particularly relevant to the paper’s focus on the expression of grouping unit operators. A package that imports a class from another package simply references this class by its name. There are two levels of granularity of the import relationship: (i) a package may impor</context>
+</contexts>
+<marker>4.</marker>
+<rawString>Ken Arnold and James Gosling. The Java Programming Language. Addison Wesley, 1996.</rawString>
+</citation>
+<citation valid="false">
+<authors>
+<author>AspectJ home page</author>
+</authors>
+<note>http://eclipse.org/aspectj/.</note>
+<contexts>
+<context position="43369" citStr="[5]" startWordPosition="7338" endWordPosition="7338">= λmt. λms. λc. (hide c)(mt ‖ {c 7→ (fix ms) c}) The new class c is defined as ((fixms) c) which makes it unextensible because it contains fix and no overriding or extension operations. 11.2 Class Extensions Some module systems allow methods to be added or redefined separately from the definition of the class they belong to. The specification of the class is therefore spread over more than one module. This mechanism complements subclassing. A class extension is the result of a separation between a definition of a class and definitions that compose this class (i.e.,method definitions). AspectJ [5] with the notion of inter-type declaration, MultiJava [35] with open-classes, HyperJ [41] with hyper-slices, Smalltalk, CLOS, and Objective-C offer such a mechanism. Within such systems, there is a conceptual difference between a class definition and its method definitions: a method definition is not physically included in a class definition but can be defined externally to the class it belongs to. The ability of a module system to offer class extensions is expressed in applying an B or a ‖ operator to the imported class. For instance, ModularSmalltalk (Section 6) and classboxes (Section 8) al</context>
+</contexts>
+<marker>5.</marker>
+<rawString>AspectJ home page. http://eclipse.org/aspectj/.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Alexandre Bergel</author>
+<author>Stephane Ducasse</author>
+<author>Oscar Nierstrasz</author>
+<author>Roel Wuyts</author>
+</authors>
+<title>Classboxes: Controlling visibility of class extensions.</title>
+<date>2005</date>
+<booktitle>Computer Languages, Systems and Structures,</booktitle>
+<pages>31--3</pages>
+<contexts>
+<context position="4509" citStr="[6, 7]" startWordPosition="681" endWordPosition="682">ed programming languages. In Section 2 we define the calculus and its operators. In Sections 3 through 10 we use the calculus to develop various module combinators that capture Java packages, C# namespaces, Ruby modules, selector namespaces, gbeta virtual classes, classboxes, MZScheme units and MixJuice modules. We chose Java and C# as they are mainstream languages, Ruby as it defines the notion of module mixin, Modular Smalltalk [44] and Smallscript [39] as they define changes that crosscut classes with selector namespaces, Beta [30] as it introduces the notion of virtual classes, classboxes [6, 7] as they illustrate the local rebinding property, MZScheme unit [23] as it separates the unit definition from the dependency statements, and MixJuice [25] as it constrains only one class version to be present in the system. In Section 11 we develop a taxonomy to characterize the studied module systems according to the set of properties we modeled. In Section 12 we describe related work. In Section 13 we conclude by summarizing the results obtained and outlining future work. 2 A Simple Module Calculus The module calculus we propose makes use of the primitive notion of an environment. In Section</context>
+<context position="15109" citStr="[6, 7]" startWordPosition="2679" endWordPosition="2680">color 7→ nil, setColor 7→ λ newCol. λself. {color 7→ newCol} B self } 2.5 The Calculus in Action The following sections illustrate the calculus by expressing the semantics of various module systems. For each of these module systems we use the calculus to define a set of module combinators that express the module composition mechanisms provided by the programming language in question. Depending on the language under consideration, a module may represent a Java package, a C# namespace, a selector namespace (Modular Smalltalk [44]), a Ruby module [42], a virtual pattern in gbeta [21], a classbox [6, 7], a MZScheme unit [23], or a MixJuice module [25]. A typical combinator is applied to a modulemt with some argumentsms and some classnames c. We make use of the following conventions: (i) each combinator is expressed as a module generator (combining two modules together yielding a new module), (ii) a t subscript (e.g., mt) refers to a input “template module” to be modified: the result of applying the combinator is a modified copy of the template module, (iii) an s subscript (e.g., ms) refers to the module provided as argument. 3 Java Java [4] classes are grouped within packages. Packages can b</context>
+<context position="25814" citStr="[6]" startWordPosition="4532" endWordPosition="4532">the fix operator. A mixin can only be used by creating a new class. To represent this, we defined the newClassWithMixin combinator expressing the semantics of creating a new class composed of one mixin. To keep the model concise, we do not handle situations (i) where a subclass includes some mixins and (ii) when a class can be composed of several mixins. These can easily be expressed by a combinator that would accept a superclass and a set of mixins. 6 Selector Namespaces It is a tradition for Smalltalk and Lisp-based programming languages to offer a mechanism for introducing class extensions [6]. A class extension is a method addition or a redefinition applied to a class already present in a system. The result is an evolution of the behavior defined by this class without introducing a subclass. The intent of this mechanism is to enable better distribution of responsibility among the involved classes. The concept of selector namespaces was first introduced in Modular Smalltalk [44], and more recently in Smallscript [39], a Smalltalk implementation for .Net. A selector namespace defines a namespace for methods and is used to manage conflicting class extensions. Within such a namespace </context>
+<context position="32785" citStr="[6]" startWordPosition="5610" endWordPosition="5610">: M→ C → D →M extendInner = λmt. λc. λd. λ. (mt\c) ‖{c 7→ d B (mt  c)} For instance, assuming an outer class Widgets, ColoredWidgets is defined as: ColoredWidgets = extendInner (extendEncapsulated λ. {} Widgets) Morph WidgetsClassbox paint() repaint() Button Morph EnhWidgetsClassbox paint() Button Button new repaint Button new repaint Old Implementation self paint Enhanced Implementation Figure 4: Implicitly rebinding classes within classboxes. Point colorExtensions where colorExtensions ={color 7→ black, setColor 7→ λnewCol. λself.{color 7→ newCol} B self} 8 Classboxes The classbox model [6] is a module system that supports local rebinding. A class defined in one particular classbox can be extended via method addition or redefinition in other classboxes. The changes made by a classbox are only visible to that extending classbox and classboxes that import it. Moreover, redefined methods take precedence over existing one when invoked from an extending classboxes, and this even if the methods are called via methods only defined in the extended classbox. Whereas virtual classes (i.e., gbeta) unify the lookup of methods and the lookup of classes under a common algorithm, classboxes of</context>
+</contexts>
+<marker>6.</marker>
+<rawString>Alexandre Bergel, Stéphane Ducasse, Oscar Nierstrasz, and Roel Wuyts. Classboxes: Controlling visibility of class extensions. Computer Languages, Systems and Structures, 31(3-4):107–126, May 2005.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Alexandre Bergel</author>
+<author>Stephane Ducasse</author>
+<author>Roel Wuyts</author>
+</authors>
+<title>Classboxes: A minimal module model supporting local rebinding.</title>
+<date>2003</date>
+<booktitle>In Proceedings of JMLC 2003 (Joint Modular Languages Conference),</booktitle>
+<volume>2789</volume>
+<pages>122--131</pages>
+<publisher>SpringerVerlag,</publisher>
+<contexts>
+<context position="4509" citStr="[6, 7]" startWordPosition="681" endWordPosition="682">ed programming languages. In Section 2 we define the calculus and its operators. In Sections 3 through 10 we use the calculus to develop various module combinators that capture Java packages, C# namespaces, Ruby modules, selector namespaces, gbeta virtual classes, classboxes, MZScheme units and MixJuice modules. We chose Java and C# as they are mainstream languages, Ruby as it defines the notion of module mixin, Modular Smalltalk [44] and Smallscript [39] as they define changes that crosscut classes with selector namespaces, Beta [30] as it introduces the notion of virtual classes, classboxes [6, 7] as they illustrate the local rebinding property, MZScheme unit [23] as it separates the unit definition from the dependency statements, and MixJuice [25] as it constrains only one class version to be present in the system. In Section 11 we develop a taxonomy to characterize the studied module systems according to the set of properties we modeled. In Section 12 we describe related work. In Section 13 we conclude by summarizing the results obtained and outlining future work. 2 A Simple Module Calculus The module calculus we propose makes use of the primitive notion of an environment. In Section</context>
+<context position="15109" citStr="[6, 7]" startWordPosition="2679" endWordPosition="2680">color 7→ nil, setColor 7→ λ newCol. λself. {color 7→ newCol} B self } 2.5 The Calculus in Action The following sections illustrate the calculus by expressing the semantics of various module systems. For each of these module systems we use the calculus to define a set of module combinators that express the module composition mechanisms provided by the programming language in question. Depending on the language under consideration, a module may represent a Java package, a C# namespace, a selector namespace (Modular Smalltalk [44]), a Ruby module [42], a virtual pattern in gbeta [21], a classbox [6, 7], a MZScheme unit [23], or a MixJuice module [25]. A typical combinator is applied to a modulemt with some argumentsms and some classnames c. We make use of the following conventions: (i) each combinator is expressed as a module generator (combining two modules together yielding a new module), (ii) a t subscript (e.g., mt) refers to a input “template module” to be modified: the result of applying the combinator is a modified copy of the template module, (iii) an s subscript (e.g., ms) refers to the module provided as argument. 3 Java Java [4] classes are grouped within packages. Packages can b</context>
+</contexts>
+<marker>7.</marker>
+<rawString>Alexandre Bergel, Stéphane Ducasse, and Roel Wuyts. Classboxes: A minimal module model supporting local rebinding. In Proceedings of JMLC 2003 (Joint Modular Languages Conference), volume 2789 of LNCS, pages 122–131. SpringerVerlag, 2003.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Viviana Bono</author>
+</authors>
+<title>Amit Patel, and Vitaly Shmatikov. A core calculus of classes and mixins. In</title>
+<date>1999</date>
+<booktitle>Proceedings ECOOP ’99,</booktitle>
+<volume>1628</volume>
+<pages>43--66</pages>
+<editor>R. Guerraoui, editor,</editor>
+<publisher>Springer-Verlag.</publisher>
+<location>Lisbon, Portugal,</location>
+<contexts>
+<context position="1971" citStr="[2, 8, 11, 31, 32]" startWordPosition="268" endWordPosition="272"> sets of interacting classes. Classes, methods and global definitions are then grouped together as packages or modules for deployment reasons or for delimiting abstraction layers. Unfortunately, though the intent behind packages and modules is clear, their semantics often is not. The simple fact that the terms module and package are overloaded with different semantics reveals a larger problem: the diversity of grouping mechanisms hampers their comparison and understanding. Numerous researchers have proposed module calculi as a medium for reasoning about the properties of module systems (e.g., [2, 8, 11, 31, 32]). These calculi have been used to study various issues such as mutual recursion and high order features [2] or to model classes and mixins in a typed setting [8]. As far as we are aware, however, module calculi have not yet been proposed as a means to study and compare the diverse approaches to module systems that are used in practice. For example, classical module systems, like those of Modula-3 [16], Oberon2 [36], Ada [40], Java [28], C++, C# [14], and Eiffel [33] do not support class extensions (i.e., the fact that a method can be added or redefined from another package). However, class ex</context>
+<context position="56001" citStr="[8]" startWordPosition="9452" endWordPosition="9452">valent to our override (in our calculus, import and export are not explicitly part of a module). The operator reduct is a form of renaming; import and export components are separately renamed via two renamings. The freeze operators binds input to output names. Finally, selection is used by clients of a module to access its components. Their approach enables a large variety of existing mechanisms for combining software components to be expressed (e.g., ML functions, mixin modules). However, no attempt has been made to express module systems of mainstream object-oriented languages. Bono et al., [8], define some basic object-oriented constructs in a lambdacalculus with records. While they focus on expressing mixin composition as the primary extension mechanism, they do not address the notion of modules and composition operators. Leroy [31] presents an implementation of an SML-like module system. The SML module system consists of three notions: a structure which is a set of named components, a signature which is an interface for a structure, and a functor which is a function that maps a structure into a new structure. A module is defined by a structure which can be associated with more th</context>
+</contexts>
+<marker>8.</marker>
+<rawString>Viviana Bono, Amit Patel, and Vitaly Shmatikov. A core calculus of classes and mixins. In R. Guerraoui, editor, Proceedings ECOOP ’99, volume 1628 of LNCS, pages 43–66, Lisbon, Portugal, June 1999. Springer-Verlag.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Gilad Bracha</author>
+</authors>
+<title>The Programming Language Jigsaw: Mixins, Modularity and Multiple Inheritance.</title>
+<date></date>
+<tech>PhD thesis,</tech>
+<institution>Dept. of Computer Science, University of Utah,</institution>
+<contexts>
+<context position="51831" citStr="[9]" startWordPosition="8781" endWordPosition="8781">methods whenever they are used by a class (Section 5). Such a behavior is called a module mixin in the Ruby community. The module mixin is applied to the environment representing the class being defined. This is expressed by the use of the fixpoint operator fix within newClassWithMixin. newClassWithMixin = λmt. λmixin. λc. λd. mt‖{c 7→ fix(λσ. d B mixin σ)} The expression mixin σ binds the class being defined σ to the module argument  of mixin. This mechanism is illustrated here with Ruby’s module mixin but it is also applicable to other mixin mechanisms like those of MzScheme [24] or Jigsaw [9]. 11.7 Identity of the Extended Classes Refining a class by subclassing it does not preserve class identity: the original and refined definitions are implemented by two distinct classes. With virtual classes (Section 7), a class is refined by creating a new class that substitutes the first one when a class lookup is performed. As a consequence, an instance of a class is not an instance of the refined class. With classboxes, new methods can be added or redefined on an imported class. The new methods are part of the class behavior but they are only visible from the context of the classbox that d</context>
+</contexts>
+<marker>9.</marker>
+<rawString>Gilad Bracha. The Programming Language Jigsaw: Mixins, Modularity and Multiple Inheritance. PhD thesis, Dept. of Computer Science, University of Utah, March</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Gilad Bracha</author>
+<author>William Cook</author>
+</authors>
+<title>Mixin-based inheritance.</title>
+<date></date>
+<journal>ACM SIGPLAN Notices,</journal>
+<booktitle>In Proceedings OOPSLA/ECOOP ’90,</booktitle>
+<volume>25</volume>
+<pages>303--311</pages>
+<contexts>
+<context position="23713" citStr="[10]" startWordPosition="4172" endWordPosition="4172">n two modules. The resulting module of this combinator is a merge between the two where (i) local definitions hide those of the imported module, and (ii) references of classes contained in the provider module are preserved. includeModule : M→M→ C →M includeModule = λmt. λms. λ. mt  B (fix ms) Definitions contained in the importing module mt have precedence over those of the imported module ms in case of duplicate definitions. Before including a module, this one needs to be fixed because references between classes in this module are preserved. Modules as mixins. As defined by Bracha and Cook [10], a mixin is a subclass definition that may be applied to different superclasses to create a related family of modified classes. In Ruby, a module mixin is a set of methods intended to be used as part of class definitions. When a module mixin defines only a set of functions, a module can be used as a mixin using an include construct stated within a class. In that case all the functions defined in the module are methods applicable to any instance of the class. The following example shows the definition of a module mixin named MColor and a class ColoredPoint that uses it: #Defined in a file MCol</context>
+</contexts>
+<marker>10.</marker>
+<rawString>Gilad Bracha and William Cook. Mixin-based inheritance. In Proceedings OOPSLA/ECOOP ’90, ACM SIGPLAN Notices, volume 25, pages 303–311, October</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Gilad Bracha</author>
+<author>Gary Lindstrom</author>
+</authors>
+<title>Modularity meets inheritance.</title>
+<date>1991</date>
+<tech>Uucs-91-017,</tech>
+<institution>University of Utah, Dept. Comp. Sci.,</institution>
+<contexts>
+<context position="1971" citStr="[2, 8, 11, 31, 32]" startWordPosition="268" endWordPosition="272"> sets of interacting classes. Classes, methods and global definitions are then grouped together as packages or modules for deployment reasons or for delimiting abstraction layers. Unfortunately, though the intent behind packages and modules is clear, their semantics often is not. The simple fact that the terms module and package are overloaded with different semantics reveals a larger problem: the diversity of grouping mechanisms hampers their comparison and understanding. Numerous researchers have proposed module calculi as a medium for reasoning about the properties of module systems (e.g., [2, 8, 11, 31, 32]). These calculi have been used to study various issues such as mutual recursion and high order features [2] or to model classes and mixins in a typed setting [8]. As far as we are aware, however, module calculi have not yet been proposed as a means to study and compare the diverse approaches to module systems that are used in practice. For example, classical module systems, like those of Modula-3 [16], Oberon2 [36], Ada [40], Java [28], C++, C# [14], and Eiffel [33] do not support class extensions (i.e., the fact that a method can be added or redefined from another package). However, class ex</context>
+</contexts>
+<marker>11.</marker>
+<rawString>Gilad Bracha and Gary Lindstrom. Modularity meets inheritance. Uucs-91-017, University of Utah, Dept. Comp. Sci., October 1991.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Gilad Bracha</author>
+<author>Gary Lindstrom</author>
+</authors>
+<title>Modularity meets inheritance.</title>
+<date>1992</date>
+<booktitle>In Proceedings of the IEEE International Conference on Computer Languages,</booktitle>
+<pages>282--290</pages>
+<contexts>
+<context position="54969" citStr="[12]" startWordPosition="9290" endWordPosition="9290">ithout modifying the client. 12 Related Work Considerable effort has been invested in studying theoretical foundations of module systems, but to the best of our knowledge there is no work defining a calculus to compare existing object-oriented module systems. We limit this section to summarizing work done in expressing module systems of various object-oriented languages. In their work on mixins operators Van Limberghen and Mens [32] present the operator encaps appropriated to deal with multiple inheritance problems, which is an alternative to the hide operator proposed by Bracha and Lindstrom [12]. They mainly focused on multi-inheritance mechanisms. Ancona and Zucca [2] define a module calculus suitable for encoding various existing mechanism for composing modules. They define a module as a set of imports, a set of exports, and a set of function definitions, i.e., components. Modules are composed using a set of operators: sum, reduct, freeze, selection. The operator sum glues two modules together, and is roughly equivalent to our override (in our calculus, import and export are not explicitly part of a module). The operator reduct is a form of renaming; import and export components ar</context>
+</contexts>
+<marker>12.</marker>
+<rawString>Gilad Bracha and Gary Lindstrom. Modularity meets inheritance. In Proceedings of the IEEE International Conference on Computer Languages, pages 282–290, April 1992.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Kim B Bruce</author>
+<author>Martin Odersky</author>
+<author>Philip Wadler</author>
+</authors>
+<title>A statically safe alternative to virtual types.</title>
+<date>1998</date>
+<booktitle>In Proceedings ECOOP ’98,</booktitle>
+<pages>523--549</pages>
+<publisher>Springer-Verlag,</publisher>
+<contexts>
+<context position="58563" citStr="[13]" startWordPosition="9866" endWordPosition="9866">ntation of classes, we expressed inheritance with the extendClass combinator. However, we did not model the super reference. This would have introduced additional complexity to the calculus that would have shifted the focus of this paper. Furthermore, not all the of languages we considered support super (e.g., gbeta). The presented calculus is untyped. As a future work we plan to explore typing rules for this calculus in order to express, for instance, which compositions of modules are type safe. Virtual classes (like in Eiffel) represent an unchecked use of covariance, which is not type-safe [13], whereas the gbeta approach was always based on checking for covariance (which is possible because, in contrast to Eiffel, covariance is always explicitly declared). In this paper we mainly focused on expressing import and extend relationship. Our future work is to apply our approach to other systems such as Modula3 [16], ModularJava [18], JavaMod [3] and Nested Inheritance [37] as they offer the notion of explicit interface. Numerous formalisms have been developed in recent years to model new kinds of module systems and their features. However, to our knowledge, ours is the first attempt to </context>
+</contexts>
+<marker>13.</marker>
+<rawString>Kim B. Bruce, Martin Odersky, and Philip Wadler. A statically safe alternative to virtual types. In Proceedings ECOOP ’98, pages 523–549. Springer-Verlag, 1998.</rawString>
+</citation>
+<citation valid="false">
+<authors>
+<author>C</author>
+</authors>
+<note>http://www.ecma-international.org/publications/standards/Ecma-334.htm.</note>
+<contexts>
+<context position="2425" citStr="[14]" startWordPosition="353" endWordPosition="353">standing. Numerous researchers have proposed module calculi as a medium for reasoning about the properties of module systems (e.g., [2, 8, 11, 31, 32]). These calculi have been used to study various issues such as mutual recursion and high order features [2] or to model classes and mixins in a typed setting [8]. As far as we are aware, however, module calculi have not yet been proposed as a means to study and compare the diverse approaches to module systems that are used in practice. For example, classical module systems, like those of Modula-3 [16], Oberon2 [36], Ada [40], Java [28], C++, C# [14], and Eiffel [33] do not support class extensions (i.e., the fact that a method can be added or redefined from another package). However, class extensions are widely used in the languages that support it, such as Smalltalk [44], CLOS [29] and gbeta [21]. OpenClasses [17], Keris [45] and MixJuice [25] offer packaging systems that introduce class extensions, virtual classes and other new features to packages. Other languages such as Ruby and Unit [24] support the definition and application of mixins to modules at different levels. Languages such as VisualWorks [43] totally decouple the issues of</context>
+</contexts>
+<marker>14.</marker>
+<rawString>C#. http://www.ecma-international.org/publications/standards/Ecma-334.htm.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Luca Cardelli</author>
+</authors>
+<title>A semantics of multiple inheritance.</title>
+<date>1988</date>
+<journal>Information and Computation,</journal>
+<volume>76</volume>
+<contexts>
+<context position="9675" citStr="[15]" startWordPosition="1667" endWordPosition="1667"> a module, κ to extract all the keys (i.e., defined names) of a module, and hide to remove one mapping from a module interface. Definition 10 (Fix). A module m : E → E? can be instantiated to an environment as follows: fix m def= µ.m (We assume the usual definition of µ, where µx.e reduces to e[µx.e/x], so fix m = m(fix m).) Since m is a function from environments to environments, fix m represents a fixpoint in which all the mappings provided by the module are made available to each other. This is analogous to Cardelli’s use of fixpoints to model self-references in object-oriented languages [15]. Example. For instance, for the two modules m1 = λ. {a 7→ 1, b 7→ } and m2 = λ. {a 7→ 2} we have: (fix (m2B m1 )) b a = 2 (fix (m2B λ. {b 7→ (fix m1) b} )) b a = 1 In the first example, let Φ = fix(m2 B m1). By unfolding the fixpoint, this gives Φ = {a 7→ 2}B {a 7→ 1, b 7→ Φ}, so Φ b a = Φ a = 2. Since m1 and m2 are effectively merged, m2’s binding of a becomes visible within m1. In the second example, let Φ1 = (fix m1) = {a 7→ 1, b 7→ Φ1} and Φ2 = fix(m2 Bλ. {b 7→ Φ1 b}) = {a 7→ 2}B {b 7→ Φ1}. So Φ2 b a = Φ1 a = 1. Here m1 is effectively closed, so merging it with m2 has no effect on th</context>
+</contexts>
+<marker>15.</marker>
+<rawString>Luca Cardelli. A semantics of multiple inheritance. Information and Computation, 76:138–164, 1988.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Luca Cardelli</author>
+<author>Jim Donahue</author>
+<author>Lucille Glassman</author>
+<author>Mick Jordan</author>
+<author>Bill Kalsow</author>
+<author>Greg Nelson</author>
+</authors>
+<title>Modula-3 language definition.</title>
+<date>1992</date>
+<journal>ACM SIGPLAN Notices,</journal>
+<volume>27</volume>
+<issue>8</issue>
+<pages>42</pages>
+<contexts>
+<context position="2376" citStr="[16]" startWordPosition="343" endWordPosition="343">ing mechanisms hampers their comparison and understanding. Numerous researchers have proposed module calculi as a medium for reasoning about the properties of module systems (e.g., [2, 8, 11, 31, 32]). These calculi have been used to study various issues such as mutual recursion and high order features [2] or to model classes and mixins in a typed setting [8]. As far as we are aware, however, module calculi have not yet been proposed as a means to study and compare the diverse approaches to module systems that are used in practice. For example, classical module systems, like those of Modula-3 [16], Oberon2 [36], Ada [40], Java [28], C++, C# [14], and Eiffel [33] do not support class extensions (i.e., the fact that a method can be added or redefined from another package). However, class extensions are widely used in the languages that support it, such as Smalltalk [44], CLOS [29] and gbeta [21]. OpenClasses [17], Keris [45] and MixJuice [25] offer packaging systems that introduce class extensions, virtual classes and other new features to packages. Other languages such as Ruby and Unit [24] support the definition and application of mixins to modules at different levels. Languages such a</context>
+<context position="58886" citStr="[16]" startWordPosition="9919" endWordPosition="9919"> presented calculus is untyped. As a future work we plan to explore typing rules for this calculus in order to express, for instance, which compositions of modules are type safe. Virtual classes (like in Eiffel) represent an unchecked use of covariance, which is not type-safe [13], whereas the gbeta approach was always based on checking for covariance (which is possible because, in contrast to Eiffel, covariance is always explicitly declared). In this paper we mainly focused on expressing import and extend relationship. Our future work is to apply our approach to other systems such as Modula3 [16], ModularJava [18], JavaMod [3] and Nested Inheritance [37] as they offer the notion of explicit interface. Numerous formalisms have been developed in recent years to model new kinds of module systems and their features. However, to our knowledge, ours is the first attempt to develop a general calculus for modeling and comparing the diversity of module systems provided by various mainstream object-oriented programming languages. Acknowledgments. We gratefully acknowledge the financial support of the Swiss National Science Foundation for the projects “A Unified Approach to Composition and Exten</context>
+</contexts>
+<marker>16.</marker>
+<rawString>Luca Cardelli, Jim Donahue, Lucille Glassman, Mick Jordan, Bill Kalsow, and Greg Nelson. Modula-3 language definition. ACM SIGPLAN Notices, 27(8):15– 42, August 1992.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Curtis Clifton</author>
+<author>Gary T Leavens</author>
+<author>Craig Chambers</author>
+<author>Todd Millstein</author>
+</authors>
+<title>MultiJava: Modular open classes and symmetric multiple dispatch for Java.</title>
+<date>2000</date>
+<booktitle>In OOPSLA 2000 Conference on Object-Oriented Programming, Systems, Languages, and Applications,</booktitle>
+<pages>130--145</pages>
+<contexts>
+<context position="2696" citStr="[17]" startWordPosition="399" endWordPosition="399">classes and mixins in a typed setting [8]. As far as we are aware, however, module calculi have not yet been proposed as a means to study and compare the diverse approaches to module systems that are used in practice. For example, classical module systems, like those of Modula-3 [16], Oberon2 [36], Ada [40], Java [28], C++, C# [14], and Eiffel [33] do not support class extensions (i.e., the fact that a method can be added or redefined from another package). However, class extensions are widely used in the languages that support it, such as Smalltalk [44], CLOS [29] and gbeta [21]. OpenClasses [17], Keris [45] and MixJuice [25] offer packaging systems that introduce class extensions, virtual classes and other new features to packages. Other languages such as Ruby and Unit [24] support the definition and application of mixins to modules at different levels. Languages such as VisualWorks [43] totally decouple the issues of namespaces from those of code packaging, hence a package in VisualWorks does not provide any support for scoping of names. In this paper we introduce a simple calculus of modules, together with a set of operators designed to express various encapsulation policies, compo</context>
+</contexts>
+<marker>17.</marker>
+<rawString>Curtis Clifton, Gary T. Leavens, Craig Chambers, and Todd Millstein. MultiJava: Modular open classes and symmetric multiple dispatch for Java. In OOPSLA 2000 Conference on Object-Oriented Programming, Systems, Languages, and Applications, pages 130–145, 2000.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>John Corwin</author>
+<author>David F Bacon</author>
+<author>David Grove</author>
+<author>Chet Murthy</author>
+</authors>
+<title>MJ: a rational module system for Java and its applications.</title>
+<date>2003</date>
+<booktitle>In Proceedings of the 18th ACM SIGPLAN conference on Object-oriented programing, systems, languages, and applications,</booktitle>
+<pages>241--254</pages>
+<publisher>ACM Press,</publisher>
+<contexts>
+<context position="58904" citStr="[18]" startWordPosition="9921" endWordPosition="9921">s is untyped. As a future work we plan to explore typing rules for this calculus in order to express, for instance, which compositions of modules are type safe. Virtual classes (like in Eiffel) represent an unchecked use of covariance, which is not type-safe [13], whereas the gbeta approach was always based on checking for covariance (which is possible because, in contrast to Eiffel, covariance is always explicitly declared). In this paper we mainly focused on expressing import and extend relationship. Our future work is to apply our approach to other systems such as Modula3 [16], ModularJava [18], JavaMod [3] and Nested Inheritance [37] as they offer the notion of explicit interface. Numerous formalisms have been developed in recent years to model new kinds of module systems and their features. However, to our knowledge, ours is the first attempt to develop a general calculus for modeling and comparing the diversity of module systems provided by various mainstream object-oriented programming languages. Acknowledgments. We gratefully acknowledge the financial support of the Swiss National Science Foundation for the projects “A Unified Approach to Composition and Extensibility” (SNF Pro</context>
+</contexts>
+<marker>18.</marker>
+<rawString>John Corwin, David F. Bacon, David Grove, and Chet Murthy. MJ: a rational module system for Java and its applications. In Proceedings of the 18th ACM SIGPLAN conference on Object-oriented programing, systems, languages, and applications, pages 241–254. ACM Press, 2003.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Linda G DeMichiel</author>
+<author>Richard P Gabriel</author>
+</authors>
+<title>The common lisp object system: An overview.</title>
+<date></date>
+<booktitle>Proceedings ECOOP ’87,</booktitle>
+<volume>276</volume>
+<pages>151--170</pages>
+<editor>In J. Bezivin, J-M. Hullot, P. Cointe, and H. Lieberman, editors,</editor>
+<location>Paris, France,</location>
+<contexts>
+<context position="40130" citStr="[19]" startWordPosition="6817" endWordPosition="6817">ring () { return ”point ”+x+”,”+y;} } } The keyword define is used to define a new class member. Without this keyword, the class is refined. Here the class Point is refined to a colored point: module coloredPoint extends point { class Point { define Color c; // Variable addition // Redefinition of the method toString() String toString () { return ”colored point ”+x+”,”+y;} } } The example above uses a single inheritance link between modules. However, multiple inheritance is permitted. In that case, all modules are linearized by topological sort (similar to the class linearization done in CLOS [19]). Within our calculus, semantics of MixJuice modules are expressed using two combinators: extends to express inheritance between modules, and refineClass to refine some part of a class using redefinition of its class members. Inheritance of modules is expressed as: extends : M→M→M extends = λmt. λms. mt B ms This combinator is the same as that expressing inheritance between outer classes (extendEncapsulated) for gbeta. Classes are refined using refineClass: refineClass : M→ C → D →M refineClass = λmt. λc. λd. λ. (mt\c) ‖{c 7→ d B (mt  c)} MixJuice does not allow multiple versions of a give</context>
+</contexts>
+<marker>19.</marker>
+<rawString>Linda G. DeMichiel and Richard P. Gabriel. The common lisp object system: An overview. In J. Bézivin, J-M. Hullot, P. Cointe, and H. Lieberman, editors, Proceedings ECOOP ’87, volume 276 of LNCS, pages 151–170, Paris, France, June</rawString>
+</citation>
+<citation valid="false">
+<publisher>Springer-Verlag.</publisher>
+<marker>1987.</marker>
+<rawString>Springer-Verlag.</rawString>
+</citation>
+<citation valid="false">
+<authors>
+<author>http www drscheme org</author>
+</authors>
+<contexts>
+<context position="5415" citStr="[20]" startWordPosition="829" endWordPosition="829"> according to the set of properties we modeled. In Section 12 we describe related work. In Section 13 we conclude by summarizing the results obtained and outlining future work. 2 A Simple Module Calculus The module calculus we propose makes use of the primitive notion of an environment. In Section 2.1 we define environments and the basic operators for manipulating them. In Section 2.2 we define modules as abstractions over environments, and we propose combinators for composing and manipulating modules. Note that the module calculus and the various combinators have been implemented in DrScheme [20]. The source code, accompanied with test units, is available at www.iam.unibe.ch/∼scg/Research/Classboxes/module.scm. 2.1 Environments Definition 1 (Environment). An environment  : D → R? , is a mapping from some domain D to an extended range R? = R∪{⊥}, such that the inverse image −1(R) is finite. The set of environments is E and we assume it to be a subset of R. We will represent environments as finite sets of mappings, for example: 1 = {a 7→ x, b 7→ y} is an environment that maps a to x and b to y. All other values in the domain of this environment (for example, c 6∈ {a, b}) are mapped t</context>
+</contexts>
+<marker>20.</marker>
+<rawString>DrScheme. http://www.drscheme.org/.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Erik Ernst</author>
+</authors>
+<title>Propagating class and method combination.</title>
+<date>1999</date>
+<booktitle>Proceedings ECOOP ’99,</booktitle>
+<volume>1628</volume>
+<pages>67--91</pages>
+<editor>In R. Guerraoui, editor,</editor>
+<publisher>Springer-Verlag.</publisher>
+<location>Lisbon, Portugal,</location>
+<contexts>
+<context position="2678" citStr="[21]" startWordPosition="397" endWordPosition="397">s [2] or to model classes and mixins in a typed setting [8]. As far as we are aware, however, module calculi have not yet been proposed as a means to study and compare the diverse approaches to module systems that are used in practice. For example, classical module systems, like those of Modula-3 [16], Oberon2 [36], Ada [40], Java [28], C++, C# [14], and Eiffel [33] do not support class extensions (i.e., the fact that a method can be added or redefined from another package). However, class extensions are widely used in the languages that support it, such as Smalltalk [44], CLOS [29] and gbeta [21]. OpenClasses [17], Keris [45] and MixJuice [25] offer packaging systems that introduce class extensions, virtual classes and other new features to packages. Other languages such as Ruby and Unit [24] support the definition and application of mixins to modules at different levels. Languages such as VisualWorks [43] totally decouple the issues of namespaces from those of code packaging, hence a package in VisualWorks does not provide any support for scoping of names. In this paper we introduce a simple calculus of modules, together with a set of operators designed to express various encapsulati</context>
+<context position="15090" citStr="[21]" startWordPosition="2676" endWordPosition="2676">xt where ext = { color 7→ nil, setColor 7→ λ newCol. λself. {color 7→ newCol} B self } 2.5 The Calculus in Action The following sections illustrate the calculus by expressing the semantics of various module systems. For each of these module systems we use the calculus to define a set of module combinators that express the module composition mechanisms provided by the programming language in question. Depending on the language under consideration, a module may represent a Java package, a C# namespace, a selector namespace (Modular Smalltalk [44]), a Ruby module [42], a virtual pattern in gbeta [21], a classbox [6, 7], a MZScheme unit [23], or a MixJuice module [25]. A typical combinator is applied to a modulemt with some argumentsms and some classnames c. We make use of the following conventions: (i) each combinator is expressed as a module generator (combining two modules together yielding a new module), (ii) a t subscript (e.g., mt) refers to a input “template module” to be modified: the result of applying the combinator is a modified copy of the template module, (iii) an s subscript (e.g., ms) refers to the module provided as argument. 3 Java Java [4] classes are grouped within packa</context>
+</contexts>
+<marker>21.</marker>
+<rawString>Erik Ernst. Propagating class and method combination. In R. Guerraoui, editor, Proceedings ECOOP ’99, volume 1628 of LNCS, pages 67–91, Lisbon, Portugal, June 1999. Springer-Verlag.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Erik Ernst</author>
+</authors>
+<title>Family polymorphism.</title>
+<date>2001</date>
+<booktitle>ECOOP 2001, number 2072 in LNCS,</booktitle>
+<pages>303--326</pages>
+<editor>In J. L. Knudsen, editor,</editor>
+<publisher>Springer Verlag,</publisher>
+<contexts>
+<context position="30145" citStr="[22]" startWordPosition="5212" endWordPosition="5212">igure 2) is defined as: English = extend λ. {} Object λs. {printString 7→ λself. englishVersion}, printOnStream 7→ λself. (s B self) printString} This class Object is extended with a German implementation of the printString method. The German namespace is defined as: German = extend λ. {} English Object λs. {printString 7→ λself. germanVersion} The second combinator associated to selector namespace is the import. A namespace imports a class without extending with: import : M→M→ C →M import = λmt. λms. λc. extend mt ms c λ. {} 7 Virtual Classes The notion of virtual classes offered by gbeta [22], Caesar [34] or Keris [45] allows class names to be dynamically looked up (rather than statically, at compilation time). Virtual classes unify the method and class lookup under a common lookup algorithm: as well as methods, class definitions are looked up along the inheritance of outer classes. In gbeta, virtual classes are implemented as inner classes, and outer classes define the unit of modularization. Class names are looked up in the same way Widgets Point x, y moveBy(int ,int) PointFactory newPoint() ColoredWidgets Point color setColor (Color) new Point() Figure 3: The outer class Colore</context>
+</contexts>
+<marker>22.</marker>
+<rawString>Erik Ernst. Family polymorphism. In J. L. Knudsen, editor, ECOOP 2001, number 2072 in LNCS, pages 303–326. Springer Verlag, 2001.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Matthew Flatt</author>
+<author>Matthias Felleisen</author>
+</authors>
+<title>Units: Cool modules for hot languages.</title>
+<date>1998</date>
+<booktitle>In Proceedings of PLDI ’98 Conference on Programming Language Design and Implementation,</booktitle>
+<pages>236--248</pages>
+<publisher>ACM Press,</publisher>
+<contexts>
+<context position="4577" citStr="[23]" startWordPosition="692" endWordPosition="692">operators. In Sections 3 through 10 we use the calculus to develop various module combinators that capture Java packages, C# namespaces, Ruby modules, selector namespaces, gbeta virtual classes, classboxes, MZScheme units and MixJuice modules. We chose Java and C# as they are mainstream languages, Ruby as it defines the notion of module mixin, Modular Smalltalk [44] and Smallscript [39] as they define changes that crosscut classes with selector namespaces, Beta [30] as it introduces the notion of virtual classes, classboxes [6, 7] as they illustrate the local rebinding property, MZScheme unit [23] as it separates the unit definition from the dependency statements, and MixJuice [25] as it constrains only one class version to be present in the system. In Section 11 we develop a taxonomy to characterize the studied module systems according to the set of properties we modeled. In Section 12 we describe related work. In Section 13 we conclude by summarizing the results obtained and outlining future work. 2 A Simple Module Calculus The module calculus we propose makes use of the primitive notion of an environment. In Section 2.1 we define environments and the basic operators for manipulating</context>
+<context position="15131" citStr="[23]" startWordPosition="2684" endWordPosition="2684">→ λ newCol. λself. {color 7→ newCol} B self } 2.5 The Calculus in Action The following sections illustrate the calculus by expressing the semantics of various module systems. For each of these module systems we use the calculus to define a set of module combinators that express the module composition mechanisms provided by the programming language in question. Depending on the language under consideration, a module may represent a Java package, a C# namespace, a selector namespace (Modular Smalltalk [44]), a Ruby module [42], a virtual pattern in gbeta [21], a classbox [6, 7], a MZScheme unit [23], or a MixJuice module [25]. A typical combinator is applied to a modulemt with some argumentsms and some classnames c. We make use of the following conventions: (i) each combinator is expressed as a module generator (combining two modules together yielding a new module), (ii) a t subscript (e.g., mt) refers to a input “template module” to be modified: the result of applying the combinator is a modified copy of the template module, (iii) an s subscript (e.g., ms) refers to the module provided as argument. 3 Java Java [4] classes are grouped within packages. Packages can be “composed” with each</context>
+<context position="35866" citStr="[23]" startWordPosition="6116" endWordPosition="6116">d Button class. The superscript identifying the originating classbox ensures that no confusion will result. If, on the other hand, EnhWidgetsClassbox imports and extends Morph from WidgetsClassbox, then this extended Morph will have the same originating classbox superscript, and will affect the imported Button class. In the same way, new classes are defined as newClass : M→ C → C → D →M newClass = λmt. λsup. λc. λd. λ. ms ‖{cmt 7→ d B  sup} A shortcut to extend a class with an empty set of definition is stated as: import : M→M→ C →M import = λmt. λms. λc. extend mt ms c {} 9 Units MZScheme [23] offers an advanced module system based on units. A program unit is an unevaluated fragment of code intended to be linked with other units in order to form executable programs. There is no global namespace of units. A unit describes its import requirements without specifying a particular unit that supplies those imports. The actual linking of the unit is specified externally at a later stage. Unlike in ML, unit linking is specified for groups of units with a graph of connections, which allows mutual recursion across unit boundaries. Furthermore, the result of linking a collection of units is a</context>
+<context position="57011" citStr="[23]" startWordPosition="9615" endWordPosition="9615">ature which is an interface for a structure, and a functor which is a function that maps a structure into a new structure. A module is defined by a structure which can be associated with more than one signature. A module can either be user-defined, or the result of applying a functor to another module. Leroy describes an attempt at transferring thus module system to other languages such as core C and mini-ML which are subsets of C and of ML, respectively. Linking modules together by functor application prevents the definition of mutually recursive types or procedures across modules boundaries [23]. Objective Caml [38] provides an object-oriented layer as well as an SML-like module system. We did not include this in our comparison because it would be redundant with the study of MZScheme units. 13 Conclusion We have defined a simple calculus in which modules and classes are combined using a set of basic operators like hide and fix. Then, for various object-oriented programing languages, we expressed their module systems (i.e., Java packages, C# namespaces, gbeta virtual classes, . . . ) by defining combinators like import or extend . The focus of this work is to express various packaging</context>
+</contexts>
+<marker>23.</marker>
+<rawString>Matthew Flatt and Matthias Felleisen. Units: Cool modules for hot languages. In Proceedings of PLDI ’98 Conference on Programming Language Design and Implementation, pages 236–248. ACM Press, 1998.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Matthew Flatt</author>
+<author>Shriram Krishnamurthi</author>
+<author>Matthias Felleisen</author>
+</authors>
+<title>Classes and mixins.</title>
+<date>1998</date>
+<booktitle>In Proceedings of the 25th ACM SIGPLAN-SIGACT Symposium on Principles of Programming Languages,</booktitle>
+<pages>171--183</pages>
+<publisher>ACM Press,</publisher>
+<contexts>
+<context position="2878" citStr="[24]" startWordPosition="428" endWordPosition="428"> systems that are used in practice. For example, classical module systems, like those of Modula-3 [16], Oberon2 [36], Ada [40], Java [28], C++, C# [14], and Eiffel [33] do not support class extensions (i.e., the fact that a method can be added or redefined from another package). However, class extensions are widely used in the languages that support it, such as Smalltalk [44], CLOS [29] and gbeta [21]. OpenClasses [17], Keris [45] and MixJuice [25] offer packaging systems that introduce class extensions, virtual classes and other new features to packages. Other languages such as Ruby and Unit [24] support the definition and application of mixins to modules at different levels. Languages such as VisualWorks [43] totally decouple the issues of namespaces from those of code packaging, hence a package in VisualWorks does not provide any support for scoping of names. In this paper we introduce a simple calculus of modules, together with a set of operators designed to express various encapsulation policies, composition rules, and extensibility mechanisms. Our work does not include deployment mechanisms, therefore the study of each language is limited in expressing operators applicable to gro</context>
+<context position="51817" citStr="[24]" startWordPosition="8778" endWordPosition="8778">re turned into methods whenever they are used by a class (Section 5). Such a behavior is called a module mixin in the Ruby community. The module mixin is applied to the environment representing the class being defined. This is expressed by the use of the fixpoint operator fix within newClassWithMixin. newClassWithMixin = λmt. λmixin. λc. λd. mt‖{c 7→ fix(λσ. d B mixin σ)} The expression mixin σ binds the class being defined σ to the module argument  of mixin. This mechanism is illustrated here with Ruby’s module mixin but it is also applicable to other mixin mechanisms like those of MzScheme [24] or Jigsaw [9]. 11.7 Identity of the Extended Classes Refining a class by subclassing it does not preserve class identity: the original and refined definitions are implemented by two distinct classes. With virtual classes (Section 7), a class is refined by creating a new class that substitutes the first one when a class lookup is performed. As a consequence, an instance of a class is not an instance of the refined class. With classboxes, new methods can be added or redefined on an imported class. The new methods are part of the class behavior but they are only visible from the context of the c</context>
+</contexts>
+<marker>24.</marker>
+<rawString>Matthew Flatt, Shriram Krishnamurthi, and Matthias Felleisen. Classes and mixins. In Proceedings of the 25th ACM SIGPLAN-SIGACT Symposium on Principles of Programming Languages, pages 171–183. ACM Press, 1998.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Yuuji Ichisugi</author>
+<author>Akira Tanaka</author>
+</authors>
+<title>Difference-based modules: A class independent module mechanism.</title>
+<date>2002</date>
+<booktitle>In Proceedings ECOOP 2002,</booktitle>
+<volume>2374</volume>
+<publisher>Springer Verlag.</publisher>
+<location>Malaga, Spain,</location>
+<contexts>
+<context position="2726" citStr="[25]" startWordPosition="404" endWordPosition="404">setting [8]. As far as we are aware, however, module calculi have not yet been proposed as a means to study and compare the diverse approaches to module systems that are used in practice. For example, classical module systems, like those of Modula-3 [16], Oberon2 [36], Ada [40], Java [28], C++, C# [14], and Eiffel [33] do not support class extensions (i.e., the fact that a method can be added or redefined from another package). However, class extensions are widely used in the languages that support it, such as Smalltalk [44], CLOS [29] and gbeta [21]. OpenClasses [17], Keris [45] and MixJuice [25] offer packaging systems that introduce class extensions, virtual classes and other new features to packages. Other languages such as Ruby and Unit [24] support the definition and application of mixins to modules at different levels. Languages such as VisualWorks [43] totally decouple the issues of namespaces from those of code packaging, hence a package in VisualWorks does not provide any support for scoping of names. In this paper we introduce a simple calculus of modules, together with a set of operators designed to express various encapsulation policies, composition rules, and extensibilit</context>
+<context position="4663" citStr="[25]" startWordPosition="705" endWordPosition="705">inators that capture Java packages, C# namespaces, Ruby modules, selector namespaces, gbeta virtual classes, classboxes, MZScheme units and MixJuice modules. We chose Java and C# as they are mainstream languages, Ruby as it defines the notion of module mixin, Modular Smalltalk [44] and Smallscript [39] as they define changes that crosscut classes with selector namespaces, Beta [30] as it introduces the notion of virtual classes, classboxes [6, 7] as they illustrate the local rebinding property, MZScheme unit [23] as it separates the unit definition from the dependency statements, and MixJuice [25] as it constrains only one class version to be present in the system. In Section 11 we develop a taxonomy to characterize the studied module systems according to the set of properties we modeled. In Section 12 we describe related work. In Section 13 we conclude by summarizing the results obtained and outlining future work. 2 A Simple Module Calculus The module calculus we propose makes use of the primitive notion of an environment. In Section 2.1 we define environments and the basic operators for manipulating them. In Section 2.2 we define modules as abstractions over environments, and we prop</context>
+<context position="15158" citStr="[25]" startWordPosition="2689" endWordPosition="2689">→ newCol} B self } 2.5 The Calculus in Action The following sections illustrate the calculus by expressing the semantics of various module systems. For each of these module systems we use the calculus to define a set of module combinators that express the module composition mechanisms provided by the programming language in question. Depending on the language under consideration, a module may represent a Java package, a C# namespace, a selector namespace (Modular Smalltalk [44]), a Ruby module [42], a virtual pattern in gbeta [21], a classbox [6, 7], a MZScheme unit [23], or a MixJuice module [25]. A typical combinator is applied to a modulemt with some argumentsms and some classnames c. We make use of the following conventions: (i) each combinator is expressed as a module generator (combining two modules together yielding a new module), (ii) a t subscript (e.g., mt) refers to a input “template module” to be modified: the result of applying the combinator is a modified copy of the template module, (iii) an s subscript (e.g., ms) refers to the module provided as argument. 3 Java Java [4] classes are grouped within packages. Packages can be “composed” with each other by means of the impo</context>
+<context position="38848" citStr="[25]" startWordPosition="6596" endWordPosition="6596"> illustrated in Figure 6, the widget factory is used by colored widgets, without altering the original definition of widgetsFactory. This is expressed with: coloredWidgets = λ. {ColoredPoint 7→ { color 7→ blue, x 7→ 0, y 7→ 0}, ColoredCircle 7→ {color 7→ blue, radius 7→ 0, center 7→  Point}} compound2 = link (link widgetsFactory coloredWidgets ColoredPoint Point) coloredWidgets ColoredCircle Circle The unit compound2 is the result of linking the class ColoredPoint and ColoredCircle obtained from coloredWidgets to the unit widgetsFactory under the names Point and Circle. 10 MixJuice MixJuice [25] is a module system for Java in which a module encapsulates the differences between the original program and the extended program. The difference is a set of definitions of additions and modifications of classes, fields and methods. Modules may inherit other modules. As explained below, an important distinction between MixJuice module system and classboxes is that an original and a modified version of a set of classes cannot be present at the same time in the same system. For instance, a module defining a point is defined as: module point { define class Point { define int x = 0; define int y =</context>
+</contexts>
+<marker>25.</marker>
+<rawString>Yuuji Ichisugi and Akira Tanaka. Difference-based modules: A class independent module mechanism. In Proceedings ECOOP 2002, volume 2374 of LNCS, Malaga, Spain, June 2002. Springer Verlag.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Atsushi Igarashi</author>
+<author>Benjamin C Pierce</author>
+</authors>
+<title>On inner classes.</title>
+<date>2000</date>
+<journal>Lecture Notes in Computer Science,</journal>
+<volume>1850</volume>
+<contexts>
+<context position="13353" citStr="[26]" startWordPosition="2385" endWordPosition="2385">ound value. New objects are therefore obtained by simply accessing a class in a fixed module. For instance, a new point is obtained by evaluating: aPoint = (fix GraphicsModule) Point. Messages are sent by passing a message name and arguments to an object. Note that a reference to self has to be provided. For instance, a point can be moved by performing: aPoint moveBy 2 3 aPoint. The self-reference is supplied as a trailing argument. The reason for this is that we do not model a dynamic environment (i.e., a runtime stack that would contain the self reference and other arguments). Inner classes [26] treat their enclosing class as a kind of module that restricts the scope of their definition. However, inner classes are mainly used as a convenient mechanism for defining callback classes and other small helper classes. To the best of our knowledge, no major application has ever been developed using inner classes as the sole module mechanism. We therefore do not consider this form of modularization in our comparison and classes do not contain inner classes. Within our calculus, inheritance over classes is expressed by the extendClass operator, defined below. Definition 13 (ExtendClass). In a</context>
+</contexts>
+<marker>26.</marker>
+<rawString>Atsushi Igarashi and Benjamin C. Pierce. On inner classes. Lecture Notes in Computer Science, 1850, 2000.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Dan Ingalls</author>
+<author>Ted Kaehler</author>
+<author>John Maloney</author>
+<author>Scott Wallace</author>
+<author>Alan Kay</author>
+</authors>
+<title>Back to the future: The story of Squeak, A practical Smalltalk written in itself.</title>
+<date></date>
+<journal>ACM SIGPLAN Notices,</journal>
+<booktitle>In Proceedings OOPSLA ’97,</booktitle>
+<pages>318--326</pages>
+<publisher>ACM Press,</publisher>
+<contexts>
+<context position="33670" citStr="[27]" startWordPosition="5751" endWordPosition="5751">, redefined methods take precedence over existing one when invoked from an extending classboxes, and this even if the methods are called via methods only defined in the extended classbox. Whereas virtual classes (i.e., gbeta) unify the lookup of methods and the lookup of classes under a common algorithm, classboxes offer a scoping mechanism to limit the visibility of class extensions. The following example illustrates a method extension with local rebinding [6]. Figure 4 depicts a classbox WidgetsClassbox that defines a class Morph, which is the root of the graphic element hierarchy in Squeak [27] (a smalltalk dialect in which classboxes are implemented), and a subclass Button. Morph contains a paint() method and a repaint() that calls paint(). The classbox EnhWidgetsClassbox imports Morph and redefines the paint() method. It also imports the subclass Button. In the context of WidgetsClassbox, invoking the repaint() method on an instance of Button invokes the definition of paint() in Morph defined by this classbox. Within EnhWidgetsClassbox, invoking repaint() triggers the new implementation of paint() defined in this classbox. Within our calculus the semantics of classboxes are expres</context>
+</contexts>
+<marker>27.</marker>
+<rawString>Dan Ingalls, Ted Kaehler, John Maloney, Scott Wallace, and Alan Kay. Back to the future: The story of Squeak, A practical Smalltalk written in itself. In Proceedings OOPSLA ’97, ACM SIGPLAN Notices, pages 318–326. ACM Press, November</rawString>
+</citation>
+<citation valid="false">
+<authors>
+<author>http java sun com</author>
+</authors>
+<contexts>
+<context position="2411" citStr="[28]" startWordPosition="350" endWordPosition="350">ison and understanding. Numerous researchers have proposed module calculi as a medium for reasoning about the properties of module systems (e.g., [2, 8, 11, 31, 32]). These calculi have been used to study various issues such as mutual recursion and high order features [2] or to model classes and mixins in a typed setting [8]. As far as we are aware, however, module calculi have not yet been proposed as a means to study and compare the diverse approaches to module systems that are used in practice. For example, classical module systems, like those of Modula-3 [16], Oberon2 [36], Ada [40], Java [28], C++, C# [14], and Eiffel [33] do not support class extensions (i.e., the fact that a method can be added or redefined from another package). However, class extensions are widely used in the languages that support it, such as Smalltalk [44], CLOS [29] and gbeta [21]. OpenClasses [17], Keris [45] and MixJuice [25] offer packaging systems that introduce class extensions, virtual classes and other new features to packages. Other languages such as Ruby and Unit [24] support the definition and application of mixins to modules at different levels. Languages such as VisualWorks [43] totally decouple</context>
+</contexts>
+<marker>28.</marker>
+<rawString>Java. http://java.sun.com/.</rawString>
+</citation>
+<citation valid="false">
+<authors>
+<author>Sonia E Keene</author>
+</authors>
+<title>Object-Oriented Programming in Common-Lisp.</title>
+<publisher>Addison Wesley,</publisher>
+<contexts>
+<context position="2663" citStr="[29]" startWordPosition="394" endWordPosition="394">h order features [2] or to model classes and mixins in a typed setting [8]. As far as we are aware, however, module calculi have not yet been proposed as a means to study and compare the diverse approaches to module systems that are used in practice. For example, classical module systems, like those of Modula-3 [16], Oberon2 [36], Ada [40], Java [28], C++, C# [14], and Eiffel [33] do not support class extensions (i.e., the fact that a method can be added or redefined from another package). However, class extensions are widely used in the languages that support it, such as Smalltalk [44], CLOS [29] and gbeta [21]. OpenClasses [17], Keris [45] and MixJuice [25] offer packaging systems that introduce class extensions, virtual classes and other new features to packages. Other languages such as Ruby and Unit [24] support the definition and application of mixins to modules at different levels. Languages such as VisualWorks [43] totally decouple the issues of namespaces from those of code packaging, hence a package in VisualWorks does not provide any support for scoping of names. In this paper we introduce a simple calculus of modules, together with a set of operators designed to express vari</context>
+</contexts>
+<marker>29.</marker>
+<rawString>Sonia E. Keene. Object-Oriented Programming in Common-Lisp. Addison Wesley,</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Bent Bruun Kristensen</author>
+</authors>
+<title>Ole Lehrmann Madsen, Birger Moller-Pedersen, and Kristen Nygaard. The BETA programming language.</title>
+<date>1987</date>
+<booktitle>Research Directions in Object-Oriented Programming,</booktitle>
+<pages>7--48</pages>
+<editor>In B. Shriver and P. Wegner, editors,</editor>
+<publisher>MIT Press,</publisher>
+<location>Cambridge, Mass.,</location>
+<contexts>
+<context position="4443" citStr="[30]" startWordPosition="671" endWordPosition="671"> to compare features of module systems for various object-oriented programming languages. In Section 2 we define the calculus and its operators. In Sections 3 through 10 we use the calculus to develop various module combinators that capture Java packages, C# namespaces, Ruby modules, selector namespaces, gbeta virtual classes, classboxes, MZScheme units and MixJuice modules. We chose Java and C# as they are mainstream languages, Ruby as it defines the notion of module mixin, Modular Smalltalk [44] and Smallscript [39] as they define changes that crosscut classes with selector namespaces, Beta [30] as it introduces the notion of virtual classes, classboxes [6, 7] as they illustrate the local rebinding property, MZScheme unit [23] as it separates the unit definition from the dependency statements, and MixJuice [25] as it constrains only one class version to be present in the system. In Section 11 we develop a taxonomy to characterize the studied module systems according to the set of properties we modeled. In Section 12 we describe related work. In Section 13 we conclude by summarizing the results obtained and outlining future work. 2 A Simple Module Calculus The module calculus we propo</context>
+</contexts>
+<marker>30.</marker>
+<rawString>Bent Bruun Kristensen, Ole Lehrmann Madsen, Birger Moller-Pedersen, and Kristen Nygaard. The BETA programming language. In B. Shriver and P. Wegner, editors, Research Directions in Object-Oriented Programming, pages 7–48. MIT Press, Cambridge, Mass., 1987.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Xavier Leroy</author>
+</authors>
+<title>A modular module system.</title>
+<date>2000</date>
+<journal>Journal of Functional Programming,</journal>
+<volume>10</volume>
+<issue>3</issue>
+<contexts>
+<context position="1971" citStr="[2, 8, 11, 31, 32]" startWordPosition="268" endWordPosition="272"> sets of interacting classes. Classes, methods and global definitions are then grouped together as packages or modules for deployment reasons or for delimiting abstraction layers. Unfortunately, though the intent behind packages and modules is clear, their semantics often is not. The simple fact that the terms module and package are overloaded with different semantics reveals a larger problem: the diversity of grouping mechanisms hampers their comparison and understanding. Numerous researchers have proposed module calculi as a medium for reasoning about the properties of module systems (e.g., [2, 8, 11, 31, 32]). These calculi have been used to study various issues such as mutual recursion and high order features [2] or to model classes and mixins in a typed setting [8]. As far as we are aware, however, module calculi have not yet been proposed as a means to study and compare the diverse approaches to module systems that are used in practice. For example, classical module systems, like those of Modula-3 [16], Oberon2 [36], Ada [40], Java [28], C++, C# [14], and Eiffel [33] do not support class extensions (i.e., the fact that a method can be added or redefined from another package). However, class ex</context>
+<context position="11436" citStr="[1, 31]" startWordPosition="2044" endWordPosition="2045">on between the interface and the implementation of a module. Example. Hiding a binding of a module removes the entry from the module’s interface, but the binding’s value is still internally accessible through other bindings. For example, for the two modules m = λ. {a 7→ 1, b 7→ }, we have: (fix (hide a)(m)) a = ⊥ (fix (hide a)(m)) b a = 1 2.4 Class Definition Within a module, a value associated to a key represents a definition. If the calculus is intended to express the semantics of a module system which is part of a procedural (or functional) language, values of bindings describe functions [1, 31]. In the rest of this paper we will focus only on expressing semantics of module systems for class-based object-oriented programming languages. Definitions contained within a module describe classes. A class is represented as an environment whose mappings define state and methods. We also do not model class instantiation. Note that we do not model the pseudo-variable super because this would add unnecessary complexity to the calculus and shift the focus of the paper. Moreover, super is not present in all the languages we consider here. We also do not model classes as modules because our goal i</context>
+<context position="56246" citStr="[31]" startWordPosition="9488" endWordPosition="9488">to output names. Finally, selection is used by clients of a module to access its components. Their approach enables a large variety of existing mechanisms for combining software components to be expressed (e.g., ML functions, mixin modules). However, no attempt has been made to express module systems of mainstream object-oriented languages. Bono et al., [8], define some basic object-oriented constructs in a lambdacalculus with records. While they focus on expressing mixin composition as the primary extension mechanism, they do not address the notion of modules and composition operators. Leroy [31] presents an implementation of an SML-like module system. The SML module system consists of three notions: a structure which is a set of named components, a signature which is an interface for a structure, and a functor which is a function that maps a structure into a new structure. A module is defined by a structure which can be associated with more than one signature. A module can either be user-defined, or the result of applying a functor to another module. Leroy describes an attempt at transferring thus module system to other languages such as core C and mini-ML which are subsets of C and </context>
+</contexts>
+<marker>31.</marker>
+<rawString>Xavier Leroy. A modular module system. Journal of Functional Programming, 10(3):269–303, 2000.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Tom Mens</author>
+<author>Marc van Limberghen</author>
+</authors>
+<title>Encapsulation and composition as orthogonal operators on mixins: A solution to multiple inheritance problems.</title>
+<date>1996</date>
+<journal>Object Oriented Systems,</journal>
+<volume>3</volume>
+<issue>1</issue>
+<contexts>
+<context position="1971" citStr="[2, 8, 11, 31, 32]" startWordPosition="268" endWordPosition="272"> sets of interacting classes. Classes, methods and global definitions are then grouped together as packages or modules for deployment reasons or for delimiting abstraction layers. Unfortunately, though the intent behind packages and modules is clear, their semantics often is not. The simple fact that the terms module and package are overloaded with different semantics reveals a larger problem: the diversity of grouping mechanisms hampers their comparison and understanding. Numerous researchers have proposed module calculi as a medium for reasoning about the properties of module systems (e.g., [2, 8, 11, 31, 32]). These calculi have been used to study various issues such as mutual recursion and high order features [2] or to model classes and mixins in a typed setting [8]. As far as we are aware, however, module calculi have not yet been proposed as a means to study and compare the diverse approaches to module systems that are used in practice. For example, classical module systems, like those of Modula-3 [16], Oberon2 [36], Ada [40], Java [28], C++, C# [14], and Eiffel [33] do not support class extensions (i.e., the fact that a method can be added or redefined from another package). However, class ex</context>
+<context position="54801" citStr="[32]" startWordPosition="9265" endWordPosition="9265">cified from their definitions. Separating the definition of classes from their use in different modules makes it easy to replace the original classes with new classes without modifying the client. 12 Related Work Considerable effort has been invested in studying theoretical foundations of module systems, but to the best of our knowledge there is no work defining a calculus to compare existing object-oriented module systems. We limit this section to summarizing work done in expressing module systems of various object-oriented languages. In their work on mixins operators Van Limberghen and Mens [32] present the operator encaps appropriated to deal with multiple inheritance problems, which is an alternative to the hide operator proposed by Bracha and Lindstrom [12]. They mainly focused on multi-inheritance mechanisms. Ancona and Zucca [2] define a module calculus suitable for encoding various existing mechanism for composing modules. They define a module as a set of imports, a set of exports, and a set of function definitions, i.e., components. Modules are composed using a set of operators: sum, reduct, freeze, selection. The operator sum glues two modules together, and is roughly equival</context>
+</contexts>
+<marker>32.</marker>
+<rawString>Tom Mens and Marc van Limberghen. Encapsulation and composition as orthogonal operators on mixins: A solution to multiple inheritance problems. Object Oriented Systems, 3(1):1–30, 1996.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Bertrand Meyer</author>
+</authors>
+<title>Eiffel: The Language.</title>
+<date>1992</date>
+<publisher>Prentice-Hall,</publisher>
+<contexts>
+<context position="2442" citStr="[33]" startWordPosition="356" endWordPosition="356">s researchers have proposed module calculi as a medium for reasoning about the properties of module systems (e.g., [2, 8, 11, 31, 32]). These calculi have been used to study various issues such as mutual recursion and high order features [2] or to model classes and mixins in a typed setting [8]. As far as we are aware, however, module calculi have not yet been proposed as a means to study and compare the diverse approaches to module systems that are used in practice. For example, classical module systems, like those of Modula-3 [16], Oberon2 [36], Ada [40], Java [28], C++, C# [14], and Eiffel [33] do not support class extensions (i.e., the fact that a method can be added or redefined from another package). However, class extensions are widely used in the languages that support it, such as Smalltalk [44], CLOS [29] and gbeta [21]. OpenClasses [17], Keris [45] and MixJuice [25] offer packaging systems that introduce class extensions, virtual classes and other new features to packages. Other languages such as Ruby and Unit [24] support the definition and application of mixins to modules at different levels. Languages such as VisualWorks [43] totally decouple the issues of namespaces from </context>
+</contexts>
+<marker>33.</marker>
+<rawString>Bertrand Meyer. Eiffel: The Language. Prentice-Hall, 1992.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Mira Mezini</author>
+<author>Klaus Ostermann</author>
+</authors>
+<title>Conquering aspects with caesar.</title>
+<date>2003</date>
+<booktitle>In Proceedings of the 2nd international conference on Aspect-oriented software development,</booktitle>
+<pages>90--99</pages>
+<publisher>ACM Press,</publisher>
+<contexts>
+<context position="30158" citStr="[34]" startWordPosition="5214" endWordPosition="5214">efined as: English = extend λ. {} Object λs. {printString 7→ λself. englishVersion}, printOnStream 7→ λself. (s B self) printString} This class Object is extended with a German implementation of the printString method. The German namespace is defined as: German = extend λ. {} English Object λs. {printString 7→ λself. germanVersion} The second combinator associated to selector namespace is the import. A namespace imports a class without extending with: import : M→M→ C →M import = λmt. λms. λc. extend mt ms c λ. {} 7 Virtual Classes The notion of virtual classes offered by gbeta [22], Caesar [34] or Keris [45] allows class names to be dynamically looked up (rather than statically, at compilation time). Virtual classes unify the method and class lookup under a common lookup algorithm: as well as methods, class definitions are looked up along the inheritance of outer classes. In gbeta, virtual classes are implemented as inner classes, and outer classes define the unit of modularization. Class names are looked up in the same way Widgets Point x, y moveBy(int ,int) PointFactory newPoint() ColoredWidgets Point color setColor (Color) new Point() Figure 3: The outer class ColoredWidgets refi</context>
+</contexts>
+<marker>34.</marker>
+<rawString>Mira Mezini and Klaus Ostermann. Conquering aspects with caesar. In Proceedings of the 2nd international conference on Aspect-oriented software development, pages 90–99. ACM Press, 2003.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Todd Millstein</author>
+<author>Mark Reay</author>
+<author>Craig Chambers</author>
+</authors>
+<title>Relaxed multijava: balancing extensibility and modular typechecking.</title>
+<date>2003</date>
+<booktitle>In Proceedings of the 18th ACM SIGPLAN conference on Object-oriented programing, systems, languages, and applications,</booktitle>
+<pages>224--240</pages>
+<publisher>ACM Press,</publisher>
+<contexts>
+<context position="43427" citStr="[35]" startWordPosition="7346" endWordPosition="7346">class c is defined as ((fixms) c) which makes it unextensible because it contains fix and no overriding or extension operations. 11.2 Class Extensions Some module systems allow methods to be added or redefined separately from the definition of the class they belong to. The specification of the class is therefore spread over more than one module. This mechanism complements subclassing. A class extension is the result of a separation between a definition of a class and definitions that compose this class (i.e.,method definitions). AspectJ [5] with the notion of inter-type declaration, MultiJava [35] with open-classes, HyperJ [41] with hyper-slices, Smalltalk, CLOS, and Objective-C offer such a mechanism. Within such systems, there is a conceptual difference between a class definition and its method definitions: a method definition is not physically included in a class definition but can be defined externally to the class it belongs to. The ability of a module system to offer class extensions is expressed in applying an B or a ‖ operator to the imported class. For instance, ModularSmalltalk (Section 6) and classboxes (Section 8) allow a class to be extended by adding or redefining methods</context>
+</contexts>
+<marker>35.</marker>
+<rawString>Todd Millstein, Mark Reay, and Craig Chambers. Relaxed multijava: balancing extensibility and modular typechecking. In Proceedings of the 18th ACM SIGPLAN conference on Object-oriented programing, systems, languages, and applications, pages 224–240. ACM Press, 2003.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Hanspeter Mossenbock</author>
+</authors>
+<title>Object-Oriented Programming in Oberon-2.</title>
+<date>1993</date>
+<publisher>SpringerVerlag,</publisher>
+<contexts>
+<context position="2390" citStr="[36]" startWordPosition="346" endWordPosition="346"> hampers their comparison and understanding. Numerous researchers have proposed module calculi as a medium for reasoning about the properties of module systems (e.g., [2, 8, 11, 31, 32]). These calculi have been used to study various issues such as mutual recursion and high order features [2] or to model classes and mixins in a typed setting [8]. As far as we are aware, however, module calculi have not yet been proposed as a means to study and compare the diverse approaches to module systems that are used in practice. For example, classical module systems, like those of Modula-3 [16], Oberon2 [36], Ada [40], Java [28], C++, C# [14], and Eiffel [33] do not support class extensions (i.e., the fact that a method can be added or redefined from another package). However, class extensions are widely used in the languages that support it, such as Smalltalk [44], CLOS [29] and gbeta [21]. OpenClasses [17], Keris [45] and MixJuice [25] offer packaging systems that introduce class extensions, virtual classes and other new features to packages. Other languages such as Ruby and Unit [24] support the definition and application of mixins to modules at different levels. Languages such as VisualWorks </context>
+</contexts>
+<marker>36.</marker>
+<rawString>Hanspeter Mössenböck. Object-Oriented Programming in Oberon-2. SpringerVerlag, 1993.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Nathaniel Nystrom</author>
+<author>Stephen Chong</author>
+<author>Andrew C Myers</author>
+</authors>
+<title>Scalable extensibility via nested inheritance.</title>
+<date>2004</date>
+<booktitle>In OOPSLA ’04: Proceedings of the 19th annual ACM SIGPLAN Conference on Object-oriented programming, systems, languages, and applications,</booktitle>
+<pages>99--115</pages>
+<publisher>ACM Press,</publisher>
+<contexts>
+<context position="58945" citStr="[37]" startWordPosition="9927" endWordPosition="9927"> explore typing rules for this calculus in order to express, for instance, which compositions of modules are type safe. Virtual classes (like in Eiffel) represent an unchecked use of covariance, which is not type-safe [13], whereas the gbeta approach was always based on checking for covariance (which is possible because, in contrast to Eiffel, covariance is always explicitly declared). In this paper we mainly focused on expressing import and extend relationship. Our future work is to apply our approach to other systems such as Modula3 [16], ModularJava [18], JavaMod [3] and Nested Inheritance [37] as they offer the notion of explicit interface. Numerous formalisms have been developed in recent years to model new kinds of module systems and their features. However, to our knowledge, ours is the first attempt to develop a general calculus for modeling and comparing the diversity of module systems provided by various mainstream object-oriented programming languages. Acknowledgments. We gratefully acknowledge the financial support of the Swiss National Science Foundation for the projects “A Unified Approach to Composition and Extensibility” (SNF Project No. 200020-105091/1, Oct. 2004 - Sep</context>
+</contexts>
+<marker>37.</marker>
+<rawString>Nathaniel Nystrom, Stephen Chong, and Andrew C. Myers. Scalable extensibility via nested inheritance. In OOPSLA ’04: Proceedings of the 19th annual ACM SIGPLAN Conference on Object-oriented programming, systems, languages, and applications, pages 99–115. ACM Press, 2004.</rawString>
+</citation>
+<citation valid="false">
+<authors>
+<author>http caml inria fr</author>
+</authors>
+<contexts>
+<context position="57032" citStr="[38]" startWordPosition="9619" endWordPosition="9619">erface for a structure, and a functor which is a function that maps a structure into a new structure. A module is defined by a structure which can be associated with more than one signature. A module can either be user-defined, or the result of applying a functor to another module. Leroy describes an attempt at transferring thus module system to other languages such as core C and mini-ML which are subsets of C and of ML, respectively. Linking modules together by functor application prevents the definition of mutually recursive types or procedures across modules boundaries [23]. Objective Caml [38] provides an object-oriented layer as well as an SML-like module system. We did not include this in our comparison because it would be redundant with the study of MZScheme units. 13 Conclusion We have defined a simple calculus in which modules and classes are combined using a set of basic operators like hide and fix. Then, for various object-oriented programing languages, we expressed their module systems (i.e., Java packages, C# namespaces, gbeta virtual classes, . . . ) by defining combinators like import or extend . The focus of this work is to express various packaging mechanisms using a c</context>
+</contexts>
+<marker>38.</marker>
+<rawString>Ocaml. http://caml.inria.fr/.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Smallscript</author>
+</authors>
+<date>2002</date>
+<note>http://www.smallscript.com.</note>
+<contexts>
+<context position="4362" citStr="[39]" startWordPosition="659" endWordPosition="659">e goal of the approach presented in this paper is to enable the language designer to compare features of module systems for various object-oriented programming languages. In Section 2 we define the calculus and its operators. In Sections 3 through 10 we use the calculus to develop various module combinators that capture Java packages, C# namespaces, Ruby modules, selector namespaces, gbeta virtual classes, classboxes, MZScheme units and MixJuice modules. We chose Java and C# as they are mainstream languages, Ruby as it defines the notion of module mixin, Modular Smalltalk [44] and Smallscript [39] as they define changes that crosscut classes with selector namespaces, Beta [30] as it introduces the notion of virtual classes, classboxes [6, 7] as they illustrate the local rebinding property, MZScheme unit [23] as it separates the unit definition from the dependency statements, and MixJuice [25] as it constrains only one class version to be present in the system. In Section 11 we develop a taxonomy to characterize the studied module systems according to the set of properties we modeled. In Section 12 we describe related work. In Section 13 we conclude by summarizing the results obtained a</context>
+<context position="26246" citStr="[39]" startWordPosition="4601" endWordPosition="4601">ss and a set of mixins. 6 Selector Namespaces It is a tradition for Smalltalk and Lisp-based programming languages to offer a mechanism for introducing class extensions [6]. A class extension is a method addition or a redefinition applied to a class already present in a system. The result is an evolution of the behavior defined by this class without introducing a subclass. The intent of this mechanism is to enable better distribution of responsibility among the involved classes. The concept of selector namespaces was first introduced in Modular Smalltalk [44], and more recently in Smallscript [39], a Smalltalk implementation for .Net. A selector namespace defines a namespace for methods and is used to manage conflicting class extensions. Within such a namespace one can extend any class in the system without producing conflict: another namespace can contain a class extension having the same name. This is illustrated by Figure 1 where the class String is extended by two namespaces UrlNamespace and NetPackage, each of them adding a method asUrl. For instance, Figure 2 shows a class Object defined in a namespace English. This class contains a method printOnStream: and two methods printStri</context>
+<context position="48814" citStr="[39]" startWordPosition="8264" endWordPosition="8264">value given by dB ms  c. The extensions d override the definition of c obtained from ms s (the module from which the class is obtained). Methods originally defined in ms s c can call methods defined in d. Selector namespaces (Section 6) allow a class to be imported and then extended with new methods. These new methods can invoke the former methods. However, the other direction is not possible: former methods cannot invoke redefined definitions. We call this property non-reentrance. Selector namespaces do not support local rebinding because they are not reentrant. For instance, in Smallscript [39] a German translation could be defined as shown in Figure 8. A namespace German extends the class Object with a German translation of asString. However, the English version of this method belongs to the namespace English where printOn(aStream) is specified. Therefore, the English version of asString is always invoked by printOn(aStream) even if the execution occurs from within the German namespace. The extend combinator used to express the class extension semantics with selectors namespace is: extend = λmt. λms. λc. λd. mt‖{c 7→ d B ((fix ms) c)} The module ms is fixed before taking the defini</context>
+</contexts>
+<marker>39.</marker>
+<rawString>Dave Simmons. Smallscript, 2002. http://www.smallscript.com.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>S Tucker Taft</author>
+</authors>
+<title>Ada 9x: From abstraction-oriented to object-oriented.</title>
+<date>1993</date>
+<booktitle>In Proceedings OOPSLA ’93,</booktitle>
+<volume>28</volume>
+<pages>127--143</pages>
+<contexts>
+<context position="2400" citStr="[40]" startWordPosition="348" endWordPosition="348">heir comparison and understanding. Numerous researchers have proposed module calculi as a medium for reasoning about the properties of module systems (e.g., [2, 8, 11, 31, 32]). These calculi have been used to study various issues such as mutual recursion and high order features [2] or to model classes and mixins in a typed setting [8]. As far as we are aware, however, module calculi have not yet been proposed as a means to study and compare the diverse approaches to module systems that are used in practice. For example, classical module systems, like those of Modula-3 [16], Oberon2 [36], Ada [40], Java [28], C++, C# [14], and Eiffel [33] do not support class extensions (i.e., the fact that a method can be added or redefined from another package). However, class extensions are widely used in the languages that support it, such as Smalltalk [44], CLOS [29] and gbeta [21]. OpenClasses [17], Keris [45] and MixJuice [25] offer packaging systems that introduce class extensions, virtual classes and other new features to packages. Other languages such as Ruby and Unit [24] support the definition and application of mixins to modules at different levels. Languages such as VisualWorks [43] total</context>
+</contexts>
+<marker>40.</marker>
+<rawString>S. Tucker Taft. Ada 9x: From abstraction-oriented to object-oriented. In Proceedings OOPSLA ’93, volume 28, pages 127–143, October 1993.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Peri Tarr</author>
+<author>Harold Ossher</author>
+<author>William Harrison</author>
+<author>Stanley M Sutton</author>
+</authors>
+<title>N Degrees of Separation: Multi-dimensional Separation of Concerns.</title>
+<date>1999</date>
+<booktitle>In Proceedings of ICSE ’99,</booktitle>
+<pages>107--119</pages>
+<location>Los Angeles CA, USA,</location>
+<contexts>
+<context position="43458" citStr="[41]" startWordPosition="7350" endWordPosition="7350">c) which makes it unextensible because it contains fix and no overriding or extension operations. 11.2 Class Extensions Some module systems allow methods to be added or redefined separately from the definition of the class they belong to. The specification of the class is therefore spread over more than one module. This mechanism complements subclassing. A class extension is the result of a separation between a definition of a class and definitions that compose this class (i.e.,method definitions). AspectJ [5] with the notion of inter-type declaration, MultiJava [35] with open-classes, HyperJ [41] with hyper-slices, Smalltalk, CLOS, and Objective-C offer such a mechanism. Within such systems, there is a conceptual difference between a class definition and its method definitions: a method definition is not physically included in a class definition but can be defined externally to the class it belongs to. The ability of a module system to offer class extensions is expressed in applying an B or a ‖ operator to the imported class. For instance, ModularSmalltalk (Section 6) and classboxes (Section 8) allow a class to be extended by adding or redefining methods. This is illustrated in the ex</context>
+</contexts>
+<marker>41.</marker>
+<rawString>Peri Tarr, Harold Ossher, William Harrison, and Stanley M. Sutton, Jr. N Degrees of Separation: Multi-dimensional Separation of Concerns. In Proceedings of ICSE ’99, pages 107–119, Los Angeles CA, USA, 1999.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>David Thomas</author>
+<author>Andrew Hunt</author>
+</authors>
+<title>Programming Ruby.</title>
+<date>2001</date>
+<publisher>Addison Wesley,</publisher>
+<contexts>
+<context position="15057" citStr="[42]" startWordPosition="2670" endWordPosition="2670">aphicsModule Point ColoredPoint ext where ext = { color 7→ nil, setColor 7→ λ newCol. λself. {color 7→ newCol} B self } 2.5 The Calculus in Action The following sections illustrate the calculus by expressing the semantics of various module systems. For each of these module systems we use the calculus to define a set of module combinators that express the module composition mechanisms provided by the programming language in question. Depending on the language under consideration, a module may represent a Java package, a C# namespace, a selector namespace (Modular Smalltalk [44]), a Ruby module [42], a virtual pattern in gbeta [21], a classbox [6, 7], a MZScheme unit [23], or a MixJuice module [25]. A typical combinator is applied to a modulemt with some argumentsms and some classnames c. We make use of the following conventions: (i) each combinator is expressed as a module generator (combining two modules together yielding a new module), (ii) a t subscript (e.g., mt) refers to a input “template module” to be modified: the result of applying the combinator is a modified copy of the template module, (iii) an s subscript (e.g., ms) refers to the module provided as argument. 3 Java Java [4]</context>
+</contexts>
+<marker>42.</marker>
+<rawString>David Thomas and Andrew Hunt. Programming Ruby. Addison Wesley, 2001.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Cincom Smalltalk</author>
+</authors>
+<date>2003</date>
+<note>http://www.cincom.com/scripts/smalltalk.dll/.</note>
+<contexts>
+<context position="2994" citStr="[43]" startWordPosition="447" endWordPosition="447">, Ada [40], Java [28], C++, C# [14], and Eiffel [33] do not support class extensions (i.e., the fact that a method can be added or redefined from another package). However, class extensions are widely used in the languages that support it, such as Smalltalk [44], CLOS [29] and gbeta [21]. OpenClasses [17], Keris [45] and MixJuice [25] offer packaging systems that introduce class extensions, virtual classes and other new features to packages. Other languages such as Ruby and Unit [24] support the definition and application of mixins to modules at different levels. Languages such as VisualWorks [43] totally decouple the issues of namespaces from those of code packaging, hence a package in VisualWorks does not provide any support for scoping of names. In this paper we introduce a simple calculus of modules, together with a set of operators designed to express various encapsulation policies, composition rules, and extensibility mechanisms. Our work does not include deployment mechanisms, therefore the study of each language is limited in expressing operators applicable to grouping units (i.e., modules, packages). The contributions of this paper are: – A formalism for expressing semantics o</context>
+</contexts>
+<marker>43.</marker>
+<rawString>Cincom Smalltalk, September 2003. http://www.cincom.com/scripts/smalltalk.dll/.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Allen Wirfs-Brock</author>
+<author>Brian Wilkerson</author>
+</authors>
+<title>An overview of modular Smalltalk.</title>
+<date>1988</date>
+<booktitle>In Proceedings OOPSLA ’88,</booktitle>
+<pages>123--134</pages>
+<contexts>
+<context position="2652" citStr="[44]" startWordPosition="392" endWordPosition="392">ion and high order features [2] or to model classes and mixins in a typed setting [8]. As far as we are aware, however, module calculi have not yet been proposed as a means to study and compare the diverse approaches to module systems that are used in practice. For example, classical module systems, like those of Modula-3 [16], Oberon2 [36], Ada [40], Java [28], C++, C# [14], and Eiffel [33] do not support class extensions (i.e., the fact that a method can be added or redefined from another package). However, class extensions are widely used in the languages that support it, such as Smalltalk [44], CLOS [29] and gbeta [21]. OpenClasses [17], Keris [45] and MixJuice [25] offer packaging systems that introduce class extensions, virtual classes and other new features to packages. Other languages such as Ruby and Unit [24] support the definition and application of mixins to modules at different levels. Languages such as VisualWorks [43] totally decouple the issues of namespaces from those of code packaging, hence a package in VisualWorks does not provide any support for scoping of names. In this paper we introduce a simple calculus of modules, together with a set of operators designed to e</context>
+<context position="4341" citStr="[44]" startWordPosition="656" endWordPosition="656">nt module systems. The goal of the approach presented in this paper is to enable the language designer to compare features of module systems for various object-oriented programming languages. In Section 2 we define the calculus and its operators. In Sections 3 through 10 we use the calculus to develop various module combinators that capture Java packages, C# namespaces, Ruby modules, selector namespaces, gbeta virtual classes, classboxes, MZScheme units and MixJuice modules. We chose Java and C# as they are mainstream languages, Ruby as it defines the notion of module mixin, Modular Smalltalk [44] and Smallscript [39] as they define changes that crosscut classes with selector namespaces, Beta [30] as it introduces the notion of virtual classes, classboxes [6, 7] as they illustrate the local rebinding property, MZScheme unit [23] as it separates the unit definition from the dependency statements, and MixJuice [25] as it constrains only one class version to be present in the system. In Section 11 we develop a taxonomy to characterize the studied module systems according to the set of properties we modeled. In Section 12 we describe related work. In Section 13 we conclude by summarizing t</context>
+<context position="15036" citStr="[44]" startWordPosition="2666" endWordPosition="2666">dule = extendClass GraphicsModule Point ColoredPoint ext where ext = { color 7→ nil, setColor 7→ λ newCol. λself. {color 7→ newCol} B self } 2.5 The Calculus in Action The following sections illustrate the calculus by expressing the semantics of various module systems. For each of these module systems we use the calculus to define a set of module combinators that express the module composition mechanisms provided by the programming language in question. Depending on the language under consideration, a module may represent a Java package, a C# namespace, a selector namespace (Modular Smalltalk [44]), a Ruby module [42], a virtual pattern in gbeta [21], a classbox [6, 7], a MZScheme unit [23], or a MixJuice module [25]. A typical combinator is applied to a modulemt with some argumentsms and some classnames c. We make use of the following conventions: (i) each combinator is expressed as a module generator (combining two modules together yielding a new module), (ii) a t subscript (e.g., mt) refers to a input “template module” to be modified: the result of applying the combinator is a modified copy of the template module, (iii) an s subscript (e.g., ms) refers to the module provided as argu</context>
+<context position="26207" citStr="[44]" startWordPosition="4595" endWordPosition="4595">combinator that would accept a superclass and a set of mixins. 6 Selector Namespaces It is a tradition for Smalltalk and Lisp-based programming languages to offer a mechanism for introducing class extensions [6]. A class extension is a method addition or a redefinition applied to a class already present in a system. The result is an evolution of the behavior defined by this class without introducing a subclass. The intent of this mechanism is to enable better distribution of responsibility among the involved classes. The concept of selector namespaces was first introduced in Modular Smalltalk [44], and more recently in Smallscript [39], a Smalltalk implementation for .Net. A selector namespace defines a namespace for methods and is used to manage conflicting class extensions. Within such a namespace one can extend any class in the system without producing conflict: another namespace can contain a class extension having the same name. This is illustrated by Figure 1 where the class String is extended by two namespaces UrlNamespace and NetPackage, each of them adding a method asUrl. For instance, Figure 2 shows a class Object defined in a namespace English. This class contains a method p</context>
+</contexts>
+<marker>44.</marker>
+<rawString>Allen Wirfs-Brock and Brian Wilkerson. An overview of modular Smalltalk. In Proceedings OOPSLA ’88, pages 123–134, November 1988.</rawString>
+</citation>
+<citation valid="true">
+<authors>
+<author>Matthias Zenger</author>
+</authors>
+<title>Type-safe prototype-based component evolution.</title>
+<date>2002</date>
+<booktitle>In Proceedings ECOOP 2002,</booktitle>
+<volume>2374</volume>
+<pages>470--497</pages>
+<publisher>Springer Verlag.</publisher>
+<location>Malaga, Spain,</location>
+<contexts>
+<context position="2708" citStr="[45]" startWordPosition="401" endWordPosition="401">mixins in a typed setting [8]. As far as we are aware, however, module calculi have not yet been proposed as a means to study and compare the diverse approaches to module systems that are used in practice. For example, classical module systems, like those of Modula-3 [16], Oberon2 [36], Ada [40], Java [28], C++, C# [14], and Eiffel [33] do not support class extensions (i.e., the fact that a method can be added or redefined from another package). However, class extensions are widely used in the languages that support it, such as Smalltalk [44], CLOS [29] and gbeta [21]. OpenClasses [17], Keris [45] and MixJuice [25] offer packaging systems that introduce class extensions, virtual classes and other new features to packages. Other languages such as Ruby and Unit [24] support the definition and application of mixins to modules at different levels. Languages such as VisualWorks [43] totally decouple the issues of namespaces from those of code packaging, hence a package in VisualWorks does not provide any support for scoping of names. In this paper we introduce a simple calculus of modules, together with a set of operators designed to express various encapsulation policies, composition rules</context>
+<context position="30172" citStr="[45]" startWordPosition="5217" endWordPosition="5217">lish = extend λ. {} Object λs. {printString 7→ λself. englishVersion}, printOnStream 7→ λself. (s B self) printString} This class Object is extended with a German implementation of the printString method. The German namespace is defined as: German = extend λ. {} English Object λs. {printString 7→ λself. germanVersion} The second combinator associated to selector namespace is the import. A namespace imports a class without extending with: import : M→M→ C →M import = λmt. λms. λc. extend mt ms c λ. {} 7 Virtual Classes The notion of virtual classes offered by gbeta [22], Caesar [34] or Keris [45] allows class names to be dynamically looked up (rather than statically, at compilation time). Virtual classes unify the method and class lookup under a common lookup algorithm: as well as methods, class definitions are looked up along the inheritance of outer classes. In gbeta, virtual classes are implemented as inner classes, and outer classes define the unit of modularization. Class names are looked up in the same way Widgets Point x, y moveBy(int ,int) PointFactory newPoint() ColoredWidgets Point color setColor (Color) new Point() Figure 3: The outer class ColoredWidgets refines the class </context>
+</contexts>
+<marker>45.</marker>
+<rawString>Matthias Zenger. Type-safe prototype-based component evolution. In Proceedings ECOOP 2002, volume 2374 of LNCS, pages 470–497, Malaga, Spain, June 2002. Springer Verlag.</rawString>
+</citation>
+</citationList>
+</algorithm>
+</algorithms>
